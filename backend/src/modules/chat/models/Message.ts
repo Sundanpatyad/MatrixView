@@ -8,6 +8,9 @@ const attachmentSchema = new Schema(
     mimeType: { type: String, required: true },
     url: { type: String, required: true },
     kind: { type: String, enum: ['image', 'video', 'document', 'other'], default: 'other' },
+    /** cloudinary | r2 | local — used to delete the blob when the message is removed */
+    storageProvider: { type: String, default: null },
+    storageKey: { type: String, default: null },
   },
   { _id: false },
 );

@@ -79,9 +79,14 @@ export async function listCachedMessages(
     // Prefer row timestamp so sort matches SQLite even if payload drifts
     const createdAt = r.created_at || msg.createdAt;
     if (r.local_status === 'pending') {
-      return { ...msg, createdAt, status: msg.status ?? 'sent' };
+      return {
+        ...msg,
+        createdAt,
+        status: msg.status ?? 'sent',
+        localState: msg.localState ?? 'sending',
+      };
     }
-    return { ...msg, createdAt };
+    return { ...msg, createdAt, localState: msg.localState ?? null };
   });
   return sortMessagesByTime(messages);
 }
@@ -127,6 +132,36 @@ export async function hasCachedConversations(userId: string): Promise<boolean> {
     [userId],
   );
   return Number(rows[0]?.c ?? 0) > 0;
+}
+
+/** Persist an optimistic bubble (sending) so it survives chat switches. */
+export async function cacheOptimisticMessage(userId: string, message: ChatMessage) {
+  const db = await getOfflineDb();
+  if (!db) return;
+  const createdAt = message.createdAt || new Date().toISOString();
+  const payload = { ...message, localState: message.localState ?? 'sending' };
+  await db.execute(
+    `INSERT INTO messages (id, conversation_id, user_id, payload, local_status, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, 'pending', $5, $5)
+     ON CONFLICT(id) DO UPDATE SET
+       payload = excluded.payload,
+       local_status = 'pending',
+       updated_at = excluded.updated_at`,
+    [message.id, message.conversationId, userId, JSON.stringify(payload), createdAt],
+  );
+}
+
+export async function markOptimisticFailed(localMessageId: string, userId: string) {
+  const db = await getOfflineDb();
+  if (!db) return;
+  const row = await getPendingMessage(localMessageId);
+  if (!row || row.user_id !== userId) return;
+  const msg = JSON.parse(row.payload) as ChatMessage;
+  msg.localState = 'failed';
+  await db.execute(
+    `UPDATE messages SET payload = $1, updated_at = $2 WHERE id = $3`,
+    [JSON.stringify(msg), new Date().toISOString(), localMessageId],
+  );
 }
 
 export async function createPendingMessage(input: {

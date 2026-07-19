@@ -88,10 +88,12 @@ router.post(
       if (!file.mimetype.startsWith('image/')) {
         throw new AuthError('Group photo must be an image', 400);
       }
+      const { storeUploadedFile } = await import('../../storage/media.js');
+      const stored = await storeUploadedFile(file, 'chat-avatars');
       const data = await chat.updateGroupAvatar(
         actorFrom(req as AuthedRequest),
         param(req.params.id),
-        `/uploads/${file.filename}`,
+        stored.url,
       );
       res.json(data);
     } catch (err) {

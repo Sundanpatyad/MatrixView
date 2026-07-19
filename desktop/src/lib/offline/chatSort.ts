@@ -47,3 +47,17 @@ export function appendMessageSorted(
   }
   return sortMessagesByTime([...existing, message]);
 }
+
+/** Swap a local optimistic id for the server message (keep position). */
+export function replaceMessageById(
+  existing: ChatMessage[],
+  localId: string,
+  server: ChatMessage,
+): ChatMessage[] {
+  const idx = existing.findIndex((m) => m.id === localId);
+  if (idx === -1) return appendMessageSorted(existing, server);
+  const next = [...existing];
+  next[idx] = { ...server, localState: server.localState ?? null };
+  // Drop duplicate if socket already inserted the server id
+  return next.filter((m, i) => m.id !== server.id || i === idx);
+}

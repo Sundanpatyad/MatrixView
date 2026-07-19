@@ -7,7 +7,7 @@ import activityRoutes from './modules/activity/routes.js';
 import orgRoutes from './modules/org/routes.js';
 import chatRoutes from './modules/chat/routes.js';
 import { errorHandler } from './middleware/errorHandler.js';
-import { uploadsDir } from './modules/workspace/upload.js';
+import { uploadsDir } from './storage/paths.js';
 
 export function createApp() {
   const app = express();

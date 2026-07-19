@@ -9,6 +9,8 @@ const attachmentSchema = new Schema(
     url: { type: String, required: true },
     createdAt: { type: Date, default: Date.now },
     uploadedBy: { type: String, required: true },
+    storageProvider: { type: String, default: null },
+    storageKey: { type: String, default: null },
   },
   { _id: false },
 );

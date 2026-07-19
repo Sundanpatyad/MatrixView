@@ -1,32 +1,21 @@
-import fs from 'node:fs';
-import path from 'node:path';
 import crypto from 'node:crypto';
 import multer from 'multer';
+import { storeUploadedFile } from '../../storage/media.js';
+import { uploadsDir } from '../../storage/paths.js';
 import { MAX_UPLOAD_BYTES } from './constants.js';
 
-export const uploadsDir = path.resolve(process.cwd(), 'uploads');
+export { uploadsDir };
 
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
-}
-
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, uploadsDir),
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname).slice(0, 16);
-    cb(null, `${Date.now()}-${crypto.randomBytes(8).toString('hex')}${ext}`);
-  },
-});
-
+/** Memory storage — files are persisted to R2 (or local disk) after the request. */
 export const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: MAX_UPLOAD_BYTES, files: 10 },
 });
 
-export function fileToAttachment(
+export async function fileToAttachment(
   file: Express.Multer.File,
   uploadedBy: string,
-): {
+): Promise<{
   id: string;
   name: string;
   size: number;
@@ -34,15 +23,20 @@ export function fileToAttachment(
   url: string;
   createdAt: Date;
   uploadedBy: string;
-} {
+  storageProvider: string;
+  storageKey: string;
+}> {
+  const stored = await storeUploadedFile(file, 'attachments');
   return {
     id: `att_${crypto.randomBytes(6).toString('hex')}`,
-    name: file.originalname,
-    size: file.size,
-    mimeType: file.mimetype || 'application/octet-stream',
-    url: `/uploads/${file.filename}`,
+    name: stored.name || file.originalname,
+    size: stored.size,
+    mimeType: stored.mimeType,
+    url: stored.url,
     createdAt: new Date(),
     uploadedBy,
+    storageProvider: stored.provider,
+    storageKey: stored.storageKey,
   };
 }
 

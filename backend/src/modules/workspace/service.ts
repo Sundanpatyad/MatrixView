@@ -19,6 +19,11 @@ import {
   presentTasks,
   serializeTimeline,
 } from './serialize.js';
+import {
+  deleteStoredMedia,
+  deleteStoredMediaMany,
+  type StoredMediaRef,
+} from '../../storage/media.js';
 import { fileToAttachment, newId } from './upload.js';
 
 type Actor = {
@@ -634,7 +639,9 @@ export async function addComment(
 
   const displayName = await actorName(actor);
   const text = body.trim();
-  const attachments = files.map((f) => fileToAttachment(f, displayName));
+  const attachments = await Promise.all(
+    files.map((f) => fileToAttachment(f, displayName)),
+  );
   if (!text && attachments.length === 0) {
     throw new AuthError('Comment body or attachment required', 400);
   }
@@ -669,7 +676,9 @@ export async function addTaskAttachments(
   const displayName = await actorName(actor);
   if (!files.length) throw new AuthError('No files uploaded', 400);
 
-  const attachments = files.map((f) => fileToAttachment(f, displayName));
+  const attachments = await Promise.all(
+    files.map((f) => fileToAttachment(f, displayName)),
+  );
   task.attachments.push(...attachments);
   await task.save();
   return presentTask(task);
@@ -689,10 +698,21 @@ export async function removeTaskAttachment(
   const project = await getProjectInOrg(String(task.projectId), actor.orgId);
   requireMembership(project, actor.email);
 
+  const removed = task.attachments.find((a) => a.id === attachmentId);
   task.attachments = task.attachments.filter(
     (a) => a.id !== attachmentId,
   ) as typeof task.attachments;
   await task.save();
+  if (removed) {
+    await deleteStoredMediaMany([
+      {
+        url: removed.url,
+        provider: (removed as { storageProvider?: string }).storageProvider,
+        storageKey: (removed as { storageKey?: string }).storageKey,
+        mimeType: removed.mimeType,
+      } satisfies StoredMediaRef,
+    ]);
+  }
   return presentTask(task);
 }
 
@@ -720,7 +740,9 @@ export async function createTimelineItem(
     type: input.type ?? 'task',
     priority: input.priority ?? 'medium',
     dueDate: input.dueDate ?? '',
-    attachments: files.map((f) => fileToAttachment(f, displayName)),
+    attachments: await Promise.all(
+      files.map((f) => fileToAttachment(f, displayName)),
+    ),
     createdBy: actor.sub,
     createdByName: displayName,
     assigneeId: null,
@@ -765,14 +787,27 @@ export async function updateTimelineItem(
   if (input.dueDate !== undefined) item.dueDate = input.dueDate;
 
   const removeIds = new Set(input.removeAttachmentIds ?? []);
+  const removedRefs: StoredMediaRef[] = [];
   if (removeIds.size > 0) {
+    for (const a of item.attachments) {
+      if (removeIds.has(a.id)) {
+        removedRefs.push({
+          url: a.url,
+          provider: (a as { storageProvider?: string }).storageProvider,
+          storageKey: (a as { storageKey?: string }).storageKey,
+          mimeType: a.mimeType,
+        });
+      }
+    }
     item.attachments = item.attachments.filter(
       (a) => !removeIds.has(a.id),
     ) as typeof item.attachments;
   }
 
   if (files.length) {
-    item.attachments.push(...files.map((f) => fileToAttachment(f, displayName)));
+    item.attachments.push(
+      ...(await Promise.all(files.map((f) => fileToAttachment(f, displayName)))),
+    );
   }
 
   const assigneeProvided = input.assigneeId !== undefined;
@@ -832,6 +867,7 @@ export async function updateTimelineItem(
   }
 
   await item.save();
+  if (removedRefs.length) await deleteStoredMediaMany(removedRefs);
 
   if (item.taskId) {
     if (!task) {
@@ -946,6 +982,13 @@ export async function deleteTimelineItem(actor: Actor, itemId: string) {
   const project = await getProjectInOrg(String(item.projectId), actor.orgId);
   requireAdmin(project, actor.email);
 
+  const refs: StoredMediaRef[] = (item.attachments ?? []).map((a) => ({
+    url: a.url,
+    provider: (a as { storageProvider?: string }).storageProvider,
+    storageKey: (a as { storageKey?: string }).storageKey,
+    mimeType: a.mimeType,
+  }));
   await item.deleteOne();
+  await deleteStoredMediaMany(refs);
   return { ok: true };
 }

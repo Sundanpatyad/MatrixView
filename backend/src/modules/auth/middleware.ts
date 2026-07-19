@@ -3,8 +3,10 @@ import { verifyAccessToken, type AccessTokenPayload } from '../../utils/tokens.j
 import { Session } from './models/Session.js';
 import { AuthError } from './errors.js';
 
+export type DeviceType = 'web' | 'desktop' | 'mobile';
+
 export type AuthedRequest = Request & {
-  auth?: AccessTokenPayload;
+  auth?: AccessTokenPayload & { deviceType: DeviceType };
 };
 
 export async function requireAuth(req: AuthedRequest, _res: Response, next: NextFunction) {
@@ -25,10 +27,27 @@ export async function requireAuth(req: AuthedRequest, _res: Response, next: Next
     session.lastActiveAt = new Date();
     await session.save();
 
-    req.auth = payload;
+    req.auth = {
+      ...payload,
+      deviceType: (session.deviceType as DeviceType) ?? 'web',
+    };
     next();
   } catch (err) {
     if (err instanceof AuthError) return next(err);
     next(new AuthError('Invalid or expired token', 401, 'UNAUTHORIZED'));
   }
+}
+
+/** Check-in / activity tracking is desktop-only. */
+export function requireDesktop(req: AuthedRequest, _res: Response, next: NextFunction) {
+  if (req.auth?.deviceType !== 'desktop') {
+    return next(
+      new AuthError(
+        'Check-in is only available from the desktop app',
+        403,
+        'DESKTOP_REQUIRED',
+      ),
+    );
+  }
+  next();
 }

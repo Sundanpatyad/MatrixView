@@ -121,7 +121,7 @@ export async function register(input: {
       password: input.password,
     });
     return issueSession(user, {
-      deviceType: input.deviceType ?? 'desktop',
+      deviceType: input.deviceType ?? 'web',
       deviceId: input.deviceId,
       ip: input.ip,
       userAgent: input.userAgent,
@@ -154,7 +154,7 @@ export async function register(input: {
   });
 
   return issueSession(user, {
-    deviceType: input.deviceType ?? 'desktop',
+    deviceType: input.deviceType ?? 'web',
     deviceId: input.deviceId,
     ip: input.ip,
     userAgent: input.userAgent,
@@ -212,7 +212,7 @@ export async function login(input: {
   }
 
   return issueSession(user, {
-    deviceType: input.deviceType ?? 'desktop',
+    deviceType: input.deviceType ?? 'web',
     deviceId: input.deviceId,
     ip: input.ip,
     userAgent: input.userAgent,
@@ -327,8 +327,13 @@ export async function updateMyAvatar(
 ): Promise<PublicUser> {
   const user = await User.findById(userId);
   if (!user) throw new AuthError('User not found', 404, 'NOT_FOUND');
+  const previousUrl = user.avatarUrl ?? null;
   user.avatarUrl = avatarUrl;
   await user.save();
+  if (previousUrl && previousUrl !== avatarUrl) {
+    const { deleteStoredMedia } = await import('../../storage/media.js');
+    await deleteStoredMedia(previousUrl);
+  }
   return toPublicUser(user);
 }
 

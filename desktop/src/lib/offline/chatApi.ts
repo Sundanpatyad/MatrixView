@@ -8,6 +8,7 @@ import {
 import {
   appendMessageSorted,
   mergeMessagesById,
+  replaceMessageById,
   sortConversationsByRecent,
   sortMessagesByTime,
 } from './chatSort';
@@ -20,13 +21,16 @@ import {
   hasCachedMessages,
   listCachedConversations,
   listCachedMessages,
+  replacePendingMessage,
 } from './chatStore';
 import { isOfflineDbAvailable } from './db';
+import { enqueueOutbox } from './outbox';
 import { syncService } from './sync';
 
 export {
   appendMessageSorted,
   mergeMessagesById,
+  replaceMessageById,
   sortConversationsByRecent,
   sortMessagesByTime,
 };
@@ -131,6 +135,8 @@ export async function sendChatMessage(input: {
   body: string;
   replyToId?: string;
   files?: File[];
+  /** Reuse optimistic bubble id (avoids a second local message). */
+  localMessageId?: string;
 }): Promise<ChatMessage> {
   const hasFiles = (input.files?.length ?? 0) > 0;
 
@@ -143,30 +149,63 @@ export async function sendChatMessage(input: {
       replyToId: input.replyToId,
       files: input.files,
     });
-    if (isOfflineDbAvailable()) await cacheMessages(input.userId, [message]);
+    if (isOfflineDbAvailable()) {
+      if (input.localMessageId) {
+        await replacePendingMessage(input.localMessageId, message, input.userId);
+      } else {
+        await cacheMessages(input.userId, [message]);
+      }
+    }
     return message;
   }
 
-  if (navigator.onLine && !isOfflineDbAvailable()) {
-    const { message } = await sendMessageApi(input.conversationId, {
-      body: input.body,
-      replyToId: input.replyToId,
-    });
-    return message;
+  if (navigator.onLine) {
+    try {
+      const { message } = await sendMessageApi(input.conversationId, {
+        body: input.body,
+        replyToId: input.replyToId,
+      });
+      if (isOfflineDbAvailable()) {
+        if (input.localMessageId) {
+          await replacePendingMessage(input.localMessageId, message, input.userId);
+        } else {
+          await cacheMessages(input.userId, [message]);
+        }
+      }
+      return message;
+    } catch {
+      if (!isOfflineDbAvailable()) throw new Error('Failed to send message');
+      /* queue offline below */
+    }
   }
 
   if (isOfflineDbAvailable()) {
-    if (navigator.onLine) {
-      try {
-        const { message } = await sendMessageApi(input.conversationId, {
-          body: input.body,
-          replyToId: input.replyToId,
-        });
-        await cacheMessages(input.userId, [message]);
-        return message;
-      } catch {
-        /* queue offline */
-      }
+    if (input.localMessageId) {
+      await enqueueOutbox('chat.message.send', {
+        localMessageId: input.localMessageId,
+        conversationId: input.conversationId,
+        body: input.body,
+        replyToId: input.replyToId,
+      });
+      void syncService.flush();
+      return {
+        id: input.localMessageId,
+        conversationId: input.conversationId,
+        senderId: input.userId,
+        senderName: input.userName,
+        senderAvatarUrl: input.userAvatarUrl ?? null,
+        body: input.body,
+        replyTo: input.replyToId
+          ? { id: input.replyToId, body: '', senderName: '', deleted: false }
+          : null,
+        attachments: [],
+        status: 'sent',
+        localState: 'sending',
+        receipts: [],
+        editedAt: null,
+        deletedAt: null,
+        createdAt: new Date().toISOString(),
+      };
     }
     const pending = await createPendingMessage({
       userId: input.userId,

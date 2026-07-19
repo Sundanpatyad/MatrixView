@@ -1,12 +1,15 @@
 import crypto from 'node:crypto';
-import fs from 'node:fs';
-import path from 'node:path';
 import multer from 'multer';
 import { Types } from 'mongoose';
 import { AuthError } from '../auth/errors.js';
 import { User } from '../auth/models/User.js';
 import { ActivitySession } from '../activity/models/ActivitySession.js';
-import { uploadsDir } from '../workspace/upload.js';
+import {
+  deleteStoredMedia,
+  deleteStoredMediaMany,
+  storeUploadedFile,
+  type StoredMediaRef,
+} from '../../storage/media.js';
 import {
   emitToConversation,
   emitToOrg,
@@ -19,20 +22,8 @@ type Actor = { sub: string; orgId: string; email: string; role?: string };
 
 const CHAT_MAX_BYTES = 25 * 1024 * 1024;
 
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
-}
-
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, uploadsDir),
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname).slice(0, 16);
-    cb(null, `chat-${Date.now()}-${crypto.randomBytes(8).toString('hex')}${ext}`);
-  },
-});
-
 export const chatUpload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: CHAT_MAX_BYTES, files: 5 },
 });
 
@@ -52,14 +43,17 @@ function attachmentKind(mime: string): 'image' | 'video' | 'document' | 'other' 
   return 'other';
 }
 
-function fileToChatAttachment(file: Express.Multer.File) {
+async function fileToChatAttachment(file: Express.Multer.File) {
+  const stored = await storeUploadedFile(file, 'chat');
   return {
     id: `catt_${crypto.randomBytes(6).toString('hex')}`,
-    name: file.originalname,
-    size: file.size,
-    mimeType: file.mimetype || 'application/octet-stream',
-    url: `/uploads/${file.filename}`,
-    kind: attachmentKind(file.mimetype || ''),
+    name: stored.name || file.originalname,
+    size: stored.size,
+    mimeType: stored.mimeType,
+    url: stored.url,
+    kind: attachmentKind(stored.mimeType),
+    storageProvider: stored.provider,
+    storageKey: stored.storageKey,
   };
 }
 
@@ -364,8 +358,12 @@ export async function updateGroupAvatar(
   if (conversation.type !== 'group') {
     throw new AuthError('Only groups can have an image', 400);
   }
+  const previousUrl = conversation.avatarUrl ?? null;
   conversation.avatarUrl = avatarUrl;
   await conversation.save();
+  if (previousUrl && previousUrl !== avatarUrl) {
+    await deleteStoredMedia(previousUrl);
+  }
   const serialized = await serializeConversation(conversation, actor.sub);
   emitToConversation(conversationId, 'conversation:upsert', { conversation: serialized });
   for (const memberId of serialized.memberIds) {
@@ -456,7 +454,7 @@ export async function sendMessage(
 ) {
   const conversation = await requireMember(conversationId, actor);
   const body = (input.body ?? '').trim();
-  const attachments = files.map(fileToChatAttachment);
+  const attachments = await Promise.all(files.map((f) => fileToChatAttachment(f)));
 
   if (!body && attachments.length === 0) {
     throw new AuthError('Message cannot be empty', 400);
@@ -530,6 +528,8 @@ export async function forwardMessage(
     mimeType: a.mimeType,
     url: a.url,
     kind: a.kind,
+    storageProvider: a.storageProvider ?? null,
+    storageKey: a.storageKey ?? null,
   }));
 
   if (!body && attachments.length === 0) {
@@ -612,10 +612,38 @@ export async function deleteMessage(actor: Actor, messageId: string) {
   }
   await requireMember(String(message.conversationId), actor);
 
+  const removed = (message.attachments ?? []).map((a) => ({
+    url: a.url,
+    provider: a.storageProvider ?? null,
+    storageKey: a.storageKey ?? null,
+    mimeType: a.mimeType ?? null,
+    kind: a.kind ?? null,
+  }));
   message.deletedAt = new Date();
   message.body = '';
   message.set('attachments', []);
   await message.save();
+
+  // Remove blobs from Cloudinary/R2 unless another live message still references them
+  const toDelete: StoredMediaRef[] = [];
+  for (const att of removed) {
+    if (!att.url && !att.storageKey) continue;
+    const stillUsed = await Message.exists({
+      orgId: message.orgId,
+      deletedAt: null,
+      _id: { $ne: message._id },
+      $or: [
+        ...(att.url ? [{ 'attachments.url': att.url }] : []),
+        ...(att.storageKey ? [{ 'attachments.storageKey': att.storageKey }] : []),
+      ],
+    });
+    if (!stillUsed) toDelete.push(att);
+  }
+  if (toDelete.length) {
+    await deleteStoredMediaMany(toDelete);
+    console.info('[chat] deleted media from storage', toDelete.length);
+  }
+
   const serialized = await serializeMessage(message);
   emitToConversation(serialized.conversationId, 'message:deleted', { message: serialized });
   for (const memberId of await memberIdsForMessage(message)) {

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { requireAuth, type AuthedRequest } from '../auth/middleware.js';
+import { requireAuth, requireDesktop, type AuthedRequest } from '../auth/middleware.js';
 import { AuthError } from '../auth/errors.js';
 import * as activity from './service.js';
 
@@ -16,7 +16,7 @@ function param(value: string | string[]): string {
   return Array.isArray(value) ? value[0] : value;
 }
 
-router.post('/activity/sessions/start', async (req, res, next) => {
+router.post('/activity/sessions/start', requireDesktop, async (req, res, next) => {
   try {
     const session = await activity.startSession(actorFrom(req as AuthedRequest));
     res.status(201).json({ session });
@@ -44,7 +44,7 @@ router.get('/activity/attendance', async (req, res, next) => {
   }
 });
 
-router.post('/activity/sessions/:sessionId/samples', async (req, res, next) => {
+router.post('/activity/sessions/:sessionId/samples', requireDesktop, async (req, res, next) => {
   try {
     const body = z
       .object({
@@ -78,7 +78,7 @@ router.post('/activity/sessions/:sessionId/samples', async (req, res, next) => {
   }
 });
 
-router.post('/activity/sessions/stop', async (req, res, next) => {
+router.post('/activity/sessions/stop', requireDesktop, async (req, res, next) => {
   try {
     const body = z
       .object({ sessionId: z.string().optional() })

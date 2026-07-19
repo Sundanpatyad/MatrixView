@@ -53,17 +53,26 @@ import {
   type PresenceUser,
 } from '@/lib/socket/chatSocket';
 import {
+  buildOptimisticMessage,
+  chatSendQueue,
+  persistOptimisticLocal,
+} from '@/lib/chat/sendQueue';
+import {
   appendMessageSorted,
   loadConversations,
   openConversationsFromLocal,
   openMessagesFromLocal,
-  sendChatMessage,
+  replaceMessageById,
   sortConversationsByRecent,
   sortMessagesByTime,
   syncConversationsFromApi,
   syncLatestMessagesFromApi,
 } from '@/lib/offline/chatApi';
-import { upsertCachedConversation, upsertLiveMessage } from '@/lib/offline/chatStore';
+import {
+  markOptimisticFailed,
+  upsertCachedConversation,
+  upsertLiveMessage,
+} from '@/lib/offline/chatStore';
 import { useOffline } from '@/lib/offline/OfflineContext';
 
 function ConversationAvatar({
@@ -156,12 +165,28 @@ function errMsg(err: unknown) {
 
 function MessageTicks({
   status,
+  localState,
   mine,
 }: {
   status?: 'sent' | 'delivered' | 'read';
+  localState?: 'sending' | 'failed' | null;
   mine: boolean;
 }) {
   if (!mine) return null;
+  if (localState === 'sending') {
+    return (
+      <span className="ml-0.5 inline-flex text-white/55" title="Sending" aria-label="Sending">
+        <span className="inline-block h-2.5 w-2.5 animate-pulse rounded-full border border-white/70 border-t-transparent" />
+      </span>
+    );
+  }
+  if (localState === 'failed') {
+    return (
+      <span className="ml-0.5 font-semibold text-rose-200" title="Failed to send" aria-label="Failed">
+        !
+      </span>
+    );
+  }
   const tone =
     status === 'read'
       ? 'text-emerald-300'
@@ -934,7 +959,25 @@ export function ChatPage() {
         void upsertLiveMessage(meId, message);
         const convId = message.conversationId;
         const prev = threadCacheRef.current.get(convId) ?? [];
-        const next = appendMessageSorted(prev, message);
+        // Prefer replacing our optimistic bubble instead of duplicating
+        let next: ChatMessage[];
+        if (message.senderId === meId) {
+          const opt = [...prev]
+            .reverse()
+            .find(
+              (m) =>
+                m.id.startsWith('lmsg_') &&
+                m.senderId === meId &&
+                m.body === message.body &&
+                (m.localState === 'sending' || m.localState === 'failed') &&
+                m.attachments.length === message.attachments.length,
+            );
+          next = opt
+            ? replaceMessageById(prev, opt.id, message)
+            : appendMessageSorted(prev, message);
+        } else {
+          next = appendMessageSorted(prev, message);
+        }
         threadCacheRef.current.set(convId, next);
         if (convId === activeIdRef.current) {
           setMessages(next);
@@ -1107,40 +1150,93 @@ export function ChatPage() {
       isTypingRef.current = false;
     }
 
-    setSending(true);
     setError('');
-    try {
-      if (editing) {
+
+    // Edit stays blocking (small payload)
+    if (editing) {
+      setSending(true);
+      try {
         const { message } = await editMessage(editing.id, body);
         setMessages((prev) => prev.map((m) => (m.id === message.id ? message : m)));
         setEditing(null);
         setDraft('');
-      } else {
-        stickToBottomRef.current = true;
-        const message = await sendChatMessage({
-          userId: user.id,
-          userName: user.name,
-          userAvatarUrl: user.avatarUrl,
-          conversationId: activeId,
-          body,
-          replyToId: replyTo?.id,
-          files,
-        });
-        setMessages((prev) => {
-          const next = appendMessageSorted(prev, message);
-          threadCacheRef.current.set(activeId, next);
-          return next;
-        });
-        setDraft('');
-        setFiles([]);
-        setReplyTo(null);
-        await refreshList(activeId);
+      } catch (err) {
+        setError(errMsg(err));
+      } finally {
+        setSending(false);
       }
-    } catch (err) {
-      setError(errMsg(err));
-    } finally {
-      setSending(false);
+      return;
     }
+
+    const conversationId = activeId;
+    const stagedFiles = [...files];
+    const stagedReply = replyTo;
+    const jobInput = {
+      userId: user.id,
+      userName: user.name,
+      userAvatarUrl: user.avatarUrl,
+      conversationId,
+      body,
+      replyToId: stagedReply?.id,
+      replyPreview: stagedReply
+        ? {
+            id: stagedReply.id,
+            body: stagedReply.body,
+            senderName: stagedReply.senderName,
+            deleted: Boolean(stagedReply.deletedAt),
+          }
+        : null,
+      files: stagedFiles,
+    };
+
+    // WhatsApp-style: clear composer immediately so the next message can be typed
+    setDraft('');
+    setFiles([]);
+    setReplyTo(null);
+    stickToBottomRef.current = true;
+
+    const optimistic = buildOptimisticMessage(jobInput);
+    setMessages((prev) => {
+      const next = appendMessageSorted(prev, optimistic.message);
+      threadCacheRef.current.set(conversationId, next);
+      return next;
+    });
+    void persistOptimisticLocal(user.id, optimistic.message);
+    void refreshList(conversationId);
+
+    chatSendQueue.enqueue(optimistic, jobInput, {
+      onSuccess: (server, localId) => {
+        setMessages((prev) => {
+          const base =
+            activeIdRef.current === conversationId
+              ? prev
+              : threadCacheRef.current.get(conversationId) ?? prev;
+          const next = replaceMessageById(base, localId, server);
+          threadCacheRef.current.set(conversationId, next);
+          if (activeIdRef.current === conversationId) return next;
+          return prev;
+        });
+        void refreshList(conversationId);
+      },
+      onFailure: (err, localId) => {
+        setError(errMsg(err));
+        setMessages((prev) => {
+          const patch = (list: ChatMessage[]) =>
+            list.map((m) =>
+              m.id === localId ? { ...m, localState: 'failed' as const } : m,
+            );
+          const base =
+            activeIdRef.current === conversationId
+              ? prev
+              : threadCacheRef.current.get(conversationId) ?? prev;
+          const next = patch(base);
+          threadCacheRef.current.set(conversationId, next);
+          if (activeIdRef.current === conversationId) return next;
+          return prev;
+        });
+        void markOptimisticFailed(localId, user.id);
+      },
+    });
   }
 
   function requestDelete(msg: ChatMessage) {
@@ -1456,13 +1552,14 @@ export function ChatPage() {
                             {msg.editedAt && !deleted ? <span>edited</span> : null}
                             <span>{formatTime(msg.createdAt)}</span>
                             {!deleted ? (
-                              msg.id.startsWith('lmsg_') ? (
-                                <span className="ml-0.5 text-white/55" title="Waiting to send">
-                                  🕒
-                                </span>
-                              ) : (
-                                <MessageTicks status={msg.status ?? 'sent'} mine={mine} />
-                              )
+                              <MessageTicks
+                                status={msg.status ?? 'sent'}
+                                localState={
+                                  msg.localState ??
+                                  (msg.id.startsWith('lmsg_') ? 'sending' : null)
+                                }
+                                mine={mine}
+                              />
                             ) : null}
                           </div>
 
@@ -1645,7 +1742,15 @@ export function ChatPage() {
                   }
                 }}
               />
-              <Button type="submit" size="md" disabled={sending} className="mb-0.5 shrink-0">
+              <Button
+                type="submit"
+                size="md"
+                disabled={
+                  sending ||
+                  (!editing && !draft.trim() && files.length === 0)
+                }
+                className="mb-0.5 shrink-0"
+              >
                 <IconSend className="h-4 w-4" />
                 {editing ? 'Save' : 'Send'}
               </Button>

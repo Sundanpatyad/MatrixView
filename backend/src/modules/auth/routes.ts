@@ -163,10 +163,9 @@ router.post(
       if (!file.mimetype.startsWith('image/')) {
         throw new AuthError('Avatar must be an image', 400);
       }
-      const user = await authService.updateMyAvatar(
-        authReq.auth.sub,
-        `/uploads/${file.filename}`,
-      );
+      const { storeUploadedFile } = await import('../../storage/media.js');
+      const stored = await storeUploadedFile(file, 'avatars');
+      const user = await authService.updateMyAvatar(authReq.auth.sub, stored.url);
       res.json({ user });
     } catch (err) {
       next(err);

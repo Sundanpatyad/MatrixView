@@ -11,6 +11,9 @@ export type ChatMember = {
 
 export type MessageDeliveryStatus = 'sent' | 'delivered' | 'read';
 
+/** Client-only send lifecycle (WhatsApp-style clock / failed). */
+export type MessageLocalState = 'sending' | 'failed';
+
 export type ChatConversation = {
   id: string;
   type: 'dm' | 'group';
@@ -51,6 +54,8 @@ export type ChatMessage = {
   replyTo: ChatReplyPreview | null;
   attachments: ChatAttachment[];
   status?: MessageDeliveryStatus;
+  /** Present while uploading / offline-queued / failed locally */
+  localState?: MessageLocalState | null;
   receipts?: Array<{
     userId: string;
     deliveredAt: string | null;
