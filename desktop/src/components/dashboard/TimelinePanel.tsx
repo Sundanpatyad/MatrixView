@@ -1,0 +1,592 @@
+import { useMemo, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
+import { EditTimelineModal } from '@/components/dashboard/EditTimelineModal';
+import { Button } from '@/components/ui/Button';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
+import { DatePicker } from '@/components/ui/DatePicker';
+import { Input } from '@/components/ui/Input';
+import { Select } from '@/components/ui/Select';
+import { UserAvatar, avatarFromMembers } from '@/components/ui/UserAvatar';
+import { cn } from '@/lib/cn';
+import {
+  TASK_PRIORITIES,
+  TASK_TYPES,
+  attachmentHref,
+  formatFileSize,
+  type TaskAttachment,
+  type TaskPriority,
+  type TaskType,
+  type TimelineItem,
+} from '@/lib/workspace/types';
+import { useWorkspace } from '@/lib/workspace/WorkspaceContext';
+
+const MAX_FILE_BYTES = 2 * 1024 * 1024;
+
+function formatDate(iso: string) {
+  try {
+    return new Date(iso).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+  } catch {
+    return iso;
+  }
+}
+
+const label = 'text-[10px] font-bold tracking-wide text-ink-500 uppercase';
+
+function AttachmentChips({
+  items,
+  onRemove,
+  compact,
+}: {
+  items: TaskAttachment[];
+  onRemove?: (id: string) => void;
+  compact?: boolean;
+}) {
+  if (items.length === 0) return null;
+  return (
+    <ul className={cn('flex flex-wrap gap-1.5', !compact && 'mt-2 space-y-0')}>
+      {items.map((att) => (
+        <li
+          key={att.id}
+          className={cn(
+            'flex items-center gap-2 border border-ink-200 bg-white',
+            compact ? 'px-2 py-1' : 'px-2.5 py-2',
+          )}
+        >
+          {att.mimeType.startsWith('image/') && attachmentHref(att) ? (
+            <img
+              src={attachmentHref(att)}
+              alt=""
+              className={cn(
+                'shrink-0 object-cover',
+                compact ? 'h-6 w-6' : 'h-8 w-8',
+              )}
+            />
+          ) : (
+            <span
+              className={cn(
+                'flex shrink-0 items-center justify-center bg-ink-100 text-[9px] font-bold text-ink-600',
+                compact ? 'h-6 w-6' : 'h-7 w-7',
+              )}
+            >
+              FILE
+            </span>
+          )}
+          <div className="min-w-0">
+            {attachmentHref(att) ? (
+              <a
+                href={attachmentHref(att)}
+                target="_blank"
+                rel="noreferrer"
+                className="block max-w-[160px] truncate text-[11px] font-semibold text-ink-800 hover:text-brand-800"
+              >
+                {att.name}
+              </a>
+            ) : (
+              <p className="max-w-[160px] truncate text-[11px] font-semibold text-ink-800">
+                {att.name}
+              </p>
+            )}
+            {!compact ? (
+              <p className="text-[10px] text-ink-400">{formatFileSize(att.size)}</p>
+            ) : null}
+          </div>
+          {onRemove ? (
+            <button
+              type="button"
+              onClick={() => onRemove(att.id)}
+              className="text-[11px] font-semibold text-ink-400 hover:text-red-600"
+            >
+              ×
+            </button>
+          ) : null}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+export function TimelinePanel() {
+  const {
+    projects,
+    timeline,
+    getProject,
+    createTimelineItem,
+    assignTimelineItem,
+    deleteTimelineItem,
+    isProjectAdmin,
+  } = useWorkspace();
+
+  const adminProjects = projects.filter((p) => isProjectAdmin(p.id));
+  const [projectId, setProjectId] = useState(adminProjects[0]?.id ?? '');
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [type, setType] = useState<TaskType>('task');
+  const [priority, setPriority] = useState<TaskPriority>('medium');
+  const [dueDate, setDueDate] = useState('');
+  const [files, setFiles] = useState<File[]>([]);
+  const [fileError, setFileError] = useState('');
+  const [filter, setFilter] = useState<'pending' | 'assigned' | 'all'>('pending');
+  const [editingItem, setEditingItem] = useState<TimelineItem | null>(null);
+  const [itemToDelete, setItemToDelete] = useState<TimelineItem | null>(null);
+  const [deletingItem, setDeletingItem] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const activeProjectId = adminProjects.some((p) => p.id === projectId)
+    ? projectId
+    : (adminProjects[0]?.id ?? '');
+
+  const project = activeProjectId ? getProject(activeProjectId) : undefined;
+  const members = project?.members ?? [];
+
+  const items = useMemo(() => {
+    let list = [...timeline].sort(
+      (a, b) => +new Date(b.createdAt) - +new Date(a.createdAt),
+    );
+    if (filter === 'pending') list = list.filter((i) => !i.taskId);
+    if (filter === 'assigned') list = list.filter((i) => !!i.taskId);
+    return list;
+  }, [timeline, filter]);
+
+  const pendingCount = timeline.filter((i) => !i.taskId).length;
+  const assignedCount = timeline.filter((i) => !!i.taskId).length;
+
+  function onFiles(e: ChangeEvent<HTMLInputElement>) {
+    const picked = e.target.files;
+    if (!picked?.length) return;
+    setFileError('');
+    const ok: File[] = [];
+    const skipped: string[] = [];
+    for (const file of Array.from(picked)) {
+      if (file.size > MAX_FILE_BYTES) skipped.push(`${file.name} (max 2MB)`);
+      else ok.push(file);
+    }
+    if (ok.length) setFiles((prev) => [...prev, ...ok]);
+    if (skipped.length) setFileError(`Skipped: ${skipped.join(', ')}`);
+    e.target.value = '';
+  }
+
+  async function onCreate(e: FormEvent) {
+    e.preventDefault();
+    if (!title.trim() || !activeProjectId) return;
+    await createTimelineItem({
+      projectId: activeProjectId,
+      title,
+      description,
+      type,
+      priority,
+      dueDate,
+      files,
+    });
+    setTitle('');
+    setDescription('');
+    setDueDate('');
+    setType('task');
+    setPriority('medium');
+    setFiles([]);
+    setFileError('');
+    setFilter('pending');
+  }
+
+  if (adminProjects.length === 0) {
+    return (
+      <div className="flex h-full items-center justify-center bg-[#F7F8FA] p-8">
+        <div className="max-w-sm border border-ink-200 bg-white px-6 py-8 text-center">
+          <p className="text-sm font-semibold text-ink-900">Admin timeline</p>
+          <p className="mt-2 text-xs leading-relaxed text-ink-500">
+            You need to be a project Admin to create timeline tasks. Create a project on the
+            board (you become Admin) or ask an admin to promote you.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-full min-h-0 flex-col bg-[#F7F8FA] lg:flex-row">
+      {/* Create form */}
+      <section className="w-full shrink-0 overflow-y-auto border-b border-ink-200 bg-white lg:w-[340px] lg:border-r lg:border-b-0">
+        <div className="border-b border-ink-100 px-5 py-4">
+          <p className="text-[10px] font-bold tracking-wide text-ink-500 uppercase">
+            New item
+          </p>
+          <h2 className="mt-0.5 text-base font-semibold text-ink-950">Create timeline task</h2>
+          <p className="mt-1 text-[11px] leading-relaxed text-ink-500">
+            Park work with files now. Assign to the team when you are ready.
+          </p>
+        </div>
+
+        <form onSubmit={onCreate} className="space-y-3.5 px-5 py-4">
+          <div>
+            <label className={label}>Project</label>
+            <div className="mt-1">
+              <Select
+                value={activeProjectId}
+                onChange={setProjectId}
+                options={adminProjects.map((p) => ({
+                  value: p.id,
+                  label: `${p.name} (${p.key})`,
+                }))}
+                aria-label="Project"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className={label}>Title</label>
+            <Input
+              placeholder="What needs to be done?"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              required
+              className="mt-1 h-9 text-xs"
+            />
+          </div>
+
+          <div>
+            <label className={label}>Description</label>
+            <textarea
+              placeholder="Notes, context, acceptance criteria…"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={3}
+              className="mt-1 w-full border border-ink-200 bg-white px-2.5 py-2 text-xs outline-none focus:border-ink-500"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-2.5">
+            <div>
+              <label className={label}>Type</label>
+              <div className="mt-1">
+                <Select
+                  value={type}
+                  onChange={(v) => setType(v as TaskType)}
+                  options={TASK_TYPES.map((t) => ({ value: t.id, label: t.label }))}
+                />
+              </div>
+            </div>
+            <div>
+              <label className={label}>Priority</label>
+              <div className="mt-1">
+                <Select
+                  value={priority}
+                  onChange={(v) => setPriority(v as TaskPriority)}
+                  options={TASK_PRIORITIES.map((p) => ({
+                    value: p,
+                    label: p.charAt(0).toUpperCase() + p.slice(1),
+                  }))}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <label className={label}>Due date</label>
+            <div className="mt-1">
+              <DatePicker value={dueDate} onChange={setDueDate} />
+            </div>
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between">
+              <label className={label}>Attachments</label>
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                className="text-[11px] font-semibold text-brand-800 hover:underline"
+              >
+                + Add file
+              </button>
+              <input
+                ref={fileRef}
+                type="file"
+                multiple
+                className="hidden"
+                onChange={onFiles}
+              />
+            </div>
+            <p className="mt-1 text-[10px] text-ink-400">Images & files up to 2MB each</p>
+            {files.length === 0 ? (
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                className="mt-2 flex w-full flex-col items-center justify-center border border-dashed border-ink-300 bg-[#FAFBFC] px-3 py-5 text-center transition hover:border-ink-400 hover:bg-ink-50"
+              >
+                <span className="text-xs font-semibold text-ink-700">Drop or browse files</span>
+                <span className="mt-0.5 text-[10px] text-ink-400">Optional · max 2MB</span>
+              </button>
+            ) : (
+              <ul className="mt-2 space-y-1">
+                {files.map((file, idx) => (
+                  <li
+                    key={`${file.name}-${idx}`}
+                    className="flex items-center justify-between border border-ink-200 bg-white px-2.5 py-1.5 text-[11px]"
+                  >
+                    <span className="truncate font-semibold text-ink-800">
+                      {file.name} · {formatFileSize(file.size)}
+                    </span>
+                    <button
+                      type="button"
+                      className="font-semibold text-ink-400 hover:text-red-600"
+                      onClick={() => setFiles((prev) => prev.filter((_, i) => i !== idx))}
+                    >
+                      Remove
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {fileError ? (
+              <p className="mt-1.5 text-[11px] font-medium text-red-600">{fileError}</p>
+            ) : null}
+          </div>
+
+          <Button type="submit" size="sm" className="w-full" disabled={!title.trim()}>
+            Add to timeline
+          </Button>
+        </form>
+      </section>
+
+      {/* Timeline list — full width */}
+      <section className="flex min-h-0 min-w-0 flex-1 flex-col bg-white">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-ink-200 px-4 py-2.5 md:px-5">
+          <div>
+            <h2 className="text-sm font-semibold text-ink-950">Timeline</h2>
+            <p className="text-[11px] text-ink-500">
+              {pendingCount} pending · {assignedCount} assigned · {items.length} shown
+            </p>
+          </div>
+          <div className="flex gap-0.5 border border-ink-200 bg-ink-50 p-0.5">
+            {(['pending', 'assigned', 'all'] as const).map((f) => (
+              <button
+                key={f}
+                type="button"
+                onClick={() => setFilter(f)}
+                className={cn(
+                  'px-3 py-1 text-[11px] font-semibold capitalize',
+                  filter === f
+                    ? 'bg-ink-900 text-white'
+                    : 'text-ink-500 hover:bg-white hover:text-ink-800',
+                )}
+              >
+                {f}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-auto">
+          {items.length === 0 ? (
+            <div className="flex h-full min-h-[240px] flex-col items-center justify-center px-6 py-16 text-center">
+              <p className="text-sm font-semibold text-ink-800">No items in this view</p>
+              <p className="mt-1 max-w-sm text-xs text-ink-500">
+                Create a timeline task on the left. Attach files if needed, then assign later.
+              </p>
+            </div>
+          ) : (
+            <table className="w-full min-w-[880px] text-left">
+              <thead className="sticky top-0 z-[1] border-b border-ink-200 bg-ink-50 text-[10px] font-bold tracking-wide text-ink-500 uppercase">
+                <tr>
+                  <th className="px-4 py-2.5 font-bold md:px-5">Task</th>
+                  <th className="px-3 py-2.5 font-bold">Project</th>
+                  <th className="px-3 py-2.5 font-bold">Status</th>
+                  <th className="px-3 py-2.5 font-bold">Priority</th>
+                  <th className="px-3 py-2.5 font-bold">Due</th>
+                  <th className="px-3 py-2.5 font-bold">Assignee</th>
+                  <th className="px-3 py-2.5 font-bold">Files</th>
+                  <th className="px-4 py-2.5 text-right font-bold md:px-5">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item) => {
+                  const proj = getProject(item.projectId);
+                  const canManageAssign = isProjectAdmin(item.projectId);
+                  const itemMembers = getProject(item.projectId)?.members ?? [];
+                  const files = item.attachments ?? [];
+                  const memberOptions = itemMembers.map((m) => ({
+                    value: m.id,
+                    label: m.name,
+                  }));
+                  const currentAssigneeId =
+                    itemMembers.find(
+                      (m) =>
+                        m.id === item.assigneeId ||
+                        m.name.toLowerCase() === (item.assigneeName ?? '').toLowerCase(),
+                    )?.id ?? '';
+                  return (
+                    <tr
+                      key={item.id}
+                      className="border-b border-ink-100 transition hover:bg-ink-50/70"
+                    >
+                      <td className="px-4 py-3 md:px-5">
+                        <div className="flex items-start gap-2.5">
+                          <span className="mt-0.5 bg-ink-100 px-1.5 py-0.5 text-[9px] font-bold tracking-wide text-ink-600 uppercase">
+                            {item.type}
+                          </span>
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-ink-950">{item.title}</p>
+                            {item.description ? (
+                              <p className="mt-0.5 line-clamp-1 text-[11px] text-ink-500">
+                                {item.description}
+                              </p>
+                            ) : null}
+                            <p className="mt-1 text-[10px] text-ink-400">
+                              {item.createdByName} · {formatDate(item.createdAt)}
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-3 py-3 text-xs font-medium text-ink-700">
+                        {proj?.name ?? '—'}
+                      </td>
+                      <td className="px-3 py-3">
+                        <span
+                          className={cn(
+                            'inline-block px-1.5 py-0.5 text-[10px] font-bold uppercase',
+                            item.taskId
+                              ? 'bg-emerald-50 text-emerald-800'
+                              : 'bg-amber-50 text-amber-800',
+                          )}
+                        >
+                          {item.taskId ? 'Assigned' : 'Pending'}
+                        </span>
+                      </td>
+                      <td className="px-3 py-3 text-xs capitalize text-ink-600">
+                        {item.priority}
+                      </td>
+                      <td className="px-3 py-3 text-xs text-ink-600">
+                        {item.dueDate
+                          ? new Date(item.dueDate).toLocaleDateString(undefined, {
+                              month: 'short',
+                              day: 'numeric',
+                              year: 'numeric',
+                            })
+                          : '—'}
+                      </td>
+                      <td className="px-3 py-3">
+                        {canManageAssign && memberOptions.length > 0 ? (
+                          <div className="w-[160px]">
+                            <Select
+                              size="xs"
+                              value={item.taskId ? currentAssigneeId : ''}
+                              placeholder={item.taskId ? 'Reassign…' : 'Assign to…'}
+                              onChange={(memberId) => {
+                                if (!memberId || memberId === currentAssigneeId) return;
+                                const member = itemMembers.find((m) => m.id === memberId);
+                                if (!member) return;
+                                void assignTimelineItem(item.id, {
+                                  id: member.id,
+                                  name: member.name,
+                                });
+                              }}
+                              options={
+                                item.taskId
+                                  ? memberOptions
+                                  : [
+                                      { value: '', label: 'Assign to…', disabled: true },
+                                      ...memberOptions,
+                                    ]
+                              }
+                              aria-label={
+                                item.taskId
+                                  ? `Reassign ${item.title}`
+                                  : `Assign ${item.title}`
+                              }
+                            />
+                          </div>
+                        ) : item.assigneeName ? (
+                          <div className="flex items-center gap-1.5">
+                            <UserAvatar
+                              name={item.assigneeName}
+                              src={avatarFromMembers(
+                                getProject(item.projectId)?.members ?? [],
+                                item.assigneeId,
+                                item.assigneeName,
+                              )}
+                              seed={item.assigneeName}
+                              size="sm"
+                            />
+                            <span className="text-xs font-semibold text-ink-800">
+                              {item.assigneeName}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-ink-400">Unassigned</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-3">
+                        {files.length > 0 ? (
+                          <AttachmentChips items={files} compact />
+                        ) : (
+                          <span className="text-xs text-ink-300">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 md:px-5">
+                        <div className="flex items-center justify-end gap-2">
+                          {canManageAssign ? (
+                            <button
+                              type="button"
+                              onClick={() => setEditingItem(item)}
+                              className="text-[11px] font-semibold text-ink-600 hover:text-ink-900"
+                            >
+                              Edit
+                            </button>
+                          ) : null}
+                          {!item.taskId && canManageAssign ? (
+                            <button
+                              type="button"
+                              onClick={() => setItemToDelete(item)}
+                              className="text-[11px] font-semibold text-ink-400 hover:text-red-600"
+                            >
+                              Remove
+                            </button>
+                          ) : canManageAssign && memberOptions.length <= 1 ? (
+                            <span className="text-[10px] text-ink-400">
+                              Invite teammates to reassign
+                            </span>
+                          ) : null}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        {members.length > 0 && activeProjectId ? (
+          <p className="border-t border-ink-200 px-4 py-2 text-[11px] text-ink-400 md:px-5">
+            {project?.name} · {members.length} members ready to assign
+          </p>
+        ) : null}
+      </section>
+
+      {editingItem ? (
+        <EditTimelineModal item={editingItem} onClose={() => setEditingItem(null)} />
+      ) : null}
+
+      <ConfirmModal
+        open={Boolean(itemToDelete)}
+        title="Remove backlog item?"
+        message={
+          itemToDelete
+            ? `Remove “${itemToDelete.title}”? This can’t be undone.`
+            : ''
+        }
+        confirmLabel="Remove"
+        danger
+        busy={deletingItem}
+        onCancel={() => setItemToDelete(null)}
+        onConfirm={async () => {
+          if (!itemToDelete) return;
+          setDeletingItem(true);
+          try {
+            await deleteTimelineItem(itemToDelete.id);
+            setItemToDelete(null);
+          } finally {
+            setDeletingItem(false);
+          }
+        }}
+      />
+    </div>
+  );
+}
