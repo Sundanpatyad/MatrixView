@@ -25,6 +25,10 @@ export function emitToUser(userId: string, event: string, payload: unknown) {
   io?.to(`user:${userId}`).emit(event, payload);
 }
 
+export function emitToProject(projectId: string, event: string, payload: unknown) {
+  io?.to(`project:${projectId}`).emit(event, payload);
+}
+
 export function emitPresenceUpdate(
   orgId: string,
   payload: { userId: string; checkedIn: boolean; online?: boolean },

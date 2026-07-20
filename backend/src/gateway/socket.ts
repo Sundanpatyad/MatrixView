@@ -6,6 +6,7 @@ import { Session } from '../modules/auth/models/Session.js';
 import { User } from '../modules/auth/models/User.js';
 import { ActivitySession } from '../modules/activity/models/ActivitySession.js';
 import { Conversation } from '../modules/chat/models/Conversation.js';
+import { Project } from '../modules/workspace/models/Project.js';
 import * as chat from '../modules/chat/service.js';
 import { verifyAccessToken, type AccessTokenPayload } from '../utils/tokens.js';
 import {
@@ -393,6 +394,39 @@ export function initSocket(httpServer: HttpServer) {
     socket.on('conversation:leave', (payload: { conversationId?: string }) => {
       if (payload?.conversationId) {
         socket.leave(`conversation:${payload.conversationId}`);
+      }
+    });
+
+    socket.on('project:join', async (payload: { projectId?: string }, ack?) => {
+      try {
+        const projectId = payload?.projectId;
+        if (!projectId || !Types.ObjectId.isValid(projectId)) {
+          ack?.({ ok: false, error: 'Invalid project' });
+          return;
+        }
+        const project = await Project.findById(projectId).select('members').lean();
+        if (!project) {
+          ack?.({ ok: false, error: 'Not found' });
+          return;
+        }
+        const email = String(auth.email ?? '').toLowerCase();
+        const member = project.members?.find(
+          (m) => String(m.email ?? '').toLowerCase() === email,
+        );
+        if (!member) {
+          ack?.({ ok: false, error: 'Forbidden' });
+          return;
+        }
+        socket.join(`project:${projectId}`);
+        ack?.({ ok: true });
+      } catch (err) {
+        ack?.({ ok: false, error: err instanceof Error ? err.message : 'Failed' });
+      }
+    });
+
+    socket.on('project:leave', (payload: { projectId?: string }) => {
+      if (payload?.projectId) {
+        socket.leave(`project:${payload.projectId}`);
       }
     });
 

@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -34,6 +35,16 @@ import {
   updateTaskRequest,
   uploadProjectAvatarRequest,
 } from '@/lib/api/workspace';
+import {
+  clearChatSocketHandlerKeys,
+  connectChatSocket,
+  getChatSocket,
+  joinProject,
+  leaveProject,
+  patchChatSocketHandlers,
+  type BoardColumnsEventPayload,
+  type BoardTaskEventPayload,
+} from '@/lib/socket/chatSocket';
 import {
   ensureProjectColumns,
   ensureTaskFields,
@@ -241,6 +252,76 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     if (isBootstrapping) return;
     void refresh();
   }, [isBootstrapping, refresh, user?.id]);
+
+  const projectIds = useMemo(
+    () => state.projects.map((p) => p.id).sort().join(','),
+    [state.projects],
+  );
+  const projectIdsRef = useRef<string[]>([]);
+  projectIdsRef.current = state.projects.map((p) => p.id);
+
+  // Realtime board sync — join project rooms + apply remote task/column changes
+  useEffect(() => {
+    if (!isAuthenticated || isBootstrapping) return;
+
+    const applyTask = (payload: BoardTaskEventPayload) => {
+      if (!payload?.task?.id) return;
+      // Always apply remote state (including own actor) so optimistic status
+      // converges to the server payload for every open board.
+      setState((prev) => ({
+        ...prev,
+        tasks: upsertTask(prev.tasks, ensureTaskFields(payload.task)),
+      }));
+    };
+
+    const applyColumns = (payload: BoardColumnsEventPayload) => {
+      if (!payload?.project?.id) return;
+      setState((prev) => {
+        let tasks = prev.tasks;
+        if (payload.tasks) {
+          const projectId = payload.project.id;
+          const others = prev.tasks.filter((t) => t.projectId !== projectId);
+          tasks = [...others, ...payload.tasks.map(ensureTaskFields)];
+        }
+        return {
+          ...prev,
+          projects: upsertProject(prev.projects, ensureProjectColumns(payload.project)),
+          tasks,
+        };
+      });
+    };
+
+    patchChatSocketHandlers({
+      onTaskCreated: applyTask,
+      onTaskUpdated: applyTask,
+      onProjectColumns: applyColumns,
+    });
+
+    let cancelled = false;
+    const joinAll = () => {
+      for (const id of projectIdsRef.current) joinProject(id);
+    };
+
+    void connectChatSocket().then((s) => {
+      if (cancelled || !s) return;
+      joinAll();
+      s.on('connect', joinAll);
+    });
+
+    return () => {
+      cancelled = true;
+      const s = getChatSocket();
+      s?.off('connect', joinAll);
+      for (const id of projectIdsRef.current) leaveProject(id);
+      clearChatSocketHandlerKeys(['onTaskCreated', 'onTaskUpdated', 'onProjectColumns']);
+    };
+  }, [isAuthenticated, isBootstrapping, user?.id]);
+
+  // Re-join when project list changes (new project created / invited)
+  useEffect(() => {
+    if (!isAuthenticated || !projectIds) return;
+    for (const id of projectIdsRef.current) joinProject(id);
+  }, [isAuthenticated, projectIds]);
 
   // Drop stale selection if project was removed / no longer visible
   useEffect(() => {

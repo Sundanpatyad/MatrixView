@@ -636,7 +636,9 @@ function Hero() {
           </div>
 
           <div className="lg:col-span-6">
-            <DesktopMockup />
+            <TiltCard>
+              <DesktopMockup />
+            </TiltCard>
           </div>
         </div>
       </div>
@@ -709,6 +711,74 @@ type BentoTile = {
   body: string;
   content: ReactNode;
 };
+
+/** Loops a message, a typing indicator, then a reply, to show chat happening live. */
+function AnimatedChat() {
+  const reduce = useReducedMotion();
+  const [step, setStep] = useState<0 | 1 | 2>(reduce ? 2 : 0);
+
+  useEffect(() => {
+    if (reduce) return;
+    const order: (0 | 1 | 2)[] = [0, 1, 2];
+    let i = 0;
+    const id = setInterval(() => {
+      i = (i + 1) % order.length;
+      setStep(order[i]);
+    }, 2200);
+    return () => clearInterval(id);
+  }, [reduce]);
+
+  return (
+    <div className="mt-5 flex min-h-[112px] flex-col justify-end gap-2">
+      <AnimatePresence initial={false}>
+        <motion.div
+          key="m1"
+          initial={reduce ? false : { opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35 }}
+          className="max-w-[85%] rounded-2xl rounded-tl-sm bg-ink-600 px-3 py-2 text-[12px] text-ink-100"
+        >
+          Pushed the new radius tokens, review when you can.
+        </motion.div>
+        {step === 1 ? (
+          <motion.div
+            key="typing"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            className="ml-auto flex items-center gap-1 rounded-2xl rounded-tr-sm bg-ink-700 px-3 py-2.5"
+          >
+            {[0, 1, 2].map((d) => (
+              <motion.span
+                key={d}
+                className="h-1.5 w-1.5 rounded-full bg-ink-300"
+                animate={{ opacity: [0.3, 1, 0.3] }}
+                transition={{ duration: 1.1, repeat: Infinity, delay: d * 0.15 }}
+              />
+            ))}
+          </motion.div>
+        ) : null}
+        {step === 2 ? (
+          <motion.div
+            key="m2"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            className="ml-auto max-w-[85%] rounded-2xl rounded-tr-sm bg-brand-500 px-3 py-2 text-[12px] text-white"
+          >
+            Merging now.
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+      <div className="flex items-center gap-2 rounded-full border border-ink-600 bg-ink-900/30 px-3 py-1.5 text-[12px] text-ink-400">
+        <span className="flex-1">Message #design-guild</span>
+        <Send className="h-3.5 w-3.5 text-brand-400" />
+      </div>
+    </div>
+  );
+}
 
 function FeatureGrid() {
   const attendanceTimer = useLiveTimer(24138);
@@ -846,6 +916,33 @@ function FeatureGrid() {
 
 /* ============ Kanban spotlight ============ */
 
+/** A plain card, or (for the one card mid-drag) a card that floats in a slow loop to suggest live drag-and-drop. */
+function DragCard({ dragging, children }: { dragging?: boolean; children: ReactNode }) {
+  const reduce = useReducedMotion();
+
+  if (!dragging) {
+    return (
+      <div className="rounded-md border border-ink-600 bg-ink-800 p-2.5 shadow-sm">{children}</div>
+    );
+  }
+  if (reduce) {
+    return (
+      <div className="rotate-[-1.5deg] rounded-md border border-brand-300 bg-ink-800 p-2.5 shadow-sm ring-2 ring-brand-500/25">
+        {children}
+      </div>
+    );
+  }
+  return (
+    <motion.div
+      className="rounded-md border border-brand-300 bg-ink-800 p-2.5 shadow-lg shadow-brand-500/20 ring-2 ring-brand-500/25 will-change-transform"
+      animate={{ y: [0, -7, 0], rotate: [-1.5, -3.5, -1.5] }}
+      transition={{ duration: 2.6, repeat: Infinity, ease: "easeInOut" }}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
 function BoardVisual() {
   const columns = [
     {
@@ -926,14 +1023,7 @@ function BoardVisual() {
             </div>
             <div className="mt-1 space-y-2">
               {col.cards.map((c) => (
-                <div
-                  key={c.k}
-                  className={`rounded-md border bg-ink-800 p-2.5 shadow-sm ${
-                    c.drag
-                      ? "border-brand-300 ring-2 ring-brand-500/25 rotate-[-1.5deg]"
-                      : "border-ink-600"
-                  }`}
-                >
+                <DragCard key={c.k} dragging={c.drag}>
                   <div className="tabular text-[10px] font-semibold text-ink-300">{c.k}</div>
                   <div className="mt-0.5 text-[12px] font-medium leading-snug text-ink-100">
                     {c.t}
@@ -950,7 +1040,7 @@ function BoardVisual() {
                       style={{ background: "#5865F2" }}
                     />
                   </div>
-                </div>
+                </DragCard>
               ))}
             </div>
           </div>
@@ -1161,7 +1251,10 @@ function Stats() {
       <div className="mx-auto grid max-w-7xl grid-cols-2 gap-6 px-4 py-14 sm:px-6 lg:grid-cols-4 lg:px-8">
         {stats.map(([n, l], i) => (
           <Reveal key={l} i={i} className="text-center">
-            <div className="tabular text-4xl font-semibold text-brand-300 sm:text-5xl">{n}</div>
+            <CountUp
+              value={n}
+              className="tabular block text-4xl font-semibold text-brand-300 sm:text-5xl"
+            />
             <div className="mt-2 text-[13px] font-medium text-ink-300">{l}</div>
           </Reveal>
         ))}

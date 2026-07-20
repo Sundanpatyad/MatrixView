@@ -5,6 +5,7 @@ import {
   refreshApiAccessToken,
 } from '@/lib/api/client';
 import type { ChatConversation, ChatMessage } from '@/lib/api/chat';
+import type { BoardTask, Project } from '@/lib/workspace/types';
 
 export type PresenceUser = {
   userId: string;
@@ -126,6 +127,20 @@ export type CallSpotlightPayload = {
   targetUserId: string | null;
 };
 
+export type BoardTaskEventPayload = {
+  projectId: string;
+  task: BoardTask;
+  actorId?: string;
+  changed?: string[];
+};
+
+export type BoardColumnsEventPayload = {
+  projectId: string;
+  project: Project;
+  tasks?: BoardTask[];
+  actorId?: string;
+};
+
 type Handlers = {
   onPresenceSnapshot?: (users: PresenceUser[]) => void;
   onPresenceUpdate?: (user: PresenceUser) => void;
@@ -149,6 +164,9 @@ type Handlers = {
   onCallHand?: (payload: CallHandPayload) => void;
   onCallReaction?: (payload: CallReactionPayload) => void;
   onCallSpotlight?: (payload: CallSpotlightPayload) => void;
+  onTaskCreated?: (payload: BoardTaskEventPayload) => void;
+  onTaskUpdated?: (payload: BoardTaskEventPayload) => void;
+  onProjectColumns?: (payload: BoardColumnsEventPayload) => void;
   onConnect?: () => void;
   onDisconnect?: () => void;
 };
@@ -263,6 +281,15 @@ function bindSocket(s: Socket) {
   });
   s.on('call:spotlight', (payload: CallSpotlightPayload) => {
     if (payload?.callId) handlers.onCallSpotlight?.(payload);
+  });
+  s.on('task:created', (payload: BoardTaskEventPayload) => {
+    if (payload?.task?.id) handlers.onTaskCreated?.(payload);
+  });
+  s.on('task:updated', (payload: BoardTaskEventPayload) => {
+    if (payload?.task?.id) handlers.onTaskUpdated?.(payload);
+  });
+  s.on('project:columns', (payload: BoardColumnsEventPayload) => {
+    if (payload?.project?.id) handlers.onProjectColumns?.(payload);
   });
 }
 
@@ -396,6 +423,14 @@ export function joinConversation(conversationId: string) {
 
 export function leaveConversation(conversationId: string) {
   socket?.emit('conversation:leave', { conversationId });
+}
+
+export function joinProject(projectId: string) {
+  socket?.emit('project:join', { projectId });
+}
+
+export function leaveProject(projectId: string) {
+  socket?.emit('project:leave', { projectId });
 }
 
 export function emitTypingStart(conversationId: string) {

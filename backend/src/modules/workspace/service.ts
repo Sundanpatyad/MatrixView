@@ -21,6 +21,7 @@ import {
   serializeTeam,
   serializeTimeline,
 } from './serialize.js';
+import { broadcastProjectEvent } from './boardRealtime.js';
 import {
   deleteStoredMedia,
   deleteStoredMediaMany,
@@ -528,7 +529,12 @@ export async function addColumn(actor: Actor, projectId: string, label: string) 
   };
   project.columns.push(column);
   await project.save();
-  return { project: await presentProject(project), column };
+  const presented = await presentProject(project);
+  await broadcastProjectEvent(project, 'project:columns', {
+    project: presented,
+    actorId: actor.sub,
+  });
+  return { project: presented, column };
 }
 
 export async function renameColumn(
@@ -546,7 +552,12 @@ export async function renameColumn(
   if (!col) throw new AuthError('Column not found', 404, 'NOT_FOUND');
   col.label = trimmed;
   await project.save();
-  return presentProject(project);
+  const presented = await presentProject(project);
+  await broadcastProjectEvent(project, 'project:columns', {
+    project: presented,
+    actorId: actor.sub,
+  });
+  return presented;
 }
 
 export async function removeColumn(
@@ -578,9 +589,16 @@ export async function removeColumn(
   );
 
   const tasks = await Task.find({ projectId: project._id });
+  const presentedProject = await presentProject(project);
+  const presentedTasks = await presentTasks(tasks);
+  await broadcastProjectEvent(project, 'project:columns', {
+    project: presentedProject,
+    tasks: presentedTasks,
+    actorId: actor.sub,
+  });
   return {
-    project: await presentProject(project),
-    tasks: await presentTasks(tasks),
+    project: presentedProject,
+    tasks: presentedTasks,
   };
 }
 
@@ -604,7 +622,12 @@ export async function reorderColumns(
   const byId = new Map(project.columns.map((c) => [c.id, c]));
   project.columns = columnIds.map((id) => byId.get(id)!) as typeof project.columns;
   await project.save();
-  return presentProject(project);
+  const presented = await presentProject(project);
+  await broadcastProjectEvent(project, 'project:columns', {
+    project: presented,
+    actorId: actor.sub,
+  });
+  return presented;
 }
 
 export async function createTask(
@@ -674,7 +697,12 @@ export async function createTask(
     attachments: [],
   });
 
-  return presentTask(task);
+  const presented = await presentTask(task);
+  await broadcastProjectEvent(project, 'task:created', {
+    task: presented,
+    actorId: actor.sub,
+  });
+  return presented;
 }
 
 export async function updateTask(
@@ -734,7 +762,13 @@ export async function updateTask(
   }
 
   await task.save();
-  return presentTask(task);
+  const presented = await presentTask(task);
+  await broadcastProjectEvent(project, 'task:updated', {
+    task: presented,
+    actorId: actor.sub,
+    changed: Object.keys(patch),
+  });
+  return presented;
 }
 
 export async function addComment(
@@ -771,7 +805,13 @@ export async function addComment(
   };
   task.comments.push(comment);
   await task.save();
-  return presentTask(task);
+  const presented = await presentTask(task);
+  await broadcastProjectEvent(project, 'task:updated', {
+    task: presented,
+    actorId: actor.sub,
+    changed: ['comments'],
+  });
+  return presented;
 }
 
 export async function addTaskAttachments(
@@ -796,7 +836,13 @@ export async function addTaskAttachments(
   );
   task.attachments.push(...attachments);
   await task.save();
-  return presentTask(task);
+  const presented = await presentTask(task);
+  await broadcastProjectEvent(project, 'task:updated', {
+    task: presented,
+    actorId: actor.sub,
+    changed: ['attachments'],
+  });
+  return presented;
 }
 
 export async function removeTaskAttachment(
@@ -828,7 +874,13 @@ export async function removeTaskAttachment(
       } satisfies StoredMediaRef,
     ]);
   }
-  return presentTask(task);
+  const presented = await presentTask(task);
+  await broadcastProjectEvent(project, 'task:updated', {
+    task: presented,
+    actorId: actor.sub,
+    changed: ['attachments'],
+  });
+  return presented;
 }
 
 export async function createTimelineItem(
@@ -931,6 +983,7 @@ export async function updateTimelineItem(
   const wantsAssignee = assigneeProvided && Boolean(nextAssigneeId && nextAssigneeName);
 
   let task: TaskDoc | null = null;
+  let taskWasCreated = false;
 
   if (wantsAssignee) {
     if (item.taskId) {
@@ -970,6 +1023,7 @@ export async function updateTimelineItem(
         comments: [],
         attachments: [...(item.attachments ?? [])],
       });
+      taskWasCreated = true;
       item.assigneeId = nextAssigneeId;
       item.assigneeName = nextAssigneeName;
       item.taskId = task._id;
@@ -1003,9 +1057,24 @@ export async function updateTimelineItem(
     }
   }
 
+  const presentedTask = task ? await presentTask(task) : null;
+  if (presentedTask) {
+    await broadcastProjectEvent(
+      project,
+      taskWasCreated ? 'task:created' : 'task:updated',
+      {
+        task: presentedTask,
+        actorId: actor.sub,
+        changed: taskWasCreated
+          ? undefined
+          : ['title', 'description', 'type', 'priority', 'dueDate', 'assigneeId', 'assigneeName'],
+      },
+    );
+  }
+
   return {
     item: serializeTimeline(item),
-    task: task ? await presentTask(task) : null,
+    task: presentedTask,
   };
 }
 
@@ -1037,9 +1106,16 @@ export async function assignTimelineItem(
     item.assignedAt = new Date();
     await item.save();
 
+    const presentedTask = await presentTask(task);
+    await broadcastProjectEvent(project, 'task:updated', {
+      task: presentedTask,
+      actorId: actor.sub,
+      changed: ['assigneeId', 'assigneeName'],
+    });
+
     return {
       timelineItem: serializeTimeline(item),
-      task: await presentTask(task),
+      task: presentedTask,
     };
   }
 
@@ -1078,9 +1154,15 @@ export async function assignTimelineItem(
   item.assignedAt = new Date();
   await item.save();
 
+  const presentedTask = await presentTask(task as TaskDoc);
+  await broadcastProjectEvent(project, 'task:created', {
+    task: presentedTask,
+    actorId: actor.sub,
+  });
+
   return {
     timelineItem: serializeTimeline(item),
-    task: await presentTask(task as TaskDoc),
+    task: presentedTask,
   };
 }
 
