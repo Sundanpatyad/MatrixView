@@ -67,20 +67,37 @@ export type AttendanceStatus = {
   lastSession: ActivitySession | null;
 };
 
-/** GET — is the user checked in (restores after app reopen). */
-export function getAttendanceStatus(): Promise<AttendanceStatus> {
-  return apiFetch('/api/activity/attendance', { auth: true });
+function tzQuery() {
+  return `tzOffset=${encodeURIComponent(String(new Date().getTimezoneOffset()))}`;
 }
 
-export function postActivitySamples(
+/** GET — is the user checked in (restores after app reopen). */
+export function getAttendanceStatus(): Promise<AttendanceStatus> {
+  return apiFetch(`/api/activity/attendance?${tzQuery()}`, { auth: true });
+}
+
+export async function postActivitySamples(
   sessionId: string,
   samples: ActivitySample[],
 ): Promise<{ session: ActivitySession }> {
-  return apiFetch(`/api/activity/sessions/${sessionId}/samples`, {
-    method: 'POST',
-    auth: true,
-    body: JSON.stringify({ samples }),
-  });
+  const CHUNK = 100;
+  if (samples.length === 0) {
+    return apiFetch(`/api/activity/sessions/${sessionId}/samples`, {
+      method: 'POST',
+      auth: true,
+      body: JSON.stringify({ samples: [] }),
+    });
+  }
+  let last!: { session: ActivitySession };
+  for (let i = 0; i < samples.length; i += CHUNK) {
+    const chunk = samples.slice(i, i + CHUNK);
+    last = await apiFetch(`/api/activity/sessions/${sessionId}/samples`, {
+      method: 'POST',
+      auth: true,
+      body: JSON.stringify({ samples: chunk }),
+    });
+  }
+  return last;
 }
 
 export function stopActivitySession(
@@ -96,11 +113,12 @@ export function stopActivitySession(
 export function getTodayActivity(): Promise<{
   date: string;
   totalTrackedMs: number;
+  totalWebsiteMs?: number;
   apps: AppUsage[];
   sites?: SiteUsage[];
   sessions: ActivitySession[];
 }> {
-  return apiFetch('/api/activity/today', { auth: true });
+  return apiFetch(`/api/activity/today?${tzQuery()}`, { auth: true });
 }
 
 export type MemberActivity = {
@@ -111,6 +129,7 @@ export type MemberActivity = {
   avatarUrl?: string | null;
   tracking: boolean;
   totalTrackedMs: number;
+  totalWebsiteMs?: number;
   apps: AppUsage[];
   sites?: SiteUsage[];
   sessions: ActivitySession[];
@@ -119,10 +138,11 @@ export type MemberActivity = {
 export function getOrgActivityByDate(date: string): Promise<{
   date: string;
   totalTrackedMs: number;
+  totalWebsiteMs?: number;
   allApps: AppUsage[];
   allSites?: SiteUsage[];
   members: MemberActivity[];
 }> {
   const q = encodeURIComponent(date);
-  return apiFetch(`/api/activity/org/today?date=${q}`, { auth: true });
+  return apiFetch(`/api/activity/org/today?date=${q}&${tzQuery()}`, { auth: true });
 }

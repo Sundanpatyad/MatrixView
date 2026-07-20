@@ -5,6 +5,7 @@ import { AdminActivityPanel } from '@/components/dashboard/AdminActivityPanel';
 import { CreateProjectModal } from '@/components/dashboard/CreateProjectModal';
 import { TimelinePanel } from '@/components/dashboard/TimelinePanel';
 import { Button } from '@/components/ui/Button';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { Select } from '@/components/ui/Select';
 import { UserAvatar, avatarFromMembers } from '@/components/ui/UserAvatar';
 import { useAttendance } from '@/lib/attendance/AttendanceContext';
@@ -158,7 +159,16 @@ type TeamUser = ProjectMember & { taskCount: number; openCount: number; projects
 export function DashboardPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { projects, tasks, getProject, timeline } = useWorkspace();
+  const {
+    projects,
+    tasks,
+    getProject,
+    timeline,
+    activeProjectId,
+    setActiveProjectId,
+    isProjectAdmin,
+    deleteProject,
+  } = useWorkspace();
   const {
     checkedIn,
     onBreak,
@@ -178,39 +188,105 @@ export function DashboardPage() {
   const [showAddUser, setShowAddUser] = useState(false);
   const [assignUser, setAssignUser] = useState<OrgUser | null>(null);
   const [orgUsers, setOrgUsers] = useState<OrgUser[]>([]);
+  const [projectToDelete, setProjectToDelete] = useState<string | null>(null);
+  const [deletingProject, setDeletingProject] = useState(false);
 
-  const isAdmin = user?.role === 'Admin';
+  const myRoleOnActive = useMemo(() => {
+    if (activeProjectId === 'all' || !user) return null;
+    const p = getProject(activeProjectId);
+    const m = p?.members.find((x) => x.email.toLowerCase() === user.email.toLowerCase());
+    return m?.role ?? null;
+  }, [activeProjectId, getProject, user]);
+
+  const canDeleteActiveProject = Boolean(
+    activeProjectId !== 'all' && isProjectAdmin(activeProjectId),
+  );
+
+  const scopedProjects = useMemo(
+    () =>
+      activeProjectId === 'all'
+        ? projects
+        : projects.filter((p) => p.id === activeProjectId),
+    [projects, activeProjectId],
+  );
+
+  const scopedTasks = useMemo(
+    () =>
+      activeProjectId === 'all'
+        ? tasks
+        : tasks.filter((t) => t.projectId === activeProjectId),
+    [tasks, activeProjectId],
+  );
+
+  const scopedTimeline = useMemo(
+    () =>
+      activeProjectId === 'all'
+        ? timeline
+        : timeline.filter((t) => t.projectId === activeProjectId),
+    [timeline, activeProjectId],
+  );
+
+  /** True if user is admin on at least one project they belong to */
+  const isProjectAdminAnywhere = useMemo(
+    () =>
+      Boolean(
+        user &&
+          projects.some((p) =>
+            p.members.some(
+              (m) =>
+                m.role === 'admin' &&
+                m.email.toLowerCase() === user.email.toLowerCase(),
+            ),
+          ),
+      ),
+    [projects, user],
+  );
+
+  const projectSwitchOptions = useMemo(
+    () => [
+      { value: 'all', label: `All projects (${projects.length})` },
+      ...projects.map((p) => {
+        const role =
+          user &&
+          p.members.find((m) => m.email.toLowerCase() === user.email.toLowerCase())?.role;
+        return {
+          value: p.id,
+          label: `${p.name} · ${role === 'admin' ? 'Admin' : 'Member'}`,
+        };
+      }),
+    ],
+    [projects, user],
+  );
   const firstName = user?.name.split(' ')[0] ?? 'there';
-  const pendingTimeline = timeline.filter((t) => !t.taskId).length;
+  const pendingTimeline = scopedTimeline.filter((t) => !t.taskId).length;
   const tabs = useMemo(
     () =>
-      isAdmin
+      isProjectAdminAnywhere
         ? [...BASE_TABS, { id: 'activity' as const, label: 'Activity' }]
         : BASE_TABS,
-    [isAdmin],
+    [isProjectAdminAnywhere],
   );
 
   useEffect(() => {
-    if (!isAdmin && tab === 'activity') setTab('overview');
-  }, [isAdmin, tab]);
+    if (!isProjectAdminAnywhere && tab === 'activity') setTab('overview');
+  }, [isProjectAdminAnywhere, tab]);
 
   const loadOrgUsers = useCallback(async () => {
-    if (!isAdmin) return;
     try {
       const data = await listOrgUsers();
       setOrgUsers(data.users);
     } catch {
       /* ignore — fall back to project members */
     }
-  }, [isAdmin]);
+  }, []);
 
   useEffect(() => {
-    if (tab === 'users' && isAdmin) void loadOrgUsers();
-  }, [tab, isAdmin, loadOrgUsers]);
+    if (tab === 'users') void loadOrgUsers();
+  }, [tab, loadOrgUsers]);
 
   const teamUsers = useMemo(() => {
     const map = new Map<string, TeamUser>();
-    for (const p of projects) {
+    for (const p of scopedProjects) {
       const project = getProject(p.id);
       if (!project) continue;
       for (const m of project.members) {
@@ -249,7 +325,7 @@ export function DashboardPage() {
         });
       }
     }
-    for (const t of tasks) {
+    for (const t of scopedTasks) {
       const emailMatch = [...map.values()].find(
         (u) =>
           u.name.toLowerCase() === t.assigneeName.toLowerCase() ||
@@ -260,16 +336,16 @@ export function DashboardPage() {
       if (t.status !== 'done') emailMatch.openCount += 1;
     }
     return [...map.values()].sort((a, b) => b.taskCount - a.taskCount);
-  }, [projects, tasks, getProject, orgUsers]);
+  }, [scopedProjects, scopedTasks, getProject, orgUsers]);
 
   const stats = useMemo(() => {
-    let scope: BoardTask[] = tasks;
+    let scope: BoardTask[] = scopedTasks;
 
     if (selectedUserEmail === 'all') {
-      scope = tasks;
+      scope = scopedTasks;
     } else {
       const member = teamUsers.find((u) => u.email.toLowerCase() === selectedUserEmail);
-      scope = tasks.filter(
+      scope = scopedTasks.filter(
         (t) =>
           (member &&
             (t.assigneeId === member.id ||
@@ -317,7 +393,7 @@ export function DashboardPage() {
     }).length;
 
     // Workload per project for bar chart
-    const byProject = projects.map((p) => ({
+    const byProject = scopedProjects.map((p) => ({
       label: p.key.slice(0, 4),
       value: scope.filter((t) => t.projectId === p.id).length,
       color: '#0f766e',
@@ -334,7 +410,7 @@ export function DashboardPage() {
       totalTasks: scope.length,
       byProject,
     };
-  }, [tasks, projects, selectedUserEmail, teamUsers]);
+  }, [scopedTasks, scopedProjects, selectedUserEmail, teamUsers]);
 
   const taskList = useMemo(() => {
     let list = [...stats.scope];
@@ -370,6 +446,28 @@ export function DashboardPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <div className="min-w-[200px] max-w-[280px] flex-1 sm:flex-none">
+              <Select
+                value={activeProjectId}
+                onChange={(value) => setActiveProjectId(value as typeof activeProjectId)}
+                options={projectSwitchOptions}
+                aria-label="Switch project"
+                size="xs"
+              />
+            </div>
+            {myRoleOnActive ? (
+              <span
+                className={cn(
+                  'hidden rounded-md px-2 py-1 text-[10px] font-bold tracking-wide uppercase sm:inline',
+                  myRoleOnActive === 'admin'
+                    ? 'bg-teal-50 text-teal-800'
+                    : 'bg-ink-100 text-ink-600',
+                )}
+              >
+                {myRoleOnActive}
+              </span>
+            ) : null}
+
             <div className="flex h-8 items-center gap-2 border border-ink-200 bg-ink-50 px-2.5">
               <span
                 className={cn(
@@ -417,12 +515,25 @@ export function DashboardPage() {
                 </Button>
               </>
             )}
-            {isAdmin ? (
-              <Button size="xs" variant="secondary" onClick={() => setShowCreateProject(true)}>
-                New project
+            <Button size="xs" variant="secondary" onClick={() => setShowCreateProject(true)}>
+              New project
+            </Button>
+            {canDeleteActiveProject ? (
+              <Button
+                size="xs"
+                variant="danger"
+                onClick={() => setProjectToDelete(activeProjectId)}
+              >
+                Delete project
               </Button>
             ) : null}
-            <Link to="/board">
+            <Link
+              to={
+                activeProjectId !== 'all'
+                  ? `/board?project=${activeProjectId}`
+                  : '/board'
+              }
+            >
               <Button size="xs" variant="secondary">
                 Board
               </Button>
@@ -459,7 +570,7 @@ export function DashboardPage() {
         </div>
       ) : null}
 
-      {tab === 'activity' && isAdmin ? (
+      {tab === 'activity' && isProjectAdminAnywhere ? (
         <div className="min-h-0 flex-1 overflow-hidden">
           <AdminActivityPanel />
         </div>
@@ -580,7 +691,7 @@ export function DashboardPage() {
                 {teamUsers.length} people across projects · click to filter Tasks tab
               </p>
             </div>
-            {isAdmin ? (
+            {isProjectAdminAnywhere ? (
               <Button size="xs" onClick={() => setShowAddUser(true)}>
                 Add user
               </Button>
@@ -596,17 +707,17 @@ export function DashboardPage() {
                   <th className="px-3 py-2">Open</th>
                   <th className="px-3 py-2">Total</th>
                   <th className="px-3 py-2">Projects</th>
-                  {isAdmin ? <th className="px-4 py-2 text-right">Actions</th> : null}
+                  {isProjectAdminAnywhere ? <th className="px-4 py-2 text-right">Actions</th> : null}
                 </tr>
               </thead>
               <tbody>
                 {teamUsers.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={isAdmin ? 7 : 6}
+                      colSpan={isProjectAdminAnywhere ? 7 : 6}
                       className="px-4 py-12 text-center text-ink-400"
                     >
-                      {isAdmin
+                      {isProjectAdminAnywhere
                         ? 'No users yet. Click Add user to create one.'
                         : 'No users yet.'}
                     </td>
@@ -665,7 +776,7 @@ export function DashboardPage() {
                         <td className="px-3 py-2.5 text-ink-500">
                           {u.projects.length > 0 ? u.projects.join(', ') : '—'}
                         </td>
-                        {isAdmin ? (
+                        {isProjectAdminAnywhere ? (
                           <td className="px-4 py-2.5 text-right">
                             {orgUser ? (
                               <button
@@ -699,7 +810,11 @@ export function DashboardPage() {
           { label: 'Open tasks', value: stats.open, hint: `${stats.totalTasks} total` },
           { label: 'Done', value: stats.byStatus.done, hint: `${stats.completion}%` },
           { label: 'Due week', value: stats.dueSoon, hint: `${stats.overdue} overdue` },
-          { label: 'Projects', value: projects.length, hint: `${teamUsers.length} users` },
+          {
+            label: 'Projects',
+            value: scopedProjects.length,
+            hint: `${teamUsers.length} users`,
+          },
         ].map((card, i) => (
           <div
             key={card.label}
@@ -954,6 +1069,7 @@ export function DashboardPage() {
           onClose={() => setShowCreateProject(false)}
           onCreated={(projectId) => {
             setShowCreateProject(false);
+            setActiveProjectId(projectId);
             navigate(`/board?project=${projectId}`);
           }}
         />
@@ -973,6 +1089,30 @@ export function DashboardPage() {
           onSaved={() => void loadOrgUsers()}
         />
       ) : null}
+
+      <ConfirmModal
+        open={Boolean(projectToDelete)}
+        title="Delete project?"
+        message={
+          projectToDelete
+            ? `Permanently delete “${getProject(projectToDelete)?.name ?? 'this project'}”? Tasks, timeline items, and invites for this project will be removed. This cannot be undone.`
+            : ''
+        }
+        confirmLabel="Delete project"
+        danger
+        busy={deletingProject}
+        onCancel={() => setProjectToDelete(null)}
+        onConfirm={() => {
+          if (!projectToDelete) return;
+          setDeletingProject(true);
+          void deleteProject(projectToDelete)
+            .then(() => setProjectToDelete(null))
+            .catch(() => {
+              /* error surfaces via UI state if needed */
+            })
+            .finally(() => setDeletingProject(false));
+        }}
+      />
     </div>
   );
 }

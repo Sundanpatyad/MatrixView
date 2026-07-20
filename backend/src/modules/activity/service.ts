@@ -24,13 +24,50 @@ export type ActivitySampleInput = {
   endedAt?: string;
 };
 
+function normalizeHost(raw: string): string {
+  let host = raw.trim().toLowerCase();
+  if (!host) return '';
+  // Drop credentials / port noise for grouping
+  host = host.replace(/^https?:\/\//, '').split('/')[0] ?? host;
+  host = host.replace(/:\d+$/, '');
+  host = host.replace(/^www\./, '');
+  // Mobile / country CDN aliases → registrable-ish host
+  host = host.replace(/^m\./, '').replace(/^mobile\./, '');
+  if (
+    !host ||
+    host === 'localhost' ||
+    host.endsWith('.local') ||
+    host.includes(' ') ||
+    host.startsWith('file:')
+  ) {
+    return '';
+  }
+  return host;
+}
+
 function hostFromUrl(url: string): string {
   try {
     const u = new URL(url);
-    return u.hostname.replace(/^www\./i, '') || url;
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return '';
+    return normalizeHost(u.hostname);
   } catch {
-    return url.replace(/^https?:\/\//i, '').split('/')[0] || url;
+    return normalizeHost(url);
   }
+}
+
+/** Sessions that belong in a calendar day (incl. still-active overnight). */
+function sessionsForDayFilter(start: Date, end: Date) {
+  return {
+    $or: [
+      { startedAt: { $gte: start, $lt: end } },
+      { status: 'active' as const, startedAt: { $lt: end } },
+      {
+        status: 'closed' as const,
+        startedAt: { $lt: start },
+        endedAt: { $gte: start, $lt: end },
+      },
+    ],
+  };
 }
 
 export async function startSession(actor: Actor) {
@@ -63,18 +100,17 @@ export async function getCurrentSession(actor: Actor) {
 }
 
 /** Attendance status from DB — active session means checked in. */
-export async function getAttendanceStatus(actor: Actor) {
+export async function getAttendanceStatus(actor: Actor, tzOffsetMinutes?: number) {
   const session = await getCurrentSession(actor);
   const checkedIn = Boolean(session && session.status === 'active');
 
   // Latest closed session today (for UI when checked out)
-  const start = new Date();
-  start.setHours(0, 0, 0, 0);
+  const { start } = dayBounds(undefined, tzOffsetMinutes);
   const lastClosed = await ActivitySession.findOne({
     userId: actor.sub,
     orgId: actor.orgId,
     status: 'closed',
-    startedAt: { $gte: start },
+    $or: [{ endedAt: { $gte: start } }, { startedAt: { $gte: start } }],
   }).sort({ endedAt: -1, startedAt: -1 });
 
   return {
@@ -149,7 +185,8 @@ export async function ingestSamples(
 
     if (kind === 'site') {
       const url = sample.url?.trim() ?? '';
-      const host = (sample.host?.trim() || (url ? hostFromUrl(url) : '')).toLowerCase();
+      if (url && !/^https?:\/\//i.test(url)) continue;
+      const host = normalizeHost(sample.host?.trim() || (url ? hostFromUrl(url) : ''));
       if (!host) continue;
       const durationMs = Math.max(0, Math.min(Number(sample.durationMs) || 0, MAX_APP_SAMPLE_MS));
       if (durationMs <= 0) continue;
@@ -157,7 +194,7 @@ export async function ingestSamples(
       const title = sample.windowTitle?.trim() ?? '';
 
       const siteList = session.sites ?? [];
-      const existing = siteList.find((s) => s.host.toLowerCase() === host);
+      const existing = siteList.find((s) => normalizeHost(s.host) === host);
       if (existing) {
         existing.durationMs = (existing.durationMs ?? 0) + durationMs;
         existing.url = url || existing.url;
@@ -232,21 +269,21 @@ export async function stopSession(actor: Actor, sessionId?: string) {
   return { session: serializeSession(session) };
 }
 
-export async function getTodaySummary(actor: Actor) {
-  const start = new Date();
-  start.setHours(0, 0, 0, 0);
+export async function getTodaySummary(actor: Actor, tzOffsetMinutes?: number) {
+  const { start, end, date } = dayBounds(undefined, tzOffsetMinutes);
 
   const sessions = await ActivitySession.find({
     userId: actor.sub,
     orgId: actor.orgId,
-    startedAt: { $gte: start },
+    ...sessionsForDayFilter(start, end),
   }).sort({ startedAt: -1 });
 
   const apps = aggregateApps(sessions);
   const sites = aggregateSites(sessions);
   return {
-    date: start.toISOString().slice(0, 10),
+    date,
     totalTrackedMs: apps.reduce((s, a) => s + a.durationMs, 0),
+    totalWebsiteMs: sites.reduce((s, a) => s + a.durationMs, 0),
     sessions: sessions.map(serializeSession),
     apps,
     sites,
@@ -259,23 +296,32 @@ function requireOrgAdmin(actor: Actor) {
   }
 }
 
-function localDateStr(d: Date) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
+/**
+ * Calendar-day bounds in the client's timezone.
+ * `tzOffsetMinutes` = `Date#getTimezoneOffset()` (e.g. IST = -330).
+ */
+function dayBounds(dateStr?: string, tzOffsetMinutes?: number) {
+  const offset =
+    typeof tzOffsetMinutes === 'number' && Number.isFinite(tzOffsetMinutes)
+      ? tzOffsetMinutes
+      : new Date().getTimezoneOffset();
 
-function dayBounds(dateStr?: string) {
-  const start = new Date();
+  let y: number;
+  let m: number;
+  let d: number;
   if (dateStr && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-    const [y, m, d] = dateStr.split('-').map(Number);
-    start.setFullYear(y, m - 1, d);
+    [y, m, d] = dateStr.split('-').map(Number) as [number, number, number];
+  } else {
+    const local = new Date(Date.now() - offset * 60_000);
+    y = local.getUTCFullYear();
+    m = local.getUTCMonth() + 1;
+    d = local.getUTCDate();
   }
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(start);
-  end.setDate(end.getDate() + 1);
-  return { start, end, date: localDateStr(start) };
+
+  const start = new Date(Date.UTC(y, m - 1, d) + offset * 60_000);
+  const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+  const date = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  return { start, end, date };
 }
 
 type AppAgg = {
@@ -341,7 +387,8 @@ function aggregateSites(
   const byHost = new Map<string, SiteAgg>();
   for (const s of sessions) {
     for (const site of s.sites ?? []) {
-      const key = site.host.toLowerCase();
+      const key = normalizeHost(site.host);
+      if (!key) continue;
       const prev = byHost.get(key);
       if (prev) {
         prev.durationMs += site.durationMs ?? 0;
@@ -350,7 +397,7 @@ function aggregateSites(
         if (site.browserName) prev.browserName = site.browserName;
       } else {
         byHost.set(key, {
-          host: site.host,
+          host: key,
           url: site.url ?? '',
           title: site.title ?? '',
           browserName: site.browserName ?? '',
@@ -362,11 +409,15 @@ function aggregateSites(
   return [...byHost.values()].sort((a, b) => b.durationMs - a.durationMs);
 }
 
-export async function getOrgActivityByDate(actor: Actor, dateStr?: string) {
+export async function getOrgActivityByDate(
+  actor: Actor,
+  dateStr?: string,
+  tzOffsetMinutes?: number,
+) {
   requireOrgAdmin(actor);
 
-  const { start, end, date } = dayBounds(dateStr);
-  const isToday = date === dayBounds().date;
+  const { start, end, date } = dayBounds(dateStr, tzOffsetMinutes);
+  const isToday = date === dayBounds(undefined, tzOffsetMinutes).date;
 
   const users = await User.find({
     orgId: actor.orgId,
@@ -377,7 +428,7 @@ export async function getOrgActivityByDate(actor: Actor, dateStr?: string) {
 
   const sessions = await ActivitySession.find({
     orgId: actor.orgId,
-    startedAt: { $gte: start, $lt: end },
+    ...sessionsForDayFilter(start, end),
   }).sort({ startedAt: -1 });
 
   const members = users.map((u) => {
@@ -395,6 +446,7 @@ export async function getOrgActivityByDate(actor: Actor, dateStr?: string) {
       avatarUrl: u.avatarUrl ?? null,
       tracking: Boolean(activeSession),
       totalTrackedMs: apps.reduce((sum, a) => sum + a.durationMs, 0),
+      totalWebsiteMs: sites.reduce((sum, a) => sum + a.durationMs, 0),
       apps,
       sites,
       sessions: userSessions.map(serializeSession),
@@ -409,6 +461,7 @@ export async function getOrgActivityByDate(actor: Actor, dateStr?: string) {
   return {
     date,
     totalTrackedMs: allApps.reduce((s, a) => s + a.durationMs, 0),
+    totalWebsiteMs: allSites.reduce((s, a) => s + a.durationMs, 0),
     allApps,
     allSites,
     members,

@@ -7,6 +7,10 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import {
+  AttendanceMomentModal,
+  type CheckPopupKind,
+} from '@/components/attendance/AttendanceMomentModal';
 import { activityTracker } from '@/lib/activity/ActivityTracker';
 import {
   getAttendanceStatus,
@@ -14,6 +18,12 @@ import {
   type AppUsage,
 } from '@/lib/api/activity';
 import { useAuth } from '@/lib/auth/AuthContext';
+import {
+  randomCheckInConfirmMessage,
+  randomCheckInMessage,
+  randomCheckOutConfirmMessage,
+  randomCheckOutMessage,
+} from '@/lib/attendance/checkMessages';
 import { getActiveLocalSession } from '@/lib/offline/activityStore';
 
 type AttendanceState = {
@@ -98,6 +108,48 @@ export function AttendanceProvider({ children }: { children: ReactNode }) {
   const [activityApps, setActivityApps] = useState<AppUsage[]>([]);
   const [activitySession, setActivitySession] = useState<ActivitySession | null>(null);
   const [trackingError, setTrackingError] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState<{
+    kind: CheckPopupKind;
+    message: string;
+  } | null>(null);
+  const [confirmBusy, setConfirmBusy] = useState(false);
+  const [popup, setPopup] = useState<{
+    kind: CheckPopupKind;
+    message: string;
+    timeLabel: string | null;
+  } | null>(null);
+
+  const closePopup = useCallback(() => setPopup(null), []);
+  const closeConfirm = useCallback(() => {
+    if (confirmBusy) return;
+    setConfirm(null);
+  }, [confirmBusy]);
+
+  const shuffleConfirm = useCallback(() => {
+    setConfirm((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        message:
+          prev.kind === 'in'
+            ? randomCheckInConfirmMessage(prev.message)
+            : randomCheckOutConfirmMessage(prev.message),
+      };
+    });
+  }, []);
+
+  const shufflePopup = useCallback(() => {
+    setPopup((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        message:
+          prev.kind === 'in'
+            ? randomCheckInMessage(prev.message)
+            : randomCheckOutMessage(prev.message),
+      };
+    });
+  }, []);
 
   useEffect(() => {
     const unsub = activityTracker.subscribe((s) => {
@@ -198,7 +250,7 @@ export function AttendanceProvider({ children }: { children: ReactNode }) {
     return workedMs + running;
   }, [checkedIn, onBreak, sessionStartedAt, workedMs, tick]);
 
-  const checkIn = useCallback(async () => {
+  const performCheckIn = useCallback(async () => {
     // Resume if already checked in on server (e.g. app reopen race)
     try {
       const status = await getAttendanceStatus();
@@ -212,6 +264,12 @@ export function AttendanceProvider({ children }: { children: ReactNode }) {
           setWorkedMs,
         });
         await activityTracker.resume(status.session);
+        const time = clockLabel(status.session.startedAt);
+        setPopup({
+          kind: 'in',
+          message: randomCheckInMessage(),
+          timeLabel: time,
+        });
         return;
       }
     } catch {
@@ -219,6 +277,7 @@ export function AttendanceProvider({ children }: { children: ReactNode }) {
     }
 
     const session = await activityTracker.start();
+    let time: string | null;
     if (session) {
       applyCheckedInSession(session, {
         setCheckedIn,
@@ -228,18 +287,25 @@ export function AttendanceProvider({ children }: { children: ReactNode }) {
         setSessionStartedAt,
         setWorkedMs,
       });
+      time = clockLabel(session.startedAt);
     } else {
       const now = Date.now();
+      time = clockLabel(new Date());
       setCheckedIn(true);
       setOnBreak(false);
-      setCheckInAt(clockLabel(new Date()));
+      setCheckInAt(time);
       setCheckOutAt(null);
       setWorkedMs(0);
       setSessionStartedAt(now);
     }
+    setPopup({
+      kind: 'in',
+      message: randomCheckInMessage(),
+      timeLabel: time,
+    });
   }, []);
 
-  const checkOut = useCallback(async () => {
+  const performCheckOut = useCallback(async () => {
     await activityTracker.stop();
     const endedAt = clockLabel(new Date());
     setCheckedIn(false);
@@ -249,7 +315,32 @@ export function AttendanceProvider({ children }: { children: ReactNode }) {
     setSessionStartedAt(null);
     setWorkedMs(0);
     setActiveTaskId(null);
+    setPopup({
+      kind: 'out',
+      message: randomCheckOutMessage(),
+      timeLabel: endedAt,
+    });
   }, []);
+
+  const checkIn = useCallback(async () => {
+    setConfirm({ kind: 'in', message: randomCheckInConfirmMessage() });
+  }, []);
+
+  const checkOut = useCallback(async () => {
+    setConfirm({ kind: 'out', message: randomCheckOutConfirmMessage() });
+  }, []);
+
+  const onConfirmAttendance = useCallback(async () => {
+    if (!confirm) return;
+    setConfirmBusy(true);
+    try {
+      if (confirm.kind === 'in') await performCheckIn();
+      else await performCheckOut();
+      setConfirm(null);
+    } finally {
+      setConfirmBusy(false);
+    }
+  }, [confirm, performCheckIn, performCheckOut]);
 
   const toggleBreak = useCallback(() => {
     if (!checkedIn) return;
@@ -316,7 +407,28 @@ export function AttendanceProvider({ children }: { children: ReactNode }) {
   );
 
   return (
-    <AttendanceContext.Provider value={value}>{children}</AttendanceContext.Provider>
+    <AttendanceContext.Provider value={value}>
+      {children}
+      <AttendanceMomentModal
+        open={confirm != null}
+        mode="confirm"
+        kind={confirm?.kind ?? 'in'}
+        message={confirm?.message ?? ''}
+        busy={confirmBusy}
+        onConfirm={() => void onConfirmAttendance()}
+        onCancel={closeConfirm}
+        onShuffle={shuffleConfirm}
+      />
+      <AttendanceMomentModal
+        open={popup != null}
+        mode="success"
+        kind={popup?.kind ?? 'in'}
+        message={popup?.message ?? ''}
+        timeLabel={popup?.timeLabel}
+        onClose={closePopup}
+        onShuffle={shufflePopup}
+      />
+    </AttendanceContext.Provider>
   );
 }
 

@@ -14,21 +14,21 @@ const credentialsSchema = z.object({
   deviceId: z.string().max(128).optional(),
 });
 
-const registerSchema = credentialsSchema
-  .extend({
-    name: z.string().min(1).max(120),
-    orgName: z.string().min(1).max(120).optional(),
-    inviteToken: z.string().min(10).max(200).optional(),
-  })
-  .superRefine((val, ctx) => {
-    if (!val.inviteToken && !val.orgName) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Organization name required',
-        path: ['orgName'],
-      });
-    }
-  });
+const optionalTrimmed = z.preprocess((v) => {
+  if (v == null || v === '') return undefined;
+  if (typeof v === 'string') {
+    const t = v.trim();
+    return t.length ? t : undefined;
+  }
+  return v;
+}, z.string().max(200).optional());
+
+const registerSchema = credentialsSchema.extend({
+  name: z.string().min(1).max(120),
+  /** Optional — personal workspace is created automatically when omitted */
+  orgName: optionalTrimmed,
+  inviteToken: optionalTrimmed,
+});
 
 function clientMeta(req: { ip?: string; headers: Record<string, unknown> }) {
   const ua = req.headers['user-agent'];

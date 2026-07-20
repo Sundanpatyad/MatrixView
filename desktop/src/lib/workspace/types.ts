@@ -58,6 +58,7 @@ export type Project = {
   description: string;
   createdAt: string;
   createdBy: string;
+  createdByUserId?: string | null;
   columns: BoardColumn[];
   members: ProjectMember[];
 };

@@ -17,6 +17,7 @@ import {
   createProjectRequest,
   createTaskRequest,
   createTimelineRequest,
+  deleteProjectRequest,
   deleteTimelineRequest,
   fetchWorkspace,
   updateTimelineRequest,
@@ -88,13 +89,21 @@ type UpdateTimelineInput = {
   assigneeName?: string;
 };
 
+const ACTIVE_PROJECT_KEY = 'tasktrack.activeProjectId';
+
+export type ActiveProjectId = string | 'all';
+
 type WorkspaceContextValue = {
   projects: Project[];
   tasks: BoardTask[];
   timeline: TimelineItem[];
   isLoading: boolean;
+  /** Currently focused project on dashboard / filters (`all` = every membership). */
+  activeProjectId: ActiveProjectId;
+  setActiveProjectId: (id: ActiveProjectId) => void;
   refresh: () => Promise<void>;
   createProject: (input: CreateProjectInput) => Promise<Project>;
+  deleteProject: (projectId: string) => Promise<void>;
   getProject: (id: string) => Project | undefined;
   getProjectTasks: (projectId: string) => BoardTask[];
   createTask: (input: CreateTaskInput) => Promise<BoardTask>;
@@ -155,6 +164,16 @@ function upsertTask(tasks: BoardTask[], task: BoardTask) {
   return next;
 }
 
+function readStoredActiveProject(): ActiveProjectId {
+  try {
+    const v = localStorage.getItem(ACTIVE_PROJECT_KEY);
+    if (!v || v === 'all') return 'all';
+    return v;
+  } catch {
+    return 'all';
+  }
+}
+
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const { user, isAuthenticated, isBootstrapping } = useAuth();
   const [state, setState] = useState<WorkspaceState>({
@@ -163,6 +182,16 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     timeline: [],
   });
   const [isLoading, setIsLoading] = useState(false);
+  const [activeProjectId, setActiveProjectIdState] = useState<ActiveProjectId>(readStoredActiveProject);
+
+  const setActiveProjectId = useCallback((id: ActiveProjectId) => {
+    setActiveProjectIdState(id);
+    try {
+      localStorage.setItem(ACTIVE_PROJECT_KEY, id);
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   const refresh = useCallback(async () => {
     if (!isAuthenticated) {
@@ -190,13 +219,41 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     void refresh();
   }, [isBootstrapping, refresh, user?.id]);
 
+  // Drop stale selection if project was removed / no longer visible
+  useEffect(() => {
+    if (activeProjectId === 'all') return;
+    if (!state.projects.some((p) => p.id === activeProjectId)) {
+      setActiveProjectId('all');
+    }
+  }, [state.projects, activeProjectId, setActiveProjectId]);
+
   const createProject = useCallback(async (input: CreateProjectInput) => {
     const { project } = await createProjectRequest(input);
+    const normalized = ensureProjectColumns(project);
     setState((prev) => ({
       ...prev,
-      projects: upsertProject(prev.projects, ensureProjectColumns(project)),
+      projects: upsertProject(prev.projects, normalized),
     }));
-    return ensureProjectColumns(project);
+    setActiveProjectId(normalized.id);
+    return normalized;
+  }, [setActiveProjectId]);
+
+  const deleteProject = useCallback(async (projectId: string) => {
+    await deleteProjectRequest(projectId);
+    setState((prev) => ({
+      projects: prev.projects.filter((p) => p.id !== projectId),
+      tasks: prev.tasks.filter((t) => t.projectId !== projectId),
+      timeline: prev.timeline.filter((t) => t.projectId !== projectId),
+    }));
+    setActiveProjectIdState((cur) => {
+      const next: ActiveProjectId = cur === projectId ? 'all' : cur;
+      try {
+        localStorage.setItem(ACTIVE_PROJECT_KEY, next);
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
   }, []);
 
   const createTask = useCallback(async (input: CreateTaskInput) => {
@@ -349,15 +406,12 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const isProjectAdmin = useCallback(
     (projectId: string) => {
       if (!user) return false;
-      // Org-level Admin can manage any project in the workspace
-      if (user.role === 'Admin') return true;
       const project = state.projects.find((p) => p.id === projectId);
       if (!project) return false;
       return project.members.some(
         (m) =>
           m.role === 'admin' &&
-          (m.email.toLowerCase() === user.email.toLowerCase() ||
-            m.name.toLowerCase() === user.name.toLowerCase()),
+          m.email.toLowerCase() === user.email.toLowerCase(),
       );
     },
     [state.projects, user],
@@ -435,8 +489,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       tasks: state.tasks.map(ensureTaskFields),
       timeline: state.timeline,
       isLoading,
+      activeProjectId,
+      setActiveProjectId,
       refresh,
       createProject,
+      deleteProject,
       getProject: (id) => {
         const p = state.projects.find((x) => x.id === id);
         return p ? ensureProjectColumns(p) : undefined;
@@ -469,8 +526,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     [
       state,
       isLoading,
+      activeProjectId,
+      setActiveProjectId,
       refresh,
       createProject,
+      deleteProject,
       createTask,
       updateTaskStatus,
       updateTask,

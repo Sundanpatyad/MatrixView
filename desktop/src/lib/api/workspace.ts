@@ -31,6 +31,13 @@ export function createProjectRequest(input: {
   });
 }
 
+export function deleteProjectRequest(projectId: string): Promise<{ ok: boolean; projectId: string }> {
+  return apiFetch(`/api/projects/${projectId}`, {
+    method: 'DELETE',
+    auth: true,
+  });
+}
+
 export type InviteMemberResult = {
   project: Project;
   result: 'added' | 'invited';

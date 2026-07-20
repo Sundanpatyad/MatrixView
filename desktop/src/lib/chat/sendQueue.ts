@@ -30,13 +30,15 @@ type QueueJob = SendJobInput & {
 function attachmentKind(mime: string): ChatAttachment['kind'] {
   if (mime.startsWith('image/')) return 'image';
   if (mime.startsWith('video/')) return 'video';
+  if (mime.startsWith('audio/')) return 'audio';
   if (
     mime.includes('pdf') ||
     mime.includes('document') ||
     mime.includes('sheet') ||
     mime.includes('text') ||
     mime.includes('msword') ||
-    mime.includes('officedocument')
+    mime.includes('officedocument') ||
+    mime.includes('presentation')
   ) {
     return 'document';
   }
@@ -151,8 +153,9 @@ class ChatSendQueue {
             if (isOfflineDbAvailable()) {
               await replacePendingMessage(job.localId, server, job.userId);
             }
-            revokeObjectUrls(job.objectUrls);
+            // Replace UI first so the bubble never briefly loses its media URL.
             job.onSuccess({ ...server, localState: null }, job.localId);
+            revokeObjectUrls(job.objectUrls);
           }
         } catch (err) {
           const error = err instanceof Error ? err : new Error('Failed to send');

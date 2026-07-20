@@ -37,7 +37,12 @@ router.get('/activity/sessions/current', async (req, res, next) => {
 /** Whether the current user is checked in (active tracking session in DB). */
 router.get('/activity/attendance', async (req, res, next) => {
   try {
-    const status = await activity.getAttendanceStatus(actorFrom(req as AuthedRequest));
+    const tzRaw = typeof req.query.tzOffset === 'string' ? Number(req.query.tzOffset) : undefined;
+    const tzOffset = Number.isFinite(tzRaw) ? tzRaw : undefined;
+    const status = await activity.getAttendanceStatus(
+      actorFrom(req as AuthedRequest),
+      tzOffset,
+    );
     res.json(status);
   } catch (err) {
     next(err);
@@ -95,7 +100,12 @@ router.post('/activity/sessions/stop', requireDesktop, async (req, res, next) =>
 
 router.get('/activity/today', async (req, res, next) => {
   try {
-    const summary = await activity.getTodaySummary(actorFrom(req as AuthedRequest));
+    const tzRaw = typeof req.query.tzOffset === 'string' ? Number(req.query.tzOffset) : undefined;
+    const tzOffset = Number.isFinite(tzRaw) ? tzRaw : undefined;
+    const summary = await activity.getTodaySummary(
+      actorFrom(req as AuthedRequest),
+      tzOffset,
+    );
     res.json(summary);
   } catch (err) {
     next(err);
@@ -105,9 +115,12 @@ router.get('/activity/today', async (req, res, next) => {
 router.get('/activity/org/today', async (req, res, next) => {
   try {
     const date = typeof req.query.date === 'string' ? req.query.date : undefined;
+    const tzRaw = typeof req.query.tzOffset === 'string' ? Number(req.query.tzOffset) : undefined;
+    const tzOffset = Number.isFinite(tzRaw) ? tzRaw : undefined;
     const summary = await activity.getOrgActivityByDate(
       actorFrom(req as AuthedRequest),
       date,
+      tzOffset,
     );
     res.json(summary);
   } catch (err) {

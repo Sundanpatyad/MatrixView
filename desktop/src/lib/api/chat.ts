@@ -34,7 +34,7 @@ export type ChatAttachment = {
   size: number;
   mimeType: string;
   url: string;
-  kind: 'image' | 'video' | 'document' | 'other';
+  kind: 'image' | 'video' | 'audio' | 'document' | 'other';
 };
 
 export type ChatReplyPreview = {
@@ -74,11 +74,14 @@ export function listChatUsers(): Promise<{ users: ChatMember[] }> {
   return apiFetch('/api/chat/users', { auth: true });
 }
 
-export function createDm(userId: string): Promise<{ conversation: ChatConversation }> {
+export function createDm(input: {
+  userId?: string;
+  email?: string;
+}): Promise<{ conversation: ChatConversation }> {
   return apiFetch('/api/chat/conversations/dm', {
     method: 'POST',
     auth: true,
-    body: JSON.stringify({ userId }),
+    body: JSON.stringify(input),
   });
 }
 

@@ -399,17 +399,14 @@ class ActivityTracker {
       this.emit();
     }
 
-    const elapsed = Math.min(now - this.lastSampleAt, POLL_MS * 2);
+    // Credit nearly the full gap until away threshold — avoids silent 10–20s holes.
+    const elapsed = Math.min(now - this.lastSampleAt, AWAY_GAP_MS - 1);
     this.lastSampleAt = now;
 
     const fg = await getForegroundApp();
     if (!fg) {
-      this.lockStreak += 1;
-      if (this.hadSuccessfulRead && this.lockStreak >= 2) {
-        this.recordLockedSlice(now, Math.max(elapsed, POLL_MS));
-        this.emit();
-        return;
-      }
+      // Accessibility / permission miss — do NOT invent "locked" time.
+      this.lockStreak = 0;
       this.currentApp = null;
       this.currentSite = null;
       this.error =
@@ -451,14 +448,17 @@ class ActivityTracker {
       this.pending.push(appSample);
       mergeLocalApp(this.localApps, appSample);
 
-      if (fg.url || fg.host) {
+      const host = (fg.host ?? '').trim().toLowerCase().replace(/^www\./, '');
+      const url = (fg.url ?? '').trim();
+      const httpUrl = /^https?:\/\//i.test(url) ? url : '';
+      if (httpUrl || host) {
         const siteSample: ActivitySample = {
           kind: 'site',
           appName: fg.appName,
           processName: fg.processName,
           windowTitle: fg.windowTitle,
-          url: fg.url ?? undefined,
-          host: fg.host ?? undefined,
+          url: httpUrl || undefined,
+          host: host || undefined,
           durationMs: elapsed,
         };
         this.pending.push(siteSample);

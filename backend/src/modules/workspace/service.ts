@@ -40,12 +40,14 @@ async function actorName(actor: Actor): Promise<string> {
   return user?.name ?? actor.email;
 }
 
-async function getProjectInOrg(projectId: string, orgId: string): Promise<ProjectDoc> {
+/** Load project if the actor is a member (works across personal workspaces). */
+async function getAccessibleProject(projectId: string, actor: Actor): Promise<ProjectDoc> {
   if (!Types.ObjectId.isValid(projectId)) {
     throw new AuthError('Project not found', 404, 'NOT_FOUND');
   }
-  const project = await Project.findOne({ _id: projectId, orgId });
+  const project = await Project.findById(projectId);
   if (!project) throw new AuthError('Project not found', 404, 'NOT_FOUND');
+  requireMembership(project, actor.email);
   return project;
 }
 
@@ -58,34 +60,29 @@ function requireMembership(project: ProjectDoc, email: string) {
 function requireAdmin(project: ProjectDoc, email: string) {
   const member = requireMembership(project, email);
   if (member.role !== 'admin') {
-    throw new AuthError('Admin access required', 403, 'FORBIDDEN');
+    throw new AuthError('Project admin access required', 403, 'FORBIDDEN');
   }
   return member;
 }
 
+/** Projects the user belongs to — visibility is by project role, not org admin. */
 export async function getWorkspace(actor: Actor) {
-  const orgId = actor.orgId;
-  const projects = await Project.find({ orgId }).sort({ createdAt: -1 });
-  const memberProjectIds = projects
-    .filter((p) => p.members.some((m) => m.email.toLowerCase() === actor.email.toLowerCase()))
-    .map((p) => p._id);
-
-  // Org admins see all; members see only projects they belong to
-  const visible =
-    actor.role === 'Admin'
-      ? projects
-      : projects.filter((p) =>
-          p.members.some((m) => m.email.toLowerCase() === actor.email.toLowerCase()),
-        );
+  const email = actor.email.toLowerCase();
+  const visible = await Project.find({
+    'members.email': email,
+  }).sort({ createdAt: -1 });
 
   const visibleIds = visible.map((p) => p._id);
-  const tasks = await Task.find({ orgId, projectId: { $in: visibleIds } }).sort({
-    createdAt: 1,
-  });
-  const timeline = await TimelineItem.find({
-    orgId,
-    projectId: { $in: memberProjectIds.length ? memberProjectIds : visibleIds },
-  }).sort({ createdAt: -1 });
+  const tasks =
+    visibleIds.length === 0
+      ? []
+      : await Task.find({ projectId: { $in: visibleIds } }).sort({ createdAt: 1 });
+  const timeline =
+    visibleIds.length === 0
+      ? []
+      : await TimelineItem.find({ projectId: { $in: visibleIds } }).sort({
+          createdAt: -1,
+        });
 
   return {
     projects: await presentProjects(visible),
@@ -128,12 +125,63 @@ export async function createProject(
   return presentProject(project);
 }
 
+/** Project admins (including creator) can permanently delete a project and its data. */
+export async function deleteProject(actor: Actor, projectId: string) {
+  const project = await getAccessibleProject(projectId, actor);
+  requireAdmin(project, actor.email);
+
+  const pid = project._id;
+
+  // Collect attachment URLs before wiping
+  const tasks = await Task.find({ projectId: pid }).select('attachments comments').lean();
+  const timeline = await TimelineItem.find({ projectId: pid }).select('attachments').lean();
+  const mediaRefs: StoredMediaRef[] = [];
+  for (const t of tasks) {
+    for (const a of t.attachments ?? []) {
+      mediaRefs.push({
+        url: a.url,
+        provider: (a as { storageProvider?: string }).storageProvider,
+        storageKey: (a as { storageKey?: string }).storageKey,
+        mimeType: a.mimeType,
+      });
+    }
+    for (const c of t.comments ?? []) {
+      for (const a of c.attachments ?? []) {
+        mediaRefs.push({
+          url: a.url,
+          provider: (a as { storageProvider?: string }).storageProvider,
+          storageKey: (a as { storageKey?: string }).storageKey,
+          mimeType: a.mimeType,
+        });
+      }
+    }
+  }
+  for (const item of timeline) {
+    for (const a of item.attachments ?? []) {
+      mediaRefs.push({
+        url: a.url,
+        provider: (a as { storageProvider?: string }).storageProvider,
+        storageKey: (a as { storageKey?: string }).storageKey,
+        mimeType: a.mimeType,
+      });
+    }
+  }
+
+  await Task.deleteMany({ projectId: pid });
+  await TimelineItem.deleteMany({ projectId: pid });
+  await ProjectInvite.deleteMany({ projectId: pid });
+  await project.deleteOne();
+  await deleteStoredMediaMany(mediaRefs);
+
+  return { ok: true as const, projectId: String(pid) };
+}
+
 export async function addMember(
   actor: Actor,
   projectId: string,
   input: { name?: string; email: string; role: 'admin' | 'member' },
 ) {
-  const project = await getProjectInOrg(projectId, actor.orgId);
+  const project = await getAccessibleProject(projectId, actor);
   requireAdmin(project, actor.email);
 
   const email = input.email.trim().toLowerCase();
@@ -144,35 +192,25 @@ export async function addMember(
     throw new AuthError('Member already on project', 409, 'MEMBER_EXISTS');
   }
 
-  const existingInOrg = await User.findOne({ orgId: actor.orgId, email });
-  const existingElsewhere = existingInOrg
-    ? null
-    : await User.findOne({ email });
-
-  if (existingElsewhere) {
-    throw new AuthError(
-      'This email already belongs to another organization',
-      409,
-      'EMAIL_OTHER_ORG',
-    );
-  }
+  // Any existing TaskTrack account can be added (personal workspaces are separate)
+  const existingUser = await User.findOne({ email });
 
   const displayName =
-    existingInOrg?.name ??
+    existingUser?.name ??
     (input.name?.trim() || email.split('@')[0] || 'Invited user');
 
-  // Existing org user → add immediately
-  if (existingInOrg) {
+  // Existing user → add to project immediately with chosen role
+  if (existingUser) {
     if (existingOnProject) {
-      existingOnProject.userId = existingInOrg._id;
-      existingOnProject.name = existingInOrg.name;
+      existingOnProject.userId = existingUser._id;
+      existingOnProject.name = existingUser.name;
       existingOnProject.role = input.role;
       existingOnProject.status = 'active';
     } else {
       project.members.push({
         id: newId('mem'),
-        userId: existingInOrg._id,
-        name: existingInOrg.name,
+        userId: existingUser._id,
+        name: existingUser.name,
         email,
         role: input.role,
         status: 'active',
@@ -212,12 +250,12 @@ export async function addMember(
   const expiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
 
   await ProjectInvite.updateMany(
-    { orgId: actor.orgId, projectId: project._id, email, status: 'pending' },
+    { projectId: project._id, email, status: 'pending' },
     { $set: { status: 'revoked' } },
   );
 
   await ProjectInvite.create({
-    orgId: actor.orgId,
+    orgId: project.orgId,
     projectId: project._id,
     email,
     name: displayName,
@@ -229,7 +267,6 @@ export async function addMember(
   });
 
   const inviteLink = `${config.appUrl}/register?invite=${encodeURIComponent(rawToken)}`;
-  const org = await Organization.findById(actor.orgId).lean();
   const inviter = await User.findById(actor.sub).lean();
 
   let emailSent = false;
@@ -238,7 +275,7 @@ export async function addMember(
       to: email,
       inviterName: inviter?.name ?? actor.email,
       projectName: project.name,
-      orgName: org?.name ?? 'TaskTrack',
+      orgName: project.name,
       inviteLink,
     });
     emailSent = mail.sent;
@@ -269,13 +306,12 @@ export async function getInvitePreview(rawToken: string) {
     throw new AuthError('Invite is invalid or expired', 404, 'INVITE_INVALID');
   }
   const project = await Project.findById(invite.projectId).lean();
-  const org = await Organization.findById(invite.orgId).lean();
   return {
     email: invite.email,
     name: invite.name || '',
     role: invite.role as 'admin' | 'member',
     projectName: project?.name ?? 'Project',
-    orgName: org?.name ?? 'Organization',
+    orgName: project?.name ?? 'TaskTrack',
     expiresAt: invite.expiresAt.toISOString(),
   };
 }
@@ -288,12 +324,8 @@ export async function claimPendingProjectInvites(user: {
   name: string;
 }) {
   const email = user.email.toLowerCase().trim();
-  const orgId = user.orgId;
 
-  const projects = await Project.find({
-    orgId,
-    'members.email': email,
-  });
+  const projects = await Project.find({ 'members.email': email });
 
   for (const project of projects) {
     const member = project.members.find((m) => m.email === email);
@@ -305,7 +337,7 @@ export async function claimPendingProjectInvites(user: {
   }
 
   await ProjectInvite.updateMany(
-    { orgId, email, status: 'pending' },
+    { email, status: 'pending' },
     {
       $set: {
         status: 'accepted',
@@ -340,16 +372,29 @@ export async function acceptInviteAndCreateUser(input: {
     );
   }
 
+  // Invitee gets their own personal workspace; project membership is separate
+  const displayName = input.name.trim() || invite.name || email.split('@')[0] || 'User';
+  const orgName = `${displayName}'s Workspace`;
+  let slug = orgName
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 48) || 'workspace';
+  if (await Organization.findOne({ slug })) {
+    slug = `${slug}-${crypto.randomBytes(2).toString('hex')}`;
+  }
+  const org = await Organization.create({ name: orgName, slug });
+
   const user = await User.create({
-    orgId: invite.orgId,
+    orgId: org._id,
     email,
-    name: input.name.trim() || invite.name || email.split('@')[0],
+    name: displayName,
     passwordHash: await hashPassword(input.password),
-    role: 'Member',
+    role: 'Admin',
     status: 'active',
   });
 
-  const project = await Project.findOne({ _id: invite.projectId, orgId: invite.orgId });
+  const project = await Project.findById(invite.projectId);
   if (project) {
     let member = project.members.find((m) => m.email === email);
     if (!member) {
@@ -387,7 +432,7 @@ export async function updateMemberRole(
   memberId: string,
   role: 'admin' | 'member',
 ) {
-  const project = await getProjectInOrg(projectId, actor.orgId);
+  const project = await getAccessibleProject(projectId, actor);
   requireAdmin(project, actor.email);
 
   const member = project.members.find((m) => m.id === memberId);
@@ -406,7 +451,7 @@ export async function updateMemberRole(
 }
 
 export async function removeMember(actor: Actor, projectId: string, memberId: string) {
-  const project = await getProjectInOrg(projectId, actor.orgId);
+  const project = await getAccessibleProject(projectId, actor);
   requireAdmin(project, actor.email);
 
   const member = project.members.find((m) => m.id === memberId);
@@ -425,7 +470,7 @@ export async function removeMember(actor: Actor, projectId: string, memberId: st
 }
 
 export async function addColumn(actor: Actor, projectId: string, label: string) {
-  const project = await getProjectInOrg(projectId, actor.orgId);
+  const project = await getAccessibleProject(projectId, actor);
   requireMembership(project, actor.email);
 
   const trimmed = label.trim();
@@ -448,7 +493,7 @@ export async function renameColumn(
   columnId: string,
   label: string,
 ) {
-  const project = await getProjectInOrg(projectId, actor.orgId);
+  const project = await getAccessibleProject(projectId, actor);
   requireMembership(project, actor.email);
   const trimmed = label.trim();
   if (!trimmed) throw new AuthError('Column label required', 400);
@@ -466,7 +511,7 @@ export async function removeColumn(
   columnId: string,
   moveToStatus?: string,
 ) {
-  const project = await getProjectInOrg(projectId, actor.orgId);
+  const project = await getAccessibleProject(projectId, actor);
   requireMembership(project, actor.email);
 
   const col = project.columns.find((c) => c.id === columnId);
@@ -500,7 +545,7 @@ export async function reorderColumns(
   projectId: string,
   columnIds: string[],
 ) {
-  const project = await getProjectInOrg(projectId, actor.orgId);
+  const project = await getAccessibleProject(projectId, actor);
   requireMembership(project, actor.email);
 
   const currentIds = project.columns.map((c) => c.id);
@@ -532,7 +577,7 @@ export async function createTask(
     dueDate?: string;
   },
 ) {
-  const project = await getProjectInOrg(projectId, actor.orgId);
+  const project = await getAccessibleProject(projectId, actor);
   requireMembership(project, actor.email);
 
   const displayName = await actorName(actor);
@@ -549,7 +594,7 @@ export async function createTask(
 
   const estimate = Number(input.estimateHours) || 0;
   const task = await Task.create({
-    orgId: actor.orgId,
+    orgId: project.orgId,
     projectId: project._id,
     key: `${project.key}-${project.taskSeq}`,
     title: input.title.trim(),
@@ -584,10 +629,10 @@ export async function updateTask(
   if (!Types.ObjectId.isValid(taskId)) {
     throw new AuthError('Task not found', 404, 'NOT_FOUND');
   }
-  const task = await Task.findOne({ _id: taskId, orgId: actor.orgId });
+  const task = await Task.findById(taskId);
   if (!task) throw new AuthError('Task not found', 404, 'NOT_FOUND');
 
-  const project = await getProjectInOrg(String(task.projectId), actor.orgId);
+  const project = await getAccessibleProject(String(task.projectId), actor);
   requireMembership(project, actor.email);
 
   const allowed = [
@@ -631,10 +676,10 @@ export async function addComment(
   if (!Types.ObjectId.isValid(taskId)) {
     throw new AuthError('Task not found', 404, 'NOT_FOUND');
   }
-  const task = await Task.findOne({ _id: taskId, orgId: actor.orgId });
+  const task = await Task.findById(taskId);
   if (!task) throw new AuthError('Task not found', 404, 'NOT_FOUND');
 
-  const project = await getProjectInOrg(String(task.projectId), actor.orgId);
+  const project = await getAccessibleProject(String(task.projectId), actor);
   requireMembership(project, actor.email);
 
   const displayName = await actorName(actor);
@@ -667,10 +712,10 @@ export async function addTaskAttachments(
   if (!Types.ObjectId.isValid(taskId)) {
     throw new AuthError('Task not found', 404, 'NOT_FOUND');
   }
-  const task = await Task.findOne({ _id: taskId, orgId: actor.orgId });
+  const task = await Task.findById(taskId);
   if (!task) throw new AuthError('Task not found', 404, 'NOT_FOUND');
 
-  const project = await getProjectInOrg(String(task.projectId), actor.orgId);
+  const project = await getAccessibleProject(String(task.projectId), actor);
   requireMembership(project, actor.email);
 
   const displayName = await actorName(actor);
@@ -692,10 +737,10 @@ export async function removeTaskAttachment(
   if (!Types.ObjectId.isValid(taskId)) {
     throw new AuthError('Task not found', 404, 'NOT_FOUND');
   }
-  const task = await Task.findOne({ _id: taskId, orgId: actor.orgId });
+  const task = await Task.findById(taskId);
   if (!task) throw new AuthError('Task not found', 404, 'NOT_FOUND');
 
-  const project = await getProjectInOrg(String(task.projectId), actor.orgId);
+  const project = await getAccessibleProject(String(task.projectId), actor);
   requireMembership(project, actor.email);
 
   const removed = task.attachments.find((a) => a.id === attachmentId);
@@ -728,12 +773,12 @@ export async function createTimelineItem(
   },
   files: Express.Multer.File[] = [],
 ) {
-  const project = await getProjectInOrg(input.projectId, actor.orgId);
+  const project = await getAccessibleProject(input.projectId, actor);
   requireAdmin(project, actor.email);
 
   const displayName = await actorName(actor);
   const item = await TimelineItem.create({
-    orgId: actor.orgId,
+    orgId: project.orgId,
     projectId: project._id,
     title: input.title.trim(),
     description: input.description?.trim() ?? '',
@@ -772,10 +817,10 @@ export async function updateTimelineItem(
   if (!Types.ObjectId.isValid(itemId)) {
     throw new AuthError('Timeline item not found', 404, 'NOT_FOUND');
   }
-  const item = await TimelineItem.findOne({ _id: itemId, orgId: actor.orgId });
+  const item = await TimelineItem.findById(itemId);
   if (!item) throw new AuthError('Timeline item not found', 404, 'NOT_FOUND');
 
-  const project = await getProjectInOrg(String(item.projectId), actor.orgId);
+  const project = await getAccessibleProject(String(item.projectId), actor);
   requireAdmin(project, actor.email);
 
   const displayName = await actorName(actor);
@@ -819,7 +864,7 @@ export async function updateTimelineItem(
 
   if (wantsAssignee) {
     if (item.taskId) {
-      task = await Task.findOne({ _id: item.taskId, orgId: actor.orgId });
+      task = await Task.findById(item.taskId);
       if (!task) throw new AuthError('Linked task not found', 404, 'NOT_FOUND');
       task.assigneeId = nextAssigneeId;
       task.assigneeName = nextAssigneeName;
@@ -832,7 +877,7 @@ export async function updateTimelineItem(
       await project.save();
       const firstCol = project.columns[0]?.id ?? 'todo';
       task = await Task.create({
-        orgId: actor.orgId,
+        orgId: project.orgId,
         projectId: project._id,
         key: `${project.key}-${project.taskSeq}`,
         title: item.title,
@@ -871,7 +916,7 @@ export async function updateTimelineItem(
 
   if (item.taskId) {
     if (!task) {
-      task = await Task.findOne({ _id: item.taskId, orgId: actor.orgId });
+      task = await Task.findById(item.taskId);
     }
     if (task) {
       task.title = item.title;
@@ -902,15 +947,15 @@ export async function assignTimelineItem(
   if (!Types.ObjectId.isValid(itemId)) {
     throw new AuthError('Timeline item not found', 404, 'NOT_FOUND');
   }
-  const item = await TimelineItem.findOne({ _id: itemId, orgId: actor.orgId });
+  const item = await TimelineItem.findById(itemId);
   if (!item) throw new AuthError('Timeline item not found', 404, 'NOT_FOUND');
 
-  const project = await getProjectInOrg(String(item.projectId), actor.orgId);
+  const project = await getAccessibleProject(String(item.projectId), actor);
   requireAdmin(project, actor.email);
 
   // Reassign: update linked board task + timeline metadata
   if (item.taskId) {
-    const task = await Task.findOne({ _id: item.taskId, orgId: actor.orgId });
+    const task = await Task.findById(item.taskId);
     if (!task) throw new AuthError('Linked task not found', 404, 'NOT_FOUND');
 
     task.assigneeId = assignee.id;
@@ -933,7 +978,7 @@ export async function assignTimelineItem(
 
   const firstCol = project.columns[0]?.id ?? 'todo';
   const task = await Task.create({
-    orgId: actor.orgId,
+    orgId: project.orgId,
     projectId: project._id,
     key: `${project.key}-${project.taskSeq}`,
     title: item.title,
@@ -973,13 +1018,13 @@ export async function deleteTimelineItem(actor: Actor, itemId: string) {
   if (!Types.ObjectId.isValid(itemId)) {
     throw new AuthError('Timeline item not found', 404, 'NOT_FOUND');
   }
-  const item = await TimelineItem.findOne({ _id: itemId, orgId: actor.orgId });
+  const item = await TimelineItem.findById(itemId);
   if (!item) throw new AuthError('Timeline item not found', 404, 'NOT_FOUND');
   if (item.taskId) {
     throw new AuthError('Cannot delete an assigned timeline item', 400);
   }
 
-  const project = await getProjectInOrg(String(item.projectId), actor.orgId);
+  const project = await getAccessibleProject(String(item.projectId), actor);
   requireAdmin(project, actor.email);
 
   const refs: StoredMediaRef[] = (item.attachments ?? []).map((a) => ({

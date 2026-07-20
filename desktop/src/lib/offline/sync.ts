@@ -140,7 +140,7 @@ class SyncService {
   }
 
   private async flushSamples() {
-    const rows = await listUnsyncedSamples(200);
+    const rows = await listUnsyncedSamples(500);
     if (rows.length === 0) return;
 
     const bySession = new Map<string, Array<{ id: string; sample: ActivitySample }>>();
@@ -151,17 +151,21 @@ class SyncService {
       bySession.set(row.session_id, list);
     }
 
+    const CHUNK = 100; // API max per request
     for (const [localSessionId, items] of bySession) {
       const sessionRow = await getLocalSessionRow(localSessionId);
       const serverId =
         sessionRow?.server_id ??
         (localSessionId.startsWith('lsess_') ? null : localSessionId);
       if (!serverId) continue;
-      await postActivitySamples(
-        serverId,
-        items.map((i) => i.sample),
-      );
-      await markSamplesSynced(items.map((i) => i.id));
+      for (let i = 0; i < items.length; i += CHUNK) {
+        const chunk = items.slice(i, i + CHUNK);
+        await postActivitySamples(
+          serverId,
+          chunk.map((item) => item.sample),
+        );
+        await markSamplesSynced(chunk.map((item) => item.id));
+      }
     }
   }
 }

@@ -38,6 +38,7 @@ export function serializeProject(doc: ProjectDoc) {
     description: doc.description ?? '',
     createdAt: iso(doc.createdAt),
     createdBy: doc.createdBy,
+    createdByUserId: doc.createdByUserId ? String(doc.createdByUserId) : null,
     columns: (doc.columns ?? []).map((c) => ({
       id: c.id,
       label: c.label,

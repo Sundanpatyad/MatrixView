@@ -59,6 +59,18 @@ router.post('/projects', async (req, res, next) => {
   }
 });
 
+router.delete('/projects/:projectId', async (req, res, next) => {
+  try {
+    const result = await workspace.deleteProject(
+      await actorFrom(req as AuthedRequest),
+      param(req.params.projectId),
+    );
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.post('/projects/:projectId/members', async (req, res, next) => {
   try {
     const body = z

@@ -51,6 +51,12 @@ export function isR2Url(url: string): boolean {
   return url.startsWith(base + '/') || url === base;
 }
 
+/** Strip codec params — `audio/webm;codecs=opus` breaks some players. */
+function cleanContentType(contentType: string): string {
+  const base = contentType.split(';')[0]?.trim();
+  return base || 'application/octet-stream';
+}
+
 export async function uploadToR2(
   buffer: Buffer,
   opts: { folder: string; fileName: string; contentType: string },
@@ -61,7 +67,7 @@ export async function uploadToR2(
       Bucket: config.r2.bucket,
       Key: key,
       Body: buffer,
-      ContentType: opts.contentType,
+      ContentType: cleanContentType(opts.contentType),
     }),
   );
   return {

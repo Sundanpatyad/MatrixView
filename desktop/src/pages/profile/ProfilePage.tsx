@@ -150,7 +150,8 @@ export function ProfilePage() {
           </div>
 
           <p className="text-xs text-ink-500">
-            Role: {user.role} · Org: {user.orgName}
+            Signed in as {user.email}. Project access is controlled by admin / member roles on
+            each project.
           </p>
 
           {error ? <p className="text-sm font-medium text-red-600">{error}</p> : null}

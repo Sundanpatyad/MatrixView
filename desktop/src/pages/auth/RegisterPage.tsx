@@ -21,7 +21,6 @@ export function RegisterPage() {
   const inviteToken = params.get('invite')?.trim() || '';
 
   const [name, setName] = useState('');
-  const [orgName, setOrgName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [invite, setInvite] = useState<InvitePreview | null>(null);
@@ -71,7 +70,6 @@ export function RegisterPage() {
         name,
         email,
         password,
-        orgName: inviteToken ? undefined : orgName,
         inviteToken: inviteToken || undefined,
       });
       navigate('/');
@@ -89,21 +87,21 @@ export function RegisterPage() {
       <div className="w-full max-w-sm">
         <p className="font-display text-3xl font-semibold text-ink-900">TaskTrack</p>
         <h1 className="mt-2 text-lg font-semibold text-ink-800">
-          {isInvite ? 'Accept invite' : 'Create organization'}
+          {isInvite ? 'Join project' : 'Create your account'}
         </h1>
         <p className="mt-1 text-sm text-ink-500">
           {isInvite
             ? invite
-              ? `Join ${invite.projectName} at ${invite.orgName}. You’ll be added to the project automatically.`
+              ? `You’ve been invited to ${invite.projectName} as ${invite.role}. Create your account to get in.`
               : inviteError || 'Loading invite…'
-            : 'Bootstrap your workspace — you become the Admin.'}
+            : 'Sign up free — create projects and invite teammates as admin or member.'}
         </p>
 
         {isInvite && inviteError ? (
           <p className="mt-6 text-sm text-red-600">
             {inviteError}{' '}
             <Link to="/register" className="font-medium text-teal-700 underline">
-              Create a new organization
+              Sign up without invite
             </Link>{' '}
             instead.
           </p>
@@ -115,22 +113,9 @@ export function RegisterPage() {
               </label>
               <Input id="name" value={name} onChange={(e) => setName(e.target.value)} required />
             </div>
-            {!isInvite ? (
-              <div>
-                <label htmlFor="orgName" className="mb-1.5 block text-sm font-medium text-ink-700">
-                  Organization
-                </label>
-                <Input
-                  id="orgName"
-                  value={orgName}
-                  onChange={(e) => setOrgName(e.target.value)}
-                  required
-                />
-              </div>
-            ) : null}
             <div>
               <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-ink-700">
-                Work email
+                Email
               </label>
               <Input
                 id="email"

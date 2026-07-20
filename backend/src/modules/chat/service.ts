@@ -4,6 +4,7 @@ import { Types } from 'mongoose';
 import { AuthError } from '../auth/errors.js';
 import { User } from '../auth/models/User.js';
 import { ActivitySession } from '../activity/models/ActivitySession.js';
+import { Project } from '../workspace/models/Project.js';
 import {
   deleteStoredMedia,
   deleteStoredMediaMany,
@@ -27,16 +28,20 @@ export const chatUpload = multer({
   limits: { fileSize: CHAT_MAX_BYTES, files: 5 },
 });
 
-function attachmentKind(mime: string): 'image' | 'video' | 'document' | 'other' {
+function attachmentKind(
+  mime: string,
+): 'image' | 'video' | 'audio' | 'document' | 'other' {
   if (mime.startsWith('image/')) return 'image';
   if (mime.startsWith('video/')) return 'video';
+  if (mime.startsWith('audio/')) return 'audio';
   if (
     mime.includes('pdf') ||
     mime.includes('document') ||
     mime.includes('sheet') ||
     mime.includes('text') ||
     mime.includes('msword') ||
-    mime.includes('officedocument')
+    mime.includes('officedocument') ||
+    mime.includes('presentation')
   ) {
     return 'document';
   }
@@ -63,25 +68,54 @@ function oid(id: string) {
 }
 
 async function requireMember(conversationId: string, actor: Actor) {
-  const conversation = await Conversation.findOne({
-    _id: oid(conversationId),
-    orgId: actor.orgId,
-  });
+  const conversation = await Conversation.findById(oid(conversationId));
   if (!conversation) throw new AuthError('Conversation not found', 404, 'NOT_FOUND');
   const isMember = conversation.memberIds.some((id) => String(id) === actor.sub);
   if (!isMember) throw new AuthError('Not a member of this chat', 403, 'FORBIDDEN');
   return conversation;
 }
 
-async function usersByIds(orgId: string, ids: string[]) {
+async function usersByIds(ids: string[]) {
   const users = await User.find({
-    orgId,
     _id: { $in: ids.filter((id) => Types.ObjectId.isValid(id)) },
     status: { $in: ['active', 'invited', 'locked'] },
   })
     .select('_id name email role avatarUrl')
     .lean();
   return users;
+}
+
+/** User ids who share ≥1 project (admin or member) with the actor. */
+async function sharedProjectPeerIds(actor: Actor): Promise<Set<string>> {
+  const email = actor.email.toLowerCase().trim();
+  const projects = await Project.find({ 'members.email': email }).select('members').lean();
+
+  const peerIds = new Set<string>();
+  for (const project of projects) {
+    const me = project.members.find((m) => m.email.toLowerCase() === email);
+    if (!me || me.status === 'pending') continue;
+
+    for (const m of project.members) {
+      if (m.status === 'pending' || !m.userId) continue;
+      const id = String(m.userId);
+      if (id !== actor.sub) peerIds.add(id);
+    }
+  }
+  return peerIds;
+}
+
+async function assertCanChatWith(actor: Actor, userIds: string[]) {
+  const peers = await sharedProjectPeerIds(actor);
+  const others = [...new Set(userIds.map(String))].filter((id) => id !== actor.sub);
+  for (const id of others) {
+    if (!peers.has(id)) {
+      throw new AuthError(
+        'You can only chat with people who share a project with you',
+        403,
+        'FORBIDDEN',
+      );
+    }
+  }
 }
 
 function serializeUser(u: {
@@ -131,7 +165,7 @@ function computeDeliveryStatus(
 }
 
 async function serializeConversation(doc: InstanceType<typeof Conversation>, actorId: string) {
-  const members = await usersByIds(String(doc.orgId), doc.memberIds.map(String));
+  const members = await usersByIds(doc.memberIds.map(String));
   const memberMap = new Map(members.map((m) => [String(m._id), m]));
   const sortedMembers = doc.memberIds
     .map((id) => memberMap.get(String(id)))
@@ -230,7 +264,6 @@ function broadcastMessageStatus(serialized: Awaited<ReturnType<typeof serializeM
 
 export async function listConversations(actor: Actor) {
   const list = await Conversation.find({
-    orgId: actor.orgId,
     memberIds: oid(actor.sub),
   }).sort({ lastMessageAt: -1 });
 
@@ -240,15 +273,26 @@ export async function listConversations(actor: Actor) {
 }
 
 export async function listChatUsers(actor: Actor) {
+  const peerIds = await sharedProjectPeerIds(actor);
+  if (peerIds.size === 0) {
+    return { users: [] };
+  }
+
+  const peerObjectIds = [...peerIds].map((id) => oid(id));
   const [users, activeSessions] = await Promise.all([
     User.find({
-      orgId: actor.orgId,
+      _id: { $in: peerObjectIds },
       status: { $in: ['active', 'invited', 'locked'] },
     })
       .select('_id name email role avatarUrl')
       .sort({ name: 1 })
       .lean(),
-    ActivitySession.find({ orgId: actor.orgId, status: 'active' }).select('userId').lean(),
+    ActivitySession.find({
+      userId: { $in: peerObjectIds },
+      status: 'active',
+    })
+      .select('userId')
+      .lean(),
   ]);
 
   const checkedIn = new Set(activeSessions.map((s) => String(s.userId)));
@@ -261,21 +305,51 @@ export async function listChatUsers(actor: Actor) {
   };
 }
 
-export async function getOrCreateDm(actor: Actor, otherUserId: string) {
-  if (otherUserId === actor.sub) {
+/**
+ * Start a DM with:
+ * - a shared-project peer (by userId), or
+ * - any registered platform user (by email).
+ */
+export async function getOrCreateDm(
+  actor: Actor,
+  input: { userId?: string; email?: string },
+) {
+  const email = input.email?.trim().toLowerCase() ?? '';
+  const userId = input.userId?.trim() ?? '';
+
+  let other: Awaited<ReturnType<typeof User.findOne>>;
+
+  if (email) {
+    other = await User.findOne({
+      email,
+      status: { $in: ['active', 'invited', 'locked'] },
+    });
+    if (!other) {
+      throw new AuthError(
+        'No TaskTrack account found with that email',
+        404,
+        'NOT_FOUND',
+      );
+    }
+  } else if (userId) {
+    await assertCanChatWith(actor, [userId]);
+    other = await User.findOne({
+      _id: oid(userId),
+      status: { $in: ['active', 'invited', 'locked'] },
+    });
+    if (!other) throw new AuthError('User not found', 404, 'NOT_FOUND');
+  } else {
+    throw new AuthError('Email or user id required', 400);
+  }
+
+  if (String(other._id) === actor.sub) {
     throw new AuthError('Cannot chat with yourself', 400);
   }
-  const other = await User.findOne({
-    _id: oid(otherUserId),
-    orgId: actor.orgId,
-    status: { $in: ['active', 'invited', 'locked'] },
-  });
-  if (!other) throw new AuthError('User not found', 404, 'NOT_FOUND');
 
+  const otherId = String(other._id);
   const existing = await Conversation.findOne({
-    orgId: actor.orgId,
     type: 'dm',
-    memberIds: { $all: [oid(actor.sub), oid(otherUserId)], $size: 2 },
+    memberIds: { $all: [oid(actor.sub), oid(otherId)], $size: 2 },
   });
   if (existing) {
     return { conversation: await serializeConversation(existing, actor.sub) };
@@ -306,7 +380,8 @@ export async function createGroup(
   if (!name) throw new AuthError('Group name required', 400);
 
   const uniqueIds = [...new Set([actor.sub, ...input.memberIds.map(String)])];
-  const users = await usersByIds(actor.orgId, uniqueIds);
+  await assertCanChatWith(actor, uniqueIds);
+  const users = await usersByIds(uniqueIds);
   if (users.length < 2) {
     throw new AuthError('Add at least one other member', 400);
   }
@@ -382,7 +457,8 @@ export async function addGroupMembers(
     throw new AuthError('Only groups support members', 400);
   }
 
-  const users = await usersByIds(actor.orgId, memberIds);
+  await assertCanChatWith(actor, memberIds);
+  const users = await usersByIds(memberIds);
   const existing = new Set(conversation.memberIds.map(String));
   for (const u of users) {
     if (!existing.has(String(u._id))) {
@@ -513,7 +589,7 @@ export async function forwardMessage(
   messageId: string,
   targetConversationId: string,
 ) {
-  const source = await Message.findOne({ _id: oid(messageId), orgId: actor.orgId });
+  const source = await Message.findById(oid(messageId));
   if (!source || source.deletedAt) {
     throw new AuthError('Message not found', 404, 'NOT_FOUND');
   }
@@ -577,7 +653,7 @@ export async function forwardMessage(
 }
 
 export async function editMessage(actor: Actor, messageId: string, body: string) {
-  const message = await Message.findOne({ _id: oid(messageId), orgId: actor.orgId });
+  const message = await Message.findById(oid(messageId));
   if (!message || message.deletedAt) {
     throw new AuthError('Message not found', 404, 'NOT_FOUND');
   }
@@ -603,7 +679,7 @@ export async function editMessage(actor: Actor, messageId: string, body: string)
 }
 
 export async function deleteMessage(actor: Actor, messageId: string) {
-  const message = await Message.findOne({ _id: oid(messageId), orgId: actor.orgId });
+  const message = await Message.findById(oid(messageId));
   if (!message || message.deletedAt) {
     throw new AuthError('Message not found', 404, 'NOT_FOUND');
   }

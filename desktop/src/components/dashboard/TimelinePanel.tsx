@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { EditTimelineModal } from '@/components/dashboard/EditTimelineModal';
 import { Button } from '@/components/ui/Button';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
@@ -113,6 +113,7 @@ export function TimelinePanel() {
     assignTimelineItem,
     deleteTimelineItem,
     isProjectAdmin,
+    activeProjectId: dashProjectId,
   } = useWorkspace();
 
   const adminProjects = projects.filter((p) => isProjectAdmin(p.id));
@@ -130,6 +131,13 @@ export function TimelinePanel() {
   const [deletingItem, setDeletingItem] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // Follow dashboard project switcher when that project is one you admin
+  useEffect(() => {
+    if (dashProjectId !== 'all' && isProjectAdmin(dashProjectId)) {
+      setProjectId(dashProjectId);
+    }
+  }, [dashProjectId, isProjectAdmin]);
+
   const activeProjectId = adminProjects.some((p) => p.id === projectId)
     ? projectId
     : (adminProjects[0]?.id ?? '');
@@ -137,16 +145,21 @@ export function TimelinePanel() {
   const project = activeProjectId ? getProject(activeProjectId) : undefined;
   const members = project?.members ?? [];
 
+  const scopedTimeline = useMemo(() => {
+    if (dashProjectId === 'all') return timeline;
+    return timeline.filter((i) => i.projectId === dashProjectId);
+  }, [timeline, dashProjectId]);
+
   const items = useMemo(() => {
-    let list = [...timeline].sort(
+    let list = [...scopedTimeline].sort(
       (a, b) => +new Date(b.createdAt) - +new Date(a.createdAt),
     );
     if (filter === 'pending') list = list.filter((i) => !i.taskId);
     if (filter === 'assigned') list = list.filter((i) => !!i.taskId);
     return list;
-  }, [timeline, filter]);
+  }, [scopedTimeline, filter]);
 
-  const pendingCount = timeline.filter((i) => !i.taskId).length;
+  const pendingCount = scopedTimeline.filter((i) => !i.taskId).length;
   const assignedCount = timeline.filter((i) => !!i.taskId).length;
 
   function onFiles(e: ChangeEvent<HTMLInputElement>) {

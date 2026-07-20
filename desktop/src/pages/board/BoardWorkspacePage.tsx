@@ -108,13 +108,7 @@ export function BoardWorkspacePage() {
   const project = projectId ? getProject(projectId) : undefined;
   const columns = project?.columns ?? [];
   const members = project?.members ?? [];
-  const canEditColumns = Boolean(
-    project &&
-      user &&
-      (user.role === 'Admin' ||
-        isProjectAdmin(project.id) ||
-        members.some((m) => m.email.toLowerCase() === user.email.toLowerCase())),
-  );
+  const canEditColumns = Boolean(project && user && isProjectAdmin(project.id));
 
   useEffect(() => {
     if (editingColumnId) renameInputRef.current?.focus();

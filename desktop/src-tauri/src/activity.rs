@@ -69,20 +69,52 @@ fn host_from_url(url: &str) -> Option<String> {
   if trimmed.is_empty() {
     return None;
   }
+  if trimmed.starts_with("file:") {
+    return None;
+  }
   let without_scheme = trimmed
     .strip_prefix("https://")
     .or_else(|| trimmed.strip_prefix("http://"))
     .unwrap_or(trimmed);
-  let host = without_scheme.split('/').next().unwrap_or("").trim();
-  if host.is_empty() {
+  let mut host = without_scheme
+    .split('/')
+    .next()
+    .unwrap_or("")
+    .split('@')
+    .next_back()
+    .unwrap_or("")
+    .trim()
+    .to_lowercase();
+  if let Some((h, port)) = host.rsplit_once(':') {
+    if !port.is_empty() && port.chars().all(|c| c.is_ascii_digit()) {
+      host = h.to_string();
+    }
+  }
+  host = host.trim_start_matches("www.").to_string();
+  host = host
+    .trim_start_matches("m.")
+    .trim_start_matches("mobile.")
+    .to_string();
+  if host.is_empty() || host == "localhost" || host.ends_with(".local") {
     return None;
   }
-  Some(host.trim_start_matches("www.").to_string())
+  Some(host)
 }
 
 fn url_from_title(title: &str) -> Option<String> {
   for part in title.split_whitespace() {
-    let candidate = part.trim_matches(|c: char| !c.is_ascii_alphanumeric() && c != ':' && c != '/' && c != '.' && c != '-' && c != '_' && c != '?' && c != '=' && c != '&' && c != '%');
+    let candidate = part.trim_matches(|c: char| {
+      !c.is_ascii_alphanumeric()
+        && c != ':'
+        && c != '/'
+        && c != '.'
+        && c != '-'
+        && c != '_'
+        && c != '?'
+        && c != '='
+        && c != '&'
+        && c != '%'
+    });
     if candidate.starts_with("http://") || candidate.starts_with("https://") {
       return Some(candidate.to_string());
     }
@@ -93,9 +125,16 @@ fn url_from_title(title: &str) -> Option<String> {
   None
 }
 
+fn is_known_browser(app_name: &str, process_name: &str) -> bool {
+  browser_applescript_name(app_name, process_name).is_some()
+}
+
 fn browser_applescript_name(app_name: &str, process_name: &str) -> Option<(&'static str, &'static str)> {
   let hay = format!("{} {}", app_name, process_name).to_lowercase();
-  // (AppleScript app name, family: chromium | safari)
+  // (AppleScript / process name, family: chromium | safari | firefox)
+  if hay.contains("firefox") || hay.contains("firefox developer") {
+    return Some(("Firefox", "firefox"));
+  }
   if hay.contains("google chrome")
     || (hay.contains("chrome") && !hay.contains("chromecast") && !hay.contains("chrome helper"))
   {
@@ -135,6 +174,29 @@ fn fetch_browser_url(app_name: &str, process_name: &str) -> Option<String> {
     "safari" => format!(
       r#"tell application "{script_app}" to get URL of front document as string"#
     ),
+    "firefox" => r#"
+      tell application "System Events"
+        if not (exists process "Firefox") then return ""
+        tell process "Firefox"
+          if (count of windows) is 0 then return ""
+          set frontWin to front window
+          try
+            return value of UI element 1 of combo box 1 of toolbar 1 of frontWin
+          on error
+            try
+              return value of text field 1 of toolbar 1 of frontWin
+            on error
+              try
+                return value of text field 1 of group 1 of toolbar 1 of frontWin
+              on error
+                return ""
+              end try
+            end try
+          end try
+        end tell
+      end tell
+    "#
+    .to_string(),
     _ => format!(
       r#"tell application "{script_app}" to get URL of active tab of front window as string"#
     ),
@@ -149,11 +211,15 @@ fn fetch_browser_url(app_name: &str, process_name: &str) -> Option<String> {
   if !output.status.success() {
     return None;
   }
-  let url = String::from_utf8_lossy(&output.stdout).trim().to_string();
+  let mut url = String::from_utf8_lossy(&output.stdout).trim().to_string();
   if url.is_empty() || url.eq_ignore_ascii_case("missing value") {
     return None;
   }
-  if !(url.starts_with("http://") || url.starts_with("https://") || url.starts_with("file://")) {
+  // Firefox address bar may omit the scheme
+  if !url.contains("://") && url.contains('.') && !url.contains(' ') {
+    url = format!("https://{url}");
+  }
+  if !(url.starts_with("http://") || url.starts_with("https://")) {
     return None;
   }
   Some(url)
@@ -183,12 +249,14 @@ pub fn get_foreground_app() -> Result<ForegroundApp, String> {
       );
       let locked = is_lock_screen(&app_name, &process_name, &window_title);
 
-      let mut url = if !excluded && !locked {
+      let known_browser = is_known_browser(&app_name, &process_name);
+      let mut url = if !excluded && !locked && known_browser {
         fetch_browser_url(&app_name, &process_name)
       } else {
         None
       };
-      if url.is_none() {
+      // Title scrape only for browsers — avoids fake site samples from IDE titles.
+      if url.is_none() && known_browser {
         url = url_from_title(&window_title);
       }
       let host = url.as_deref().and_then(host_from_url);

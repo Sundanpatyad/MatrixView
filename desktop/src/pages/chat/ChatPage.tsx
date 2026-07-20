@@ -9,12 +9,17 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import {
+  IconFile,
   IconForward,
+  IconGallery,
+  IconImage,
+  IconMic,
   IconPaperclip,
   IconPlus,
   IconReply,
   IconSearch,
   IconSend,
+  IconStop,
   IconUsers,
   IconX,
 } from '@/components/ui/Icons';
@@ -24,6 +29,7 @@ import { UserAvatar } from '@/components/ui/UserAvatar';
 import { Input } from '@/components/ui/Input';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { cn } from '@/lib/cn';
+import { resolveMediaUrl } from '@/lib/mediaUrl';
 import {
   addGroupMembers,
   createDm,
@@ -262,32 +268,128 @@ function ChatThreadSkeleton() {
   );
 }
 
+function formatBytes(bytes: number) {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function isPdfAttachment(att: ChatAttachment) {
+  return (
+    att.mimeType.includes('pdf') || att.name.toLowerCase().endsWith('.pdf')
+  );
+}
+
+function VoiceNotePlayer({ att }: { att: ChatAttachment }) {
+  const src = resolveMediaUrl(att.url);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setError(null);
+  }, [src]);
+
+  return (
+    <div className="min-w-[220px] max-w-xs border border-ink-200/80 bg-white/80 px-2.5 py-2">
+      <div className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-ink-700">
+        <IconMic className="h-3.5 w-3.5 text-brand-600" />
+        <span className="truncate">{att.name || 'Voice note'}</span>
+      </div>
+      {error ? (
+        <div className="space-y-1.5">
+          <p className="text-[11px] text-rose-700">{error}</p>
+          <a
+            href={src}
+            target="_blank"
+            rel="noreferrer"
+            className="text-[11px] font-semibold text-brand-700 underline"
+          >
+            Open audio file
+          </a>
+        </div>
+      ) : (
+        <audio
+          key={src}
+          controls
+          preload="metadata"
+          className="w-full"
+          src={src}
+          onError={() =>
+            setError('Couldn’t play this voice note. Try opening the file instead.')
+          }
+        >
+          <track kind="captions" />
+        </audio>
+      )}
+    </div>
+  );
+}
+
 function AttachmentBlock({ att }: { att: ChatAttachment }) {
+  const src = resolveMediaUrl(att.url);
   if (att.kind === 'image') {
     return (
-      <a href={att.url} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-md">
-        <img src={att.url} alt={att.name} className="max-h-56 max-w-full object-cover" />
+      <a href={src} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-md">
+        <img src={src} alt={att.name} className="max-h-56 max-w-full object-cover" />
       </a>
     );
   }
   if (att.kind === 'video') {
     return (
-      <video controls className="max-h-56 max-w-full rounded-md" src={att.url}>
+      <video controls className="max-h-56 max-w-full rounded-md" src={src}>
         <track kind="captions" />
       </video>
     );
   }
-  return (
-    <a
-      href={att.url}
-      target="_blank"
-      rel="noreferrer"
-      className="flex items-center gap-2 rounded-md border border-ink-200/80 bg-white/70 px-2.5 py-2 text-xs text-ink-800 hover:bg-white"
-    >
-      <span className="font-semibold">📎</span>
-      <span className="min-w-0 truncate font-medium">{att.name}</span>
-    </a>
-  );
+  if (att.kind === 'audio') {
+    return <VoiceNotePlayer att={att} />;
+  }
+  if (att.kind === 'document' || att.kind === 'other') {
+    const pdf = isPdfAttachment(att);
+    return (
+      <a
+        href={src}
+        target="_blank"
+        rel="noreferrer"
+        className="flex min-w-[200px] max-w-xs items-center gap-2.5 rounded-md border border-ink-200/80 bg-white/80 px-2.5 py-2.5 text-xs text-ink-800 hover:bg-white"
+      >
+        <span
+          className={cn(
+            'flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-[10px] font-bold uppercase tracking-wide',
+            pdf ? 'bg-rose-100 text-rose-700' : 'bg-ink-100 text-ink-700',
+          )}
+        >
+          {pdf ? 'PDF' : <IconFile className="h-4 w-4" />}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate font-medium">{att.name}</span>
+          <span className="mt-0.5 block text-[11px] text-ink-500">
+            {pdf ? 'PDF document' : 'Document'}
+            {att.size ? ` · ${formatBytes(att.size)}` : ''}
+          </span>
+        </span>
+      </a>
+    );
+  }
+  return null;
+}
+
+type AttachPickerKind = 'photo' | 'gallery' | 'document' | 'audio';
+
+const ATTACH_ACCEPT: Record<AttachPickerKind, string> = {
+  photo: 'image/*',
+  gallery: 'image/*,video/*',
+  document:
+    '.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,.ppt,.pptx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  audio: 'audio/*,.mp3,.m4a,.wav,.ogg,.webm,.aac',
+};
+
+function fileKindLabel(file: File) {
+  if (file.type.startsWith('image/')) return 'Photo';
+  if (file.type.startsWith('video/')) return 'Video';
+  if (file.type.startsWith('audio/')) return 'Audio';
+  if (file.type.includes('pdf') || file.name.toLowerCase().endsWith('.pdf')) return 'PDF';
+  return 'File';
 }
 
 type ModalProps = { onClose: () => void; children: React.ReactNode; title: string; subtitle?: string };
@@ -335,6 +437,7 @@ function NewDmModal({
   onCreated: (c: ChatConversation) => void;
 }) {
   const [q, setQ] = useState('');
+  const [email, setEmail] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const filtered = users.filter(
@@ -344,11 +447,11 @@ function NewDmModal({
         u.email.toLowerCase().includes(q.toLowerCase())),
   );
 
-  async function pick(userId: string) {
+  async function openDm(input: { userId?: string; email?: string }) {
     setBusy(true);
     setError('');
     try {
-      const { conversation } = await createDm(userId);
+      const { conversation } = await createDm(input);
       onCreated(conversation);
       onClose();
     } catch (e) {
@@ -358,27 +461,68 @@ function NewDmModal({
     }
   }
 
+  async function onEmailSubmit(e: FormEvent) {
+    e.preventDefault();
+    const trimmed = email.trim();
+    if (!trimmed) {
+      setError('Enter an email address');
+      return;
+    }
+    await openDm({ email: trimmed });
+  }
+
   return (
-    <ModalShell onClose={onClose} title="New chat" subtitle="Start a one-to-one conversation">
-      <div className="mt-3">
+    <ModalShell
+      onClose={onClose}
+      title="New chat"
+      subtitle="Project members, or anyone on TaskTrack by email"
+    >
+      <form onSubmit={onEmailSubmit} className="mt-3 space-y-2">
+        <label className="block text-xs font-medium text-ink-600">
+          Chat by email
+        </label>
+        <div className="flex gap-2">
+          <Input
+            type="email"
+            placeholder="colleague@company.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            autoFocus
+            disabled={busy}
+          />
+          <Button type="submit" size="sm" disabled={busy}>
+            Start
+          </Button>
+        </div>
+        <p className="text-[11px] text-ink-500">
+          They must already have a TaskTrack account.
+        </p>
+      </form>
+
+      <div className="mt-4 border-t border-ink-100 pt-3">
+        <p className="mb-2 text-xs font-medium text-ink-600">Shared project members</p>
         <Input
           placeholder="Search people…"
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          autoFocus
+          disabled={busy}
         />
       </div>
       {error ? <p className="mt-2 text-xs font-medium text-red-700">{error}</p> : null}
       <div className="mt-3 max-h-72 overflow-y-auto">
         {filtered.length === 0 ? (
-          <p className="py-6 text-center text-sm text-ink-500">No people found</p>
+          <p className="py-6 text-center text-sm text-ink-500">
+            {users.filter((u) => u.id !== meId).length === 0
+              ? 'No shared project members — use email above'
+              : 'No people found'}
+          </p>
         ) : (
           filtered.map((u) => (
             <button
               key={u.id}
               type="button"
               disabled={busy}
-              onClick={() => pick(u.id)}
+              onClick={() => openDm({ userId: u.id })}
               className="flex w-full items-center gap-3 border-b border-ink-100 px-1 py-2.5 text-left hover:bg-ink-50 disabled:opacity-50"
             >
               <UserAvatar name={u.name} src={u.avatarUrl} seed={u.id} size="lg" className="!h-9 !w-9" />
@@ -464,7 +608,11 @@ function NewGroupModal({
   }
 
   return (
-    <ModalShell onClose={onClose} title="New group" subtitle="Name the group and pick members">
+    <ModalShell
+      onClose={onClose}
+      title="New group"
+      subtitle="Pick members from your shared projects"
+    >
       <form onSubmit={onSubmit} className="mt-3 space-y-3">
         <div className="flex items-center gap-3">
           <button
@@ -800,9 +948,21 @@ export function ChatPage() {
   const [deletingMsg, setDeletingMsg] = useState(false);
   const [forwardMsg, setForwardMsg] = useState<ChatMessage | null>(null);
   const [forwardBusy, setForwardBusy] = useState(false);
+  const [attachMenuOpen, setAttachMenuOpen] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [recordSecs, setRecordSecs] = useState(0);
+  const [recordError, setRecordError] = useState('');
   const threadScrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
+  const documentInputRef = useRef<HTMLInputElement>(null);
+  const audioInputRef = useRef<HTMLInputElement>(null);
+  const attachMenuRef = useRef<HTMLDivElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordChunksRef = useRef<Blob[]>([]);
+  const recordTimerRef = useRef<number | null>(null);
+  const recordStreamRef = useRef<MediaStream | null>(null);
   const activeIdRef = useRef<string | null>(null);
   const prevActiveIdForScrollRef = useRef<string | null>(null);
   /** Keep pin-to-bottom unless the user scrolls up to read history. */
@@ -964,17 +1124,31 @@ export function ChatPage() {
         if (message.senderId === meId) {
           const opt = [...prev]
             .reverse()
-            .find(
-              (m) =>
-                m.id.startsWith('lmsg_') &&
-                m.senderId === meId &&
-                m.body === message.body &&
-                (m.localState === 'sending' || m.localState === 'failed') &&
-                m.attachments.length === message.attachments.length,
-            );
+            .find((m) => {
+              if (
+                !m.id.startsWith('lmsg_') ||
+                m.senderId !== meId ||
+                (m.localState !== 'sending' && m.localState !== 'failed')
+              ) {
+                return false;
+              }
+              if (m.body !== message.body) return false;
+              if (m.attachments.length !== message.attachments.length) return false;
+              // Voice notes often have empty body — match by attachment fingerprint.
+              if (m.attachments.length > 0) {
+                const a = m.attachments[0]!;
+                const b = message.attachments[0]!;
+                return (
+                  a.kind === b.kind &&
+                  a.name === b.name &&
+                  Math.abs((a.size || 0) - (b.size || 0)) < 2048
+                );
+              }
+              return true;
+            });
           next = opt
-            ? replaceMessageById(prev, opt.id, message)
-            : appendMessageSorted(prev, message);
+            ? replaceMessageById(prev, opt.id, { ...message, localState: null })
+            : appendMessageSorted(prev, { ...message, localState: null });
         } else {
           next = appendMessageSorted(prev, message);
         }
@@ -1044,10 +1218,17 @@ export function ChatPage() {
   }, [user, meId, upsertConversationQuiet, online]);
 
   useEffect(() => {
+    setAttachMenuOpen(false);
+    setRecordError('');
+    if (mediaRecorderRef.current?.state === 'recording') {
+      cancelAudioNote();
+    }
+
     if (!activeId || !meId) {
       setMessages([]);
       setTypingUsers({});
       setShowThreadSkeleton(false);
+      setFiles([]);
       return;
     }
     let cancelled = false;
@@ -1058,6 +1239,7 @@ export function ChatPage() {
     setMenuMsgId(null);
     setTypingUsers({});
     setError('');
+    setFiles([]);
 
       // Instant paint from memory if we already opened this chat
     const mem = threadCacheRef.current.get(activeId);
@@ -1138,6 +1320,158 @@ export function ChatPage() {
       }
     }, 1600);
   }
+
+  function addFiles(list: File[]) {
+    if (!list.length) return;
+    setFiles((prev) => [...prev, ...list].slice(0, 5));
+  }
+
+  function openAttachPicker(kind: AttachPickerKind) {
+    setAttachMenuOpen(false);
+    const ref =
+      kind === 'photo'
+        ? photoInputRef
+        : kind === 'gallery'
+          ? galleryInputRef
+          : kind === 'document'
+            ? documentInputRef
+            : audioInputRef;
+    ref.current?.click();
+  }
+
+  function stopRecordTracks() {
+    recordStreamRef.current?.getTracks().forEach((t) => t.stop());
+    recordStreamRef.current = null;
+  }
+
+  function clearRecordTimer() {
+    if (recordTimerRef.current) {
+      window.clearInterval(recordTimerRef.current);
+      recordTimerRef.current = null;
+    }
+  }
+
+  async function startAudioNote() {
+    setAttachMenuOpen(false);
+    setRecordError('');
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setRecordError('Audio recording is not supported in this environment.');
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      recordStreamRef.current = stream;
+      recordChunksRef.current = [];
+      // Prefer mp4/aac — WebKit (Tauri/Safari) cannot play webm/opus voice notes.
+      const mimeCandidates = [
+        'audio/mp4',
+        'audio/aac',
+        'audio/webm;codecs=opus',
+        'audio/webm',
+        'audio/ogg;codecs=opus',
+      ];
+      const mimeType =
+        mimeCandidates.find((t) => MediaRecorder.isTypeSupported(t)) ?? '';
+      const recorder = mimeType
+        ? new MediaRecorder(stream, { mimeType })
+        : new MediaRecorder(stream);
+      mediaRecorderRef.current = recorder;
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) recordChunksRef.current.push(e.data);
+      };
+      recorder.onstop = () => {
+        clearRecordTimer();
+        stopRecordTracks();
+        const rawType = recorder.mimeType || mimeType || 'audio/mp4';
+        const blobType = rawType.split(';')[0]?.trim() || 'audio/mp4';
+        const blob = new Blob(recordChunksRef.current, { type: blobType });
+        recordChunksRef.current = [];
+        mediaRecorderRef.current = null;
+        setRecording(false);
+        if (blob.size < 200) return;
+        const ext = blobType.includes('mp4') || blobType.includes('aac')
+          ? 'm4a'
+          : blobType.includes('ogg')
+            ? 'ogg'
+            : 'webm';
+        const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+        const file = new File([blob], `voice-note-${stamp}.${ext}`, {
+          type: blobType,
+        });
+        addFiles([file]);
+      };
+      // Timeslice keeps data flowing; some WebKit builds emit nothing without it.
+      recorder.start(250);
+      setRecording(true);
+      setRecordSecs(0);
+      clearRecordTimer();
+      recordTimerRef.current = window.setInterval(() => {
+        setRecordSecs((s) => s + 1);
+      }, 1000);
+    } catch {
+      stopRecordTracks();
+      setRecording(false);
+      setRecordError('Microphone permission is required to record audio notes.');
+    }
+  }
+
+  function stopAudioNote() {
+    const recorder = mediaRecorderRef.current;
+    if (recorder && recorder.state !== 'inactive') {
+      recorder.stop();
+    } else {
+      clearRecordTimer();
+      stopRecordTracks();
+      setRecording(false);
+    }
+  }
+
+  function cancelAudioNote() {
+    const recorder = mediaRecorderRef.current;
+    if (recorder) {
+      recorder.ondataavailable = null;
+      recorder.onstop = () => {
+        clearRecordTimer();
+        stopRecordTracks();
+        recordChunksRef.current = [];
+        mediaRecorderRef.current = null;
+        setRecording(false);
+      };
+      if (recorder.state !== 'inactive') recorder.stop();
+      else {
+        clearRecordTimer();
+        stopRecordTracks();
+        recordChunksRef.current = [];
+        mediaRecorderRef.current = null;
+        setRecording(false);
+      }
+    } else {
+      clearRecordTimer();
+      stopRecordTracks();
+      setRecording(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!attachMenuOpen) return;
+    function onDocClick(e: MouseEvent) {
+      if (!attachMenuRef.current?.contains(e.target as Node)) {
+        setAttachMenuOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [attachMenuOpen]);
+
+  useEffect(() => {
+    return () => {
+      clearRecordTimer();
+      stopRecordTracks();
+      if (mediaRecorderRef.current?.state === 'recording') {
+        mediaRecorderRef.current.stop();
+      }
+    };
+  }, []);
 
   async function onSend(e: FormEvent) {
     e.preventDefault();
@@ -1555,8 +1889,9 @@ export function ChatPage() {
                               <MessageTicks
                                 status={msg.status ?? 'sent'}
                                 localState={
-                                  msg.localState ??
-                                  (msg.id.startsWith('lmsg_') ? 'sending' : null)
+                                  msg.localState === 'sending' || msg.localState === 'failed'
+                                    ? msg.localState
+                                    : null
                                 }
                                 mine={mine}
                               />
@@ -1685,9 +2020,12 @@ export function ChatPage() {
                 {files.map((f, i) => (
                   <span
                     key={`${f.name}-${i}`}
-                    className="inline-flex items-center gap-1.5 rounded-md border border-ink-200 bg-ink-50 px-2 py-1 text-xs text-ink-700"
+                    className="inline-flex max-w-[220px] items-center gap-1.5 rounded-md border border-ink-200 bg-ink-50 px-2 py-1 text-xs text-ink-700"
                   >
-                    {f.name}
+                    <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-ink-500">
+                      {fileKindLabel(f)}
+                    </span>
+                    <span className="min-w-0 truncate">{f.name}</span>
                     <button
                       type="button"
                       onClick={() => setFiles((prev) => prev.filter((_, j) => j !== i))}
@@ -1700,31 +2038,147 @@ export function ChatPage() {
               </div>
             ) : null}
 
+            {recording ? (
+              <div className="flex items-center justify-between gap-3 border-t border-ink-200 bg-rose-50/80 px-4 py-2.5">
+                <div className="flex items-center gap-2 text-sm text-rose-700">
+                  <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-rose-500" />
+                  Recording audio note…
+                  <span className="tabular-nums font-medium">
+                    {String(Math.floor(recordSecs / 60)).padStart(2, '0')}:
+                    {String(recordSecs % 60).padStart(2, '0')}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={cancelAudioNote}
+                    className="rounded-md px-2.5 py-1.5 text-xs font-medium text-ink-600 hover:bg-white"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={stopAudioNote}
+                    className="inline-flex items-center gap-1.5 rounded-md bg-rose-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-rose-700"
+                  >
+                    <IconStop className="h-3.5 w-3.5" />
+                    Stop & attach
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            {recordError ? (
+              <p className="border-t border-ink-200 bg-white px-4 py-2 text-xs text-rose-600">
+                {recordError}
+              </p>
+            ) : null}
+
             <form
               onSubmit={onSend}
               className="flex items-end gap-2 border-t border-ink-200 bg-white px-3 py-3"
             >
               <input
-                ref={fileRef}
+                ref={photoInputRef}
                 type="file"
-                multiple
-                accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,.ppt,.pptx"
+                accept={ATTACH_ACCEPT.photo}
                 className="hidden"
                 onChange={(e) => {
-                  const list = Array.from(e.target.files ?? []);
-                  if (list.length) setFiles((prev) => [...prev, ...list].slice(0, 5));
+                  addFiles(Array.from(e.target.files ?? []));
+                  e.target.value = '';
+                }}
+              />
+              <input
+                ref={galleryInputRef}
+                type="file"
+                multiple
+                accept={ATTACH_ACCEPT.gallery}
+                className="hidden"
+                onChange={(e) => {
+                  addFiles(Array.from(e.target.files ?? []));
+                  e.target.value = '';
+                }}
+              />
+              <input
+                ref={documentInputRef}
+                type="file"
+                multiple
+                accept={ATTACH_ACCEPT.document}
+                className="hidden"
+                onChange={(e) => {
+                  addFiles(Array.from(e.target.files ?? []));
+                  e.target.value = '';
+                }}
+              />
+              <input
+                ref={audioInputRef}
+                type="file"
+                multiple
+                accept={ATTACH_ACCEPT.audio}
+                className="hidden"
+                onChange={(e) => {
+                  addFiles(Array.from(e.target.files ?? []));
                   e.target.value = '';
                 }}
               />
               {!editing ? (
-                <button
-                  type="button"
-                  title="Attach photo, video, or document"
-                  onClick={() => fileRef.current?.click()}
-                  className="mb-0.5 rounded-md p-2 text-ink-500 hover:bg-ink-100 hover:text-ink-800"
-                >
-                  <IconPaperclip className="h-5 w-5" />
-                </button>
+                <div className="relative mb-0.5" ref={attachMenuRef}>
+                  <button
+                    type="button"
+                    title="Attach"
+                    onClick={() => setAttachMenuOpen((o) => !o)}
+                    className={cn(
+                      'rounded-md p-2 text-ink-500 hover:bg-ink-100 hover:text-ink-800',
+                      attachMenuOpen && 'bg-ink-100 text-ink-800',
+                    )}
+                  >
+                    <IconPaperclip className="h-5 w-5" />
+                  </button>
+                  {attachMenuOpen ? (
+                    <div className="absolute bottom-full left-0 z-30 mb-2 w-52 overflow-hidden rounded-xl border border-ink-200 bg-white py-1 shadow-lg">
+                      <button
+                        type="button"
+                        onClick={() => openAttachPicker('photo')}
+                        className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm text-ink-800 hover:bg-ink-50"
+                      >
+                        <IconImage className="h-4 w-4 text-brand-600" />
+                        Photo
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openAttachPicker('document')}
+                        className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm text-ink-800 hover:bg-ink-50"
+                      >
+                        <IconFile className="h-4 w-4 text-brand-600" />
+                        Document
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void startAudioNote()}
+                        className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm text-ink-800 hover:bg-ink-50"
+                      >
+                        <IconMic className="h-4 w-4 text-brand-600" />
+                        Audio note
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openAttachPicker('audio')}
+                        className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm text-ink-800 hover:bg-ink-50"
+                      >
+                        <IconMic className="h-4 w-4 text-ink-500" />
+                        Audio file
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openAttachPicker('gallery')}
+                        className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm text-ink-800 hover:bg-ink-50"
+                      >
+                        <IconGallery className="h-4 w-4 text-brand-600" />
+                        Gallery
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
               ) : null}
               <textarea
                 value={draft}
@@ -1747,6 +2201,7 @@ export function ChatPage() {
                 size="md"
                 disabled={
                   sending ||
+                  recording ||
                   (!editing && !draft.trim() && files.length === 0)
                 }
                 className="mb-0.5 shrink-0"

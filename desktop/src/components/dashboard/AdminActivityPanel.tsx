@@ -555,8 +555,10 @@ export function AdminActivityPanel() {
           >
             <section className="flex min-h-0 flex-col overflow-hidden border-b border-ink-200 lg:border-r lg:border-b-0">
               <div className="shrink-0 border-b border-ink-100 px-4 py-2">
-                <h3 className="text-xs font-semibold text-ink-900">Apps used</h3>
-                <p className="text-[11px] text-ink-500">Scroll this panel independently</p>
+                <h3 className="text-xs font-semibold text-ink-900">Software used</h3>
+                <p className="text-[11px] text-ink-500">
+                  App time (includes browsers). Primary tracked total.
+                </p>
               </div>
               <div className="min-h-0 flex-1 overflow-y-auto p-4">
                 {appSlices.length === 0 ? (
@@ -573,7 +575,9 @@ export function AdminActivityPanel() {
             <section className="flex min-h-0 flex-col overflow-hidden">
               <div className="shrink-0 border-b border-ink-100 px-4 py-2">
                 <h3 className="text-xs font-semibold text-ink-900">Websites used</h3>
-                <p className="text-[11px] text-ink-500">Browser sites while checked in</p>
+                <p className="text-[11px] text-ink-500">
+                  Site breakdown while browsing — subset of browser app time, not added on top
+                </p>
               </div>
               <div className="min-h-0 flex-1 overflow-y-auto p-4">
                 <UsageList

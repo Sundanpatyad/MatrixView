@@ -41,8 +41,16 @@ router.get('/chat/users', async (req, res, next) => {
 
 router.post('/chat/conversations/dm', async (req, res, next) => {
   try {
-    const body = z.object({ userId: z.string().min(1) }).parse(req.body);
-    const data = await chat.getOrCreateDm(actorFrom(req as AuthedRequest), body.userId);
+    const body = z
+      .object({
+        userId: z.string().min(1).optional(),
+        email: z.string().email().optional(),
+      })
+      .refine((v) => Boolean(v.userId || v.email), {
+        message: 'Email or userId required',
+      })
+      .parse(req.body);
+    const data = await chat.getOrCreateDm(actorFrom(req as AuthedRequest), body);
     res.status(201).json(data);
   } catch (err) {
     next(err);

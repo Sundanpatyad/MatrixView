@@ -52,6 +52,7 @@ function isChatFolder(folder: string) {
 
 /**
  * Chat images & videos → Cloudinary (when configured).
+ * Chat audio, PDFs, and other documents → R2 (when configured).
  * User avatars, task/timeline files → R2.
  * Deleting a message/attachment also deletes the blob from that provider.
  * Falls back to local /uploads if the target provider is not configured.
@@ -63,13 +64,14 @@ export async function storeUploadedFile(
   let buffer = file.buffer ?? (file.path ? await fs.readFile(file.path) : null);
   if (!buffer) throw new Error('Upload has no file data');
 
-  let contentType = file.mimetype || 'application/octet-stream';
+  let contentType = (file.mimetype || 'application/octet-stream').split(';')[0]?.trim()
+    || 'application/octet-stream';
   let storeName = file.originalname;
 
   const compressed = await compressMedia(buffer, contentType, folder);
   if (compressed) {
     buffer = compressed.buffer;
-    contentType = compressed.mimeType;
+    contentType = compressed.mimeType.split(';')[0]?.trim() || compressed.mimeType;
     storeName = withNewExtension(file.originalname, compressed.extension);
   }
 

@@ -134,11 +134,10 @@ export async function register(input: {
     throw new AuthError('Unable to create account with that email', 409, 'EMAIL_TAKEN');
   }
 
-  const orgName = (input.orgName ?? '').trim();
-  if (!orgName) {
-    throw new AuthError('Organization name required', 400);
-  }
-
+  // Personal workspace (no org field in UI) — projects are the real tenancy unit
+  const displayName = input.name.trim() || email.split('@')[0] || 'User';
+  const orgName =
+    (input.orgName ?? '').trim() || `${displayName}'s Workspace`;
   let slug = slugify(orgName);
   const clash = await Organization.findOne({ slug });
   if (clash) slug = `${slug}-${crypto.randomBytes(2).toString('hex')}`;
@@ -147,7 +146,7 @@ export async function register(input: {
   const user = await User.create({
     orgId: org._id,
     email,
-    name: input.name.trim(),
+    name: displayName,
     passwordHash: await hashPassword(input.password),
     role: 'Admin',
     status: 'active',
