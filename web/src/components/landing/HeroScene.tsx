@@ -350,50 +350,20 @@ export function HeroScene({ className = "" }: Props) {
         new THREE.PlaneGeometry(panelW, panelH),
         new THREE.MeshBasicMaterial({ map: tex }),
       );
-      screen.position.z = 0.045;
+      screen.position.z = 0.02;
       product.add(screen);
 
-      const frame = new THREE.Mesh(
-        new THREE.BoxGeometry(panelW + 0.08, panelH + 0.08, 0.06),
-        new THREE.MeshStandardMaterial({
-          color: isDark() ? 0x2b2d31 : 0xe3e5e8,
-          metalness: 0.4,
-          roughness: 0.4,
-        }),
-      );
-      product.add(frame);
-
-      const accent = new THREE.Mesh(
-        new THREE.BoxGeometry(0.07, panelH * 0.55, 0.08),
-        new THREE.MeshBasicMaterial({ color: 0x5865f2 }),
-      );
-      accent.position.set(-panelW / 2 - 0.01, 0, 0.02);
-      product.add(accent);
-
-      // glow plane behind panel
-      const glow = new THREE.Mesh(
-        new THREE.PlaneGeometry(panelW * 1.15, panelH * 1.15),
-        new THREE.MeshBasicMaterial({
-          color: 0x5865f2,
-          transparent: true,
-          opacity: 0.08,
-          blending: THREE.AdditiveBlending,
-          depthWrite: false,
-        }),
-      );
-      glow.position.z = -0.08;
-      product.add(glow);
-
+      // Soft ground shadow only — no backdrop plate / glow box
       const shadow = new THREE.Mesh(
-        new THREE.PlaneGeometry(panelW * 1.15, panelH * 0.4),
+        new THREE.PlaneGeometry(panelW * 0.95, panelH * 0.28),
         new THREE.MeshBasicMaterial({
           color: 0x000000,
           transparent: true,
-          opacity: isDark() ? 0.3 : 0.12,
+          opacity: isDark() ? 0.22 : 0.1,
         }),
       );
       shadow.rotation.x = -Math.PI / 2;
-      shadow.position.set(0, -panelH / 2 - 0.18, 0.25);
+      shadow.position.set(0, -panelH / 2 - 0.12, 0.2);
       product.add(shadow);
 
       // floating chips
@@ -470,12 +440,9 @@ export function HeroScene({ className = "" }: Props) {
         chipB.draw();
         chipB.tex.needsUpdate = true;
         pMat.opacity = isDark() ? 0.45 : 0.28;
-        (frame.material as THREE.MeshStandardMaterial).color.setHex(
-          isDark() ? 0x2b2d31 : 0xe3e5e8,
-        );
         (shadow.material as THREE.MeshBasicMaterial).opacity = isDark()
-          ? 0.3
-          : 0.12;
+          ? 0.22
+          : 0.1;
       });
       themeObs.observe(document.documentElement, {
         attributes: true,
@@ -503,10 +470,6 @@ export function HeroScene({ className = "" }: Props) {
         product.rotation.y = baseRotY + pointer.x * 0.22;
         product.rotation.x = baseRotX + pointer.y * 0.14;
         product.rotation.z = pointer.x * -0.04;
-
-        (glow.material as THREE.MeshBasicMaterial).opacity =
-          0.07 + Math.sin(t * 2) * 0.025;
-        accent.scale.y = 1 + Math.sin(t * 2.5) * 0.06;
 
         chipA.mesh.position.y =
           (mobile ? -0.9 : 0.95) + Math.sin(t * 1.35 + 0.5) * 0.07;

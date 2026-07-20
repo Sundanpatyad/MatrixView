@@ -3,6 +3,7 @@ import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { ThemeToggle } from "../ThemeToggle";
 import { HeroScene } from "./HeroScene";
+import { DownloadDesktopButton, DownloadDesktopNavLink, DESKTOP_DOWNLOAD_URL } from "./DownloadDesktop";
 import { CursorGlow, MagneticLink, SplitBrand } from "./InteractiveBits";
 import { DashboardMock } from "./DashboardMock";
 import {
@@ -245,8 +246,8 @@ export function LandingExperience() {
             {[
               ["#product", "Product"],
               ["#dashboard", "Dashboard"],
+              ["#download", "Download"],
               ["#play", "Try it"],
-              ["#modules", "Modules"],
               ["#faq", "FAQ"],
             ].map(([href, label]) => (
               <a
@@ -261,9 +262,10 @@ export function LandingExperience() {
           </nav>
           <div className="flex items-center gap-2">
             <ThemeToggle />
+            <DownloadDesktopNavLink />
             <MagneticLink
               href={APP_LOGIN_URL}
-              className="rounded-full bg-brand-500 px-4 py-2 text-[13px] font-semibold text-white hover:bg-brand-600"
+              className="hidden rounded-full bg-brand-500 px-4 py-2 text-[13px] font-semibold text-white hover:bg-brand-600 sm:inline-flex"
             >
               Log in
             </MagneticLink>
@@ -318,22 +320,16 @@ export function LandingExperience() {
               the board.
             </p>
             <div data-hero="cta" className="mt-8 flex flex-wrap items-center gap-3">
+              <DownloadDesktopButton />
               <MagneticLink
                 href={APP_LOGIN_URL}
-                className="items-center gap-2 rounded-full bg-brand-500 px-6 py-3 text-sm font-semibold text-white hover:bg-brand-600"
+                className="items-center gap-2 rounded-full border border-ink-600 bg-ink-800/70 px-6 py-3 text-sm font-semibold text-ink-100 hover:border-brand-400/40"
               >
                 Log in to DockX
                 <span aria-hidden className="text-lg leading-none">
                   →
                 </span>
               </MagneticLink>
-              <a
-                href="#dashboard"
-                data-cursor="grow"
-                className="inline-flex items-center rounded-full border border-ink-600 bg-ink-800/70 px-6 py-3 text-sm font-semibold text-ink-100 transition hover:border-brand-400/40 hover:text-ink-50"
-              >
-                See the dashboard
-              </a>
             </div>
             <p
               data-hero="meta"
@@ -466,6 +462,67 @@ export function LandingExperience() {
           </div>
           <div data-reveal>
             <DashboardMock />
+          </div>
+        </div>
+      </section>
+
+      {/* Download desktop */}
+      <section id="download" className="border-t border-ink-600 py-24 sm:py-32">
+        <div className="mx-auto max-w-6xl px-5 sm:px-8">
+          <div className="grid items-center gap-12 lg:grid-cols-[1.1fr_0.9fr]">
+            <div data-reveal>
+              <p className="text-[11px] font-semibold tracking-[0.22em] text-brand-300 uppercase">
+                Desktop app
+              </p>
+              <h2 className="mt-4 font-landing text-4xl font-semibold tracking-tight text-ink-50 sm:text-5xl">
+                Install DockX
+                <br />
+                on the desk.
+              </h2>
+              <p className="mt-5 max-w-lg text-base leading-relaxed text-ink-300">
+                The desktop agent captures attendance, focus, and board work
+                offline-first — then syncs live with your team.
+              </p>
+              <div className="mt-8 flex flex-wrap items-center gap-3">
+                <DownloadDesktopButton className="px-6 py-3" />
+                <a
+                  href={DESKTOP_DOWNLOAD_URL}
+                  data-cursor="grow"
+                  className="inline-flex items-center rounded-full border border-ink-600 px-5 py-3 text-sm font-semibold text-ink-300 transition hover:border-brand-400/40 hover:text-ink-50"
+                >
+                  All releases
+                </a>
+              </div>
+              <p className="mt-5 text-xs text-ink-400">
+                Windows builds ship via CI. macOS / Linux installers appear on
+                the same releases page when published.
+              </p>
+            </div>
+
+            <div
+              data-reveal
+              className="rounded-2xl border border-ink-600 bg-ink-800/60 p-6 sm:p-8"
+            >
+              <p className="text-[11px] font-semibold tracking-[0.18em] text-ink-400 uppercase">
+                What you get
+              </p>
+              <ul className="mt-5 space-y-4">
+                {[
+                  "Native check-in, break, and checkout",
+                  "Offline queue that syncs when you’re back",
+                  "Live boards, chat, and presence in one agent",
+                  "Works alongside the web dashboard",
+                ].map((item) => (
+                  <li
+                    key={item}
+                    className="flex items-start gap-3 text-sm text-ink-200"
+                  >
+                    <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-brand-400" />
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
         </div>
       </section>
@@ -645,20 +702,14 @@ export function LandingExperience() {
             on the board.
           </p>
           <div data-reveal className="mt-10 flex flex-wrap items-center justify-center gap-3">
+            <DownloadDesktopButton className="px-7 py-3.5" />
             <MagneticLink
               href={APP_LOGIN_URL}
-              className="items-center gap-2 rounded-full bg-brand-500 px-8 py-3.5 text-sm font-semibold text-white hover:bg-brand-600"
+              className="items-center gap-2 rounded-full border border-ink-600 bg-ink-800/70 px-7 py-3.5 text-sm font-semibold text-ink-100 hover:border-brand-400/40"
             >
               Log in to DockX
               <span aria-hidden>→</span>
             </MagneticLink>
-            <a
-              href="#dashboard"
-              data-cursor="grow"
-              className="inline-flex rounded-full border border-ink-600 bg-ink-800/70 px-6 py-3.5 text-sm font-semibold text-ink-200 transition hover:border-brand-400/40 hover:text-ink-50"
-            >
-              Explore dashboard
-            </a>
           </div>
         </div>
       </section>
@@ -667,6 +718,9 @@ export function LandingExperience() {
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-5 text-xs text-ink-400 sm:flex-row sm:px-8">
           <span>© {new Date().getFullYear()} DockX</span>
           <div className="flex items-center gap-6">
+            <a href="#download" className="transition hover:text-brand-300">
+              Download
+            </a>
             <a href="#product" className="transition hover:text-brand-300">
               Product
             </a>
