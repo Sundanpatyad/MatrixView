@@ -151,8 +151,8 @@ export function Select({
         onClick={() => !disabled && setOpen((v) => !v)}
         onKeyDown={onKeyDown}
         className={cn(
-          'inline-flex w-full items-center justify-between gap-2 border border-ink-200 bg-white font-semibold text-ink-900 transition',
-          'hover:border-ink-300 focus:border-ink-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-45',
+          'inline-flex w-full items-center justify-between gap-2 border border-ink-600 bg-ink-800 font-semibold text-ink-50 transition',
+          'hover:border-ink-500 focus:border-ink-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-45',
           open && 'border-ink-500',
           sizes[size],
           className,
@@ -178,7 +178,7 @@ export function Select({
               ref={listRef}
               role="listbox"
               aria-labelledby={id}
-              className="fixed z-[10000] max-h-56 overflow-y-auto border border-ink-200 bg-white py-1 shadow-[0_8px_24px_rgba(15,23,42,0.12)]"
+              className="fixed z-[10000] max-h-56 overflow-y-auto border border-ink-600 bg-ink-800 py-1 shadow-[0_8px_24px_rgba(15,23,42,0.12)]"
               style={{
                 top: pos.openUp ? undefined : pos.top,
                 bottom: pos.openUp ? window.innerHeight - pos.top + 4 : undefined,
@@ -200,10 +200,10 @@ export function Select({
                         'flex w-full items-center px-3 py-2 text-left text-xs font-semibold transition',
                         opt.disabled && 'cursor-not-allowed opacity-40',
                         opt.value === value
-                          ? 'bg-ink-900 text-white'
+                          ? 'bg-brand-500 text-white'
                           : highlight === i
-                            ? 'bg-ink-100 text-ink-900'
-                            : 'text-ink-700 hover:bg-ink-50',
+                            ? 'bg-ink-600 text-ink-50'
+                            : 'text-ink-200 hover:bg-ink-700',
                       )}
                     >
                       {opt.label}

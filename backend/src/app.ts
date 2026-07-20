@@ -22,7 +22,7 @@ export function createApp() {
   app.use('/uploads', express.static(uploadsDir));
 
   app.get('/health', (_req, res) => {
-    res.json({ ok: true, service: 'tasktrack-api' });
+    res.json({ ok: true, service: 'dockx-api' });
   });
 
   app.use('/api/auth', authRoutes);

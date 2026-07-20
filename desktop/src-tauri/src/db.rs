@@ -1,6 +1,6 @@
 use tauri_plugin_sql::{Migration, MigrationKind};
 
-pub const DB_URL: &str = "sqlite:tasktrack.db";
+pub const DB_URL: &str = "sqlite:dockx.db";
 
 pub fn migrations() -> Vec<Migration> {
   vec![Migration {

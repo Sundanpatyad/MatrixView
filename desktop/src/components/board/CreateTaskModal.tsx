@@ -54,17 +54,17 @@ export function CreateTaskModal({ projectId, onClose, defaultAssignee }: Props) 
       <div
         role="dialog"
         aria-modal="true"
-        className="relative z-10 w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl"
+        className="relative z-10 w-full max-w-lg rounded-2xl bg-ink-800 p-5 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-xl font-bold text-ink-950">Create issue</h2>
-        <p className="mt-1 text-sm font-medium text-ink-600">
+        <h2 className="text-xl font-bold text-ink-50">Create issue</h2>
+        <p className="mt-1 text-sm font-medium text-ink-200">
           Choose type: Task, Bug, Story, or Time.
         </p>
 
         <form onSubmit={onSubmit} className="mt-5 space-y-3">
           <div>
-            <label className="mb-1 block text-xs font-bold text-ink-700 uppercase" htmlFor="title">
+            <label className="mb-1 block text-xs font-bold text-ink-200 uppercase" htmlFor="title">
               Summary
             </label>
             <Input
@@ -77,7 +77,7 @@ export function CreateTaskModal({ projectId, onClose, defaultAssignee }: Props) 
           </div>
 
           <div>
-            <label className="mb-1 block text-xs font-bold text-ink-700 uppercase" htmlFor="desc">
+            <label className="mb-1 block text-xs font-bold text-ink-200 uppercase" htmlFor="desc">
               Description
             </label>
             <textarea
@@ -85,14 +85,14 @@ export function CreateTaskModal({ projectId, onClose, defaultAssignee }: Props) 
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
-              className="w-full rounded-lg border border-ink-300 bg-white px-3 py-2 text-sm font-medium text-ink-900"
+              className="w-full rounded-lg border border-ink-500 bg-ink-800 px-3 py-2 text-sm font-medium text-ink-50"
               placeholder="Details, steps to reproduce, acceptance criteria…"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="mb-1 block text-xs font-bold text-ink-700 uppercase">Type</label>
+              <label className="mb-1 block text-xs font-bold text-ink-200 uppercase">Type</label>
               <Select
                 size="md"
                 value={type}
@@ -101,7 +101,7 @@ export function CreateTaskModal({ projectId, onClose, defaultAssignee }: Props) 
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-bold text-ink-700 uppercase">
+              <label className="mb-1 block text-xs font-bold text-ink-200 uppercase">
                 Priority
               </label>
               <Select
@@ -119,7 +119,7 @@ export function CreateTaskModal({ projectId, onClose, defaultAssignee }: Props) 
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label
-                className="mb-1 block text-xs font-bold text-ink-700 uppercase"
+                className="mb-1 block text-xs font-bold text-ink-200 uppercase"
                 htmlFor="estimate"
               >
                 Estimate (hours)
@@ -134,7 +134,7 @@ export function CreateTaskModal({ projectId, onClose, defaultAssignee }: Props) 
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-bold text-ink-700 uppercase">
+              <label className="mb-1 block text-xs font-bold text-ink-200 uppercase">
                 Due date
               </label>
               <DatePicker size="md" value={dueDate} onChange={setDueDate} />
@@ -142,15 +142,15 @@ export function CreateTaskModal({ projectId, onClose, defaultAssignee }: Props) 
           </div>
 
           <div>
-            <label className="mb-1 block text-xs font-bold text-ink-700 uppercase">
+            <label className="mb-1 block text-xs font-bold text-ink-200 uppercase">
               Assigned to
             </label>
-            <p className="rounded-lg border border-ink-200 bg-ink-50 px-3 py-2.5 text-sm font-semibold text-ink-800">
+            <p className="rounded-lg border border-ink-600 bg-ink-900 px-3 py-2.5 text-sm font-semibold text-ink-100">
               {assigneeName}
               {assigneeName === user?.name ? (
-                <span className="font-medium text-ink-500"> (you)</span>
+                <span className="font-medium text-ink-300"> (you)</span>
               ) : (
-                <span className="font-medium text-ink-500"> — current board</span>
+                <span className="font-medium text-ink-300"> — current board</span>
               )}
             </p>
           </div>

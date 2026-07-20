@@ -56,6 +56,7 @@ export type Project = {
   name: string;
   key: string;
   description: string;
+  avatarUrl?: string | null;
   createdAt: string;
   createdBy: string;
   createdByUserId?: string | null;
@@ -112,31 +113,31 @@ export type BoardTask = {
 
 export const COLUMN_ACCENTS = [
   'bg-ink-500',
-  'bg-amber-600',
-  'bg-sky-600',
-  'bg-emerald-600',
-  'bg-violet-600',
-  'bg-rose-600',
-  'bg-cyan-600',
-  'bg-orange-600',
-  'bg-teal-700',
-  'bg-fuchsia-600',
+  'bg-[#f0b232]',
+  'bg-[#00a8fc]',
+  'bg-[#23a559]',
+  'bg-[#5865f2]',
+  'bg-[#eb459e]',
+  'bg-[#57f287]',
+  'bg-[#ed4245]',
+  'bg-brand-500',
+  'bg-[#fee75c]',
 ] as const;
 
 export const DEFAULT_BOARD_COLUMNS: BoardColumn[] = [
   { id: 'todo', label: 'To Do', accent: 'bg-ink-500', locked: true },
-  { id: 'in_progress', label: 'In Progress', accent: 'bg-amber-600', locked: true },
-  { id: 'review', label: 'In Review', accent: 'bg-sky-600', locked: true },
-  { id: 'done', label: 'Done', accent: 'bg-emerald-600', locked: true },
+  { id: 'in_progress', label: 'In Progress', accent: 'bg-[#f0b232]', locked: true },
+  { id: 'review', label: 'In Review', accent: 'bg-[#00a8fc]', locked: true },
+  { id: 'done', label: 'Done', accent: 'bg-[#23a559]', locked: true },
 ];
 
 export const BOARD_COLUMNS = DEFAULT_BOARD_COLUMNS;
 
 export const TASK_TYPES: { id: TaskType; label: string; color: string }[] = [
-  { id: 'task', label: 'Task', color: 'bg-sky-700' },
-  { id: 'bug', label: 'Bug', color: 'bg-red-700' },
-  { id: 'story', label: 'Story', color: 'bg-emerald-700' },
-  { id: 'time', label: 'Time', color: 'bg-amber-700' },
+  { id: 'task', label: 'Task', color: 'bg-[#00a8fc]' },
+  { id: 'bug', label: 'Bug', color: 'bg-[#ed4245]' },
+  { id: 'story', label: 'Story', color: 'bg-[#23a559]' },
+  { id: 'time', label: 'Time', color: 'bg-[#f0b232]' },
 ];
 
 export const TASK_PRIORITIES: TaskPriority[] = [

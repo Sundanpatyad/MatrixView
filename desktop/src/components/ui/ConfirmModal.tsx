@@ -56,7 +56,7 @@ export function ConfirmModal({
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-ink-950/40 p-4">
+    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/55 p-4">
       <button
         type="button"
         className="absolute inset-0"
@@ -69,13 +69,13 @@ export function ConfirmModal({
         role="alertdialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="relative z-10 w-full max-w-sm border border-ink-200 bg-white p-5 shadow-lg"
+        className="relative z-10 w-full max-w-sm border border-ink-600 bg-ink-800 p-5 shadow-lg"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 id={titleId} className="text-base font-semibold text-ink-900">
+        <h2 id={titleId} className="text-base font-semibold text-ink-50">
           {title}
         </h2>
-        <p className="mt-2 text-sm leading-relaxed text-ink-600">{message}</p>
+        <p className="mt-2 text-sm leading-relaxed text-ink-200">{message}</p>
         <div className="mt-5 flex justify-end gap-2">
           <Button
             type="button"

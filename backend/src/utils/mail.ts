@@ -12,25 +12,25 @@ export async function sendInviteEmail(input: {
   orgName: string;
   inviteLink: string;
 }): Promise<{ sent: boolean; preview?: string }> {
-  const subject = `You're invited to ${input.projectName} on TaskTrack`;
+  const subject = `You're invited to ${input.projectName} on DockX`;
   const text = [
     `Hi,`,
     ``,
-    `${input.inviterName} invited you to join “${input.projectName}” at ${input.orgName} on TaskTrack.`,
+    `${input.inviterName} invited you to join “${input.projectName}” at ${input.orgName} on DockX.`,
     ``,
     `Create your account using this link:`,
     input.inviteLink,
     ``,
     `After you sign up, you'll already be on that project.`,
     ``,
-    `— TaskTrack`,
+    `— DockX`,
   ].join('\n');
 
   const html = `
     <p>Hi,</p>
     <p><strong>${escapeHtml(input.inviterName)}</strong> invited you to join
       <strong>${escapeHtml(input.projectName)}</strong> at
-      <strong>${escapeHtml(input.orgName)}</strong> on TaskTrack.</p>
+      <strong>${escapeHtml(input.orgName)}</strong> on DockX.</p>
     <p><a href="${input.inviteLink}">Create your account</a></p>
     <p>After you sign up, you'll already be on that project.</p>
   `;

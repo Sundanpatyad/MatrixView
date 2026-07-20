@@ -71,6 +71,42 @@ router.delete('/projects/:projectId', async (req, res, next) => {
   }
 });
 
+router.post(
+  '/projects/:projectId/avatar',
+  upload.single('avatar'),
+  async (req, res, next) => {
+    try {
+      const file = req.file;
+      if (!file) throw new AuthError('Image file required', 400);
+      if (!file.mimetype.startsWith('image/')) {
+        throw new AuthError('Project image must be an image', 400);
+      }
+      const { storeUploadedFile } = await import('../../storage/media.js');
+      const stored = await storeUploadedFile(file, 'avatars');
+      const project = await workspace.updateProjectAvatar(
+        await actorFrom(req as AuthedRequest),
+        param(req.params.projectId),
+        stored.url,
+      );
+      res.json({ project });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+router.delete('/projects/:projectId/avatar', async (req, res, next) => {
+  try {
+    const project = await workspace.removeProjectAvatar(
+      await actorFrom(req as AuthedRequest),
+      param(req.params.projectId),
+    );
+    res.json({ project });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.post('/projects/:projectId/members', async (req, res, next) => {
   try {
     const body = z

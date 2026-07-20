@@ -21,14 +21,14 @@ import { getForegroundApp, type ForegroundApp } from './native';
 const POLL_MS = 5_000;
 const FLUSH_MS = 20_000;
 
-/** Extra client-side guard — never record TaskTrack (dev binary often named "app"). */
-function isTaskTrackSelf(fg: ForegroundApp) {
+/** Extra client-side guard — never record DockX (dev binary often named "app"). */
+function isDockXSelf(fg: ForegroundApp) {
   const app = fg.appName.toLowerCase();
   const proc = fg.processName.toLowerCase();
   const title = (fg.windowTitle ?? '').toLowerCase();
-  if (app.includes('tasktrack') || proc.includes('tasktrack')) return true;
+  if (app.includes('dockx') || proc.includes('dockx')) return true;
   const generic = app === 'app' || app === 'app_lib' || proc === 'app' || proc === 'app_lib';
-  return generic && title.includes('tasktrack');
+  return generic && title.includes('dockx');
 }
 /** Gaps larger than this are treated as away (lock / sleep / lid). */
 const AWAY_GAP_MS = 20_000;
@@ -116,7 +116,6 @@ class ActivityTracker {
   private error: string | null = null;
   private listeners = new Set<Listener>();
   private lockStreak = 0;
-  private hadSuccessfulRead = false;
   private visibilityHandler: (() => void) | null = null;
 
   configureUser(user: { id: string; orgId: string } | null) {
@@ -190,7 +189,6 @@ class ActivityTracker {
     this.currentApp = null;
     this.currentSite = null;
     this.lockStreak = 0;
-    this.hadSuccessfulRead = false;
 
     // Prefer online start when network is available
     if (navigator.onLine) {
@@ -233,7 +231,6 @@ class ActivityTracker {
     this.error = null;
     this.pending = [];
     this.lockStreak = 0;
-    this.hadSuccessfulRead = false;
     this.localSessionId = localId ?? session.id;
     await saveServerActivitySession(session, this.localSessionId);
     this.attachSession(session, this.localSessionId);
@@ -410,13 +407,12 @@ class ActivityTracker {
       this.currentApp = null;
       this.currentSite = null;
       this.error =
-        'Cannot read active app. Grant Accessibility to TaskTrack (macOS System Settings → Privacy & Security → Accessibility), then check in again.';
+        'Cannot read active app. Grant Accessibility to DockX (macOS System Settings → Privacy & Security → Accessibility), then check in again.';
       this.emit();
       return;
     }
 
     this.error = null;
-    this.hadSuccessfulRead = true;
 
     if (fg.locked) {
       this.lockStreak += 1;
@@ -427,7 +423,7 @@ class ActivityTracker {
 
     this.lockStreak = 0;
 
-    if (fg.excluded || isTaskTrackSelf(fg)) {
+    if (fg.excluded || isDockXSelf(fg)) {
       this.currentApp = null;
       this.currentSite = null;
       this.emit();

@@ -84,9 +84,9 @@ export function ProjectBoardPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-ink-200 bg-white px-4 py-3 md:px-6">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-ink-600 bg-ink-800 px-4 py-3 md:px-6">
         <div className="min-w-0">
-          <div className="flex items-center gap-2 text-xs font-semibold text-ink-600">
+          <div className="flex items-center gap-2 text-xs font-semibold text-ink-200">
             <Link to="/projects" className="hover:text-brand-800">
               Projects
             </Link>
@@ -95,15 +95,15 @@ export function ProjectBoardPage() {
               {project.key}
             </Link>
             <span>/</span>
-            <span className="text-ink-900">Board</span>
+            <span className="text-ink-50">Board</span>
           </div>
-          <h1 className="truncate text-xl font-bold text-ink-950">{project.name} board</h1>
-          <p className="mt-0.5 text-xs font-semibold text-ink-600">
+          <h1 className="truncate text-xl font-bold text-ink-50">{project.name} board</h1>
+          <p className="mt-0.5 text-xs font-semibold text-ink-200">
             Click a card for details · Drag between columns · Add custom columns
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <span className="rounded-lg bg-ink-100 px-2.5 py-1 text-xs font-bold text-ink-800">
+          <span className="rounded-lg bg-ink-700 px-2.5 py-1 text-xs font-bold text-ink-200">
             {tasks.length} issues · {columns.length} columns
           </span>
           <Link to={`/projects/${project.id}`}>
@@ -120,7 +120,7 @@ export function ProjectBoardPage() {
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden bg-[#EBECF0]">
+      <div className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden bg-ink-900">
         <div
           className="grid h-full gap-3 p-4"
           style={{
@@ -134,23 +134,23 @@ export function ProjectBoardPage() {
               className={cn(
                 'flex h-full min-w-0 flex-col rounded-xl border-2 transition',
                 dropTarget === col.id
-                  ? 'border-brand-600 bg-brand-50'
-                  : 'border-transparent bg-[#DFE1E6]/50',
+                  ? 'border-brand-500 bg-brand-500/10'
+                  : 'border-transparent bg-ink-700/50',
               )}
             >
               <header className="flex items-center gap-2 px-3 py-3">
                 <span className={cn('h-2.5 w-2.5 shrink-0 rounded-full', col.accent)} />
-                <h2 className="min-w-0 flex-1 truncate text-xs font-bold tracking-wide text-ink-800 uppercase">
+                <h2 className="min-w-0 flex-1 truncate text-xs font-bold tracking-wide text-ink-100 uppercase">
                   {col.label}
                 </h2>
-                <span className="rounded bg-white px-1.5 py-0.5 text-[11px] font-bold text-ink-700">
+                <span className="rounded bg-ink-800 px-1.5 py-0.5 text-[11px] font-bold text-ink-200">
                   {(byStatus[col.id] ?? []).length}
                 </span>
                 {columns.length > 1 ? (
                   <button
                     type="button"
                     title="Remove column"
-                    className="rounded px-1 text-xs font-bold text-ink-500 hover:bg-white hover:text-red-700"
+                    className="rounded px-1 text-xs font-bold text-ink-300 hover:bg-ink-800 hover:text-[#ed4245]"
                     onClick={() => setColumnToRemove({ id: col.id, label: col.label })}
                   >
                     ×
@@ -183,7 +183,7 @@ export function ProjectBoardPage() {
                   />
                 ))}
                 {(byStatus[col.id] ?? []).length === 0 ? (
-                  <div className="rounded-lg border border-dashed border-ink-400 px-3 py-10 text-center text-xs font-bold text-ink-600">
+                  <div className="rounded-lg border border-dashed border-ink-400 px-3 py-10 text-center text-xs font-bold text-ink-200">
                     Drop issues here
                   </div>
                 ) : null}
@@ -203,15 +203,15 @@ export function ProjectBoardPage() {
           />
           <form
             onSubmit={onAddColumn}
-            className="relative z-10 w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl"
+            className="relative z-10 w-full max-w-sm rounded-2xl bg-ink-800 p-5 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="text-lg font-bold text-ink-950">Add custom column</h2>
-            <p className="mt-1 text-sm font-medium text-ink-600">
+            <h2 className="text-lg font-bold text-ink-50">Add custom column</h2>
+            <p className="mt-1 text-sm font-medium text-ink-200">
               Examples: Testing, On Host, Staging, Blocked
             </p>
             <div className="mt-4">
-              <label className="mb-1 block text-xs font-bold text-ink-700 uppercase" htmlFor="col">
+              <label className="mb-1 block text-xs font-bold text-ink-200 uppercase" htmlFor="col">
                 Column name
               </label>
               <Input
@@ -229,7 +229,7 @@ export function ProjectBoardPage() {
                   key={preset}
                   type="button"
                   onClick={() => setNewColumnName(preset)}
-                  className="rounded-full border border-ink-300 bg-ink-50 px-2.5 py-1 text-xs font-bold text-ink-800 hover:border-brand-600"
+                  className="rounded-full border border-ink-500 bg-ink-900 px-2.5 py-1 text-xs font-bold text-ink-100 hover:border-brand-600"
                 >
                   {preset}
                 </button>

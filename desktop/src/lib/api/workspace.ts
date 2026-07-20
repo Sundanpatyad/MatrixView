@@ -31,6 +31,28 @@ export function createProjectRequest(input: {
   });
 }
 
+export function uploadProjectAvatarRequest(
+  projectId: string,
+  file: File,
+): Promise<{ project: Project }> {
+  const body = new FormData();
+  body.append('avatar', file);
+  return apiFetch(`/api/projects/${projectId}/avatar`, {
+    method: 'POST',
+    auth: true,
+    body,
+  });
+}
+
+export function removeProjectAvatarRequest(
+  projectId: string,
+): Promise<{ project: Project }> {
+  return apiFetch(`/api/projects/${projectId}/avatar`, {
+    method: 'DELETE',
+    auth: true,
+  });
+}
+
 export function deleteProjectRequest(projectId: string): Promise<{ ok: boolean; projectId: string }> {
   return apiFetch(`/api/projects/${projectId}`, {
     method: 'DELETE',

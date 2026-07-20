@@ -99,7 +99,7 @@ function sessionSpanMs(session: ActivitySession) {
 }
 
 const CHART_COLORS = [
-  '#0f766e',
+  '#5865F2',
   '#0369a1',
   '#b45309',
   '#be123c',
@@ -139,7 +139,7 @@ function Donut({
     <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
       <div className="relative mx-auto h-[132px] w-[132px] shrink-0 sm:mx-0">
         <svg viewBox="0 0 120 120" className="h-full w-full -rotate-90">
-          <circle cx="60" cy="60" r={r} fill="none" stroke="#f1f5f9" strokeWidth="16" />
+          <circle cx="60" cy="60" r={r} fill="none" stroke="var(--chart-track)" strokeWidth="16" />
           {slices.map((slice) => {
             const len = (slice.value / total) * c;
             const el = (
@@ -160,7 +160,7 @@ function Donut({
           })}
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-          <p className="text-sm font-semibold tabular-nums text-ink-900">{centerValue}</p>
+          <p className="text-sm font-semibold tabular-nums text-ink-50">{centerValue}</p>
           <p className="text-[10px] text-ink-400">total</p>
         </div>
       </div>
@@ -174,10 +174,10 @@ function Donut({
                   className="h-2.5 w-2.5 shrink-0 rounded-full"
                   style={{ background: s.color }}
                 />
-                <span className="truncate font-medium text-ink-800">{s.label}</span>
+                <span className="truncate font-medium text-ink-100">{s.label}</span>
               </span>
-              <span className="shrink-0 tabular-nums text-ink-500">
-                <span className="font-semibold text-ink-800">{formatDuration(s.value)}</span>
+              <span className="shrink-0 tabular-nums text-ink-300">
+                <span className="font-semibold text-ink-100">{formatDuration(s.value)}</span>
                 <span className="ml-1.5 text-[10px]">{pct}%</span>
               </span>
             </li>
@@ -207,16 +207,16 @@ function UsageList({
         <li key={row.key}>
           <div className="flex items-baseline justify-between gap-2 text-xs">
             <div className="min-w-0">
-              <p className="truncate font-semibold text-ink-900">{row.label}</p>
+              <p className="truncate font-semibold text-ink-50">{row.label}</p>
               {row.sub ? (
                 <p className="truncate text-[10px] text-ink-400">{row.sub}</p>
               ) : null}
             </div>
-            <span className="shrink-0 tabular-nums font-semibold text-ink-600">
+            <span className="shrink-0 tabular-nums font-semibold text-ink-200">
               {formatDuration(row.value)}
             </span>
           </div>
-          <div className="mt-1.5 h-1.5 overflow-hidden bg-ink-100">
+          <div className="mt-1.5 h-1.5 overflow-hidden bg-ink-700">
             <div
               className="h-full"
               style={{
@@ -372,7 +372,7 @@ export function AdminActivityPanel() {
 
   if (loading && members.length === 0) {
     return (
-      <div className="flex h-full items-center justify-center bg-white text-sm text-ink-400">
+      <div className="flex h-full items-center justify-center bg-ink-800 text-sm text-ink-400">
         Loading activity…
       </div>
     );
@@ -383,12 +383,12 @@ export function AdminActivityPanel() {
     : members.reduce((n, m) => n + m.sessions.length, 0);
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-white">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-ink-800">
       {/* Sticky toolbar */}
-      <div className="flex shrink-0 flex-wrap items-end justify-between gap-3 border-b border-ink-200 px-4 py-2.5 md:px-5">
+      <div className="flex shrink-0 flex-wrap items-end justify-between gap-3 border-b border-ink-600 px-4 py-2.5 md:px-5">
         <div>
-          <h2 className="text-sm font-semibold text-ink-900">Activity</h2>
-          <p className="text-[11px] text-ink-500">
+          <h2 className="text-sm font-semibold text-ink-50">Activity</h2>
+          <p className="text-[11px] text-ink-300">
             {formatDateLabel(filterDate)} · each panel scrolls on its own
           </p>
         </div>
@@ -415,7 +415,7 @@ export function AdminActivityPanel() {
       </div>
 
       {error ? (
-        <div className="shrink-0 border-b border-red-100 bg-red-50 px-4 py-2 text-[11px] text-red-700">
+        <div className="shrink-0 border-b border-[#ed4245]/25 bg-[#ed4245]/10 px-4 py-2 text-[11px] text-[#ed4245]">
           {error}
         </div>
       ) : null}
@@ -423,8 +423,8 @@ export function AdminActivityPanel() {
       {/* Dashboard grid — no page scroll; panes scroll independently */}
       <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden lg:grid-cols-[200px_1fr]">
         {/* Team pane */}
-        <aside className="flex min-h-0 flex-col overflow-hidden border-b border-ink-200 lg:border-r lg:border-b-0">
-          <div className="shrink-0 border-b border-ink-100 px-3 py-2">
+        <aside className="flex min-h-0 flex-col overflow-hidden border-b border-ink-600 lg:border-r lg:border-b-0">
+          <div className="shrink-0 border-b border-ink-700 px-3 py-2">
             <p className="text-[10px] font-bold tracking-wide text-ink-400 uppercase">Team</p>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">
@@ -433,13 +433,17 @@ export function AdminActivityPanel() {
               onClick={() => selectMember('all')}
               className={cn(
                 'flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-xs',
-                selectedId === 'all' ? 'bg-ink-900 text-white' : 'hover:bg-ink-50',
+                selectedId === 'all'
+                  ? 'bg-brand-500 text-white'
+                  : 'text-ink-200 hover:bg-ink-700',
               )}
             >
               <span
                 className={cn(
                   'flex h-8 w-8 items-center justify-center text-[10px] font-bold',
-                  selectedId === 'all' ? 'bg-white/15' : 'bg-ink-900 text-white',
+                  selectedId === 'all'
+                    ? 'bg-white/15 text-white'
+                    : 'bg-ink-700 text-ink-200',
                 )}
               >
                 All
@@ -449,7 +453,7 @@ export function AdminActivityPanel() {
                 <span
                   className={cn(
                     'block text-[11px]',
-                    selectedId === 'all' ? 'text-white/60' : 'text-ink-500',
+                    selectedId === 'all' ? 'text-white/60' : 'text-ink-300',
                   )}
                 >
                   {formatDuration(orgTotal)} · {liveCount} live
@@ -465,8 +469,8 @@ export function AdminActivityPanel() {
                   type="button"
                   onClick={() => selectMember(m.userId)}
                   className={cn(
-                    'flex w-full items-center gap-2.5 border-t border-ink-100 px-3 py-2.5 text-left',
-                    active ? 'bg-teal-50' : 'hover:bg-ink-50',
+                    'flex w-full items-center gap-2.5 border-t border-ink-700 px-3 py-2.5 text-left',
+                    active ? 'bg-brand-500/10' : 'hover:bg-ink-700',
                   )}
                 >
                   <span className="relative shrink-0">
@@ -477,14 +481,14 @@ export function AdminActivityPanel() {
                       size="md"
                     />
                     {m.tracking ? (
-                      <span className="absolute -right-0.5 -bottom-0.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-emerald-500" />
+                      <span className="absolute -right-0.5 -bottom-0.5 h-2.5 w-2.5 rounded-full border-2 border-ink-800 bg-[#23a559]" />
                     ) : null}
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-xs font-semibold text-ink-900">
+                    <span className="block truncate text-xs font-semibold text-ink-50">
                       {m.name}
                     </span>
-                    <span className="block truncate text-[11px] text-ink-500">
+                    <span className="block truncate text-[11px] text-ink-300">
                       {formatDuration(m.totalTrackedMs)}
                       {m.sessions.length > 0 ? ` · ${m.sessions.length} in` : ''}
                     </span>
@@ -498,7 +502,7 @@ export function AdminActivityPanel() {
         {/* Main dashboard */}
         <div className="flex min-h-0 flex-col overflow-hidden">
           {/* KPIs — fixed */}
-          <section className="grid shrink-0 grid-cols-3 border-b border-ink-200">
+          <section className="grid shrink-0 grid-cols-3 border-b border-ink-600">
             {[
               { label: 'Tracked', value: formatDuration(scopedTracked), hint: scopeName },
               {
@@ -514,22 +518,22 @@ export function AdminActivityPanel() {
             ].map((k, i) => (
               <div
                 key={k.label}
-                className={cn('px-4 py-2.5', i < 2 && 'border-r border-ink-100')}
+                className={cn('px-4 py-2.5', i < 2 && 'border-r border-ink-700')}
               >
                 <p className="text-[10px] font-bold tracking-wide text-ink-400 uppercase">
                   {k.label}
                 </p>
-                <p className="mt-0.5 text-lg font-semibold tabular-nums text-ink-950">
+                <p className="mt-0.5 text-lg font-semibold tabular-nums text-ink-50">
                   {k.value}
                 </p>
-                <p className="truncate text-[11px] text-ink-500">{k.hint}</p>
+                <p className="truncate text-[11px] text-ink-300">{k.hint}</p>
               </div>
             ))}
           </section>
 
           {selectedSession ? (
-            <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-teal-100 bg-teal-50/60 px-4 py-1.5">
-              <p className="text-[12px] text-teal-900">
+            <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-brand-500/25 bg-brand-500/10 px-4 py-1.5">
+              <p className="text-[12px] text-brand-200">
                 Session{' '}
                 <span className="font-semibold">
                   {formatClock(selectedSession.startedAt)} →{' '}
@@ -540,7 +544,7 @@ export function AdminActivityPanel() {
               </p>
               <button
                 type="button"
-                className="text-[11px] font-semibold text-teal-800 hover:underline"
+                className="text-[11px] font-semibold text-brand-300 hover:underline"
                 onClick={() => setSelectedSessionId(null)}
               >
                 Show full day
@@ -551,12 +555,12 @@ export function AdminActivityPanel() {
           {/* Top: Apps | Websites — each scrolls alone */}
           <div
             key={`${selectedId}:${selectedSessionId ?? 'day'}`}
-            className="grid min-h-0 flex-[1.1] grid-cols-1 overflow-hidden border-b border-ink-200 lg:grid-cols-2"
+            className="grid min-h-0 flex-[1.1] grid-cols-1 overflow-hidden border-b border-ink-600 lg:grid-cols-2"
           >
-            <section className="flex min-h-0 flex-col overflow-hidden border-b border-ink-200 lg:border-r lg:border-b-0">
-              <div className="shrink-0 border-b border-ink-100 px-4 py-2">
-                <h3 className="text-xs font-semibold text-ink-900">Software used</h3>
-                <p className="text-[11px] text-ink-500">
+            <section className="flex min-h-0 flex-col overflow-hidden border-b border-ink-600 lg:border-r lg:border-b-0">
+              <div className="shrink-0 border-b border-ink-700 px-4 py-2">
+                <h3 className="text-xs font-semibold text-ink-50">Software used</h3>
+                <p className="text-[11px] text-ink-300">
                   App time (includes browsers). Primary tracked total.
                 </p>
               </div>
@@ -573,9 +577,9 @@ export function AdminActivityPanel() {
             </section>
 
             <section className="flex min-h-0 flex-col overflow-hidden">
-              <div className="shrink-0 border-b border-ink-100 px-4 py-2">
-                <h3 className="text-xs font-semibold text-ink-900">Websites used</h3>
-                <p className="text-[11px] text-ink-500">
+              <div className="shrink-0 border-b border-ink-700 px-4 py-2">
+                <h3 className="text-xs font-semibold text-ink-50">Websites used</h3>
+                <p className="text-[11px] text-ink-300">
                   Site breakdown while browsing — subset of browser app time, not added on top
                 </p>
               </div>
@@ -591,7 +595,7 @@ export function AdminActivityPanel() {
                   }))}
                 />
                 {detailAway.length > 0 ? (
-                  <div className="mt-5 border-t border-ink-100 pt-4">
+                  <div className="mt-5 border-t border-ink-700 pt-4">
                     <p className="mb-2 text-[10px] font-bold tracking-wide text-ink-400 uppercase">
                       Lock / sleep
                     </p>
@@ -599,17 +603,17 @@ export function AdminActivityPanel() {
                       {detailAway.map((p, i) => (
                         <li
                           key={`${p.startedAt}-${i}`}
-                          className="flex items-center justify-between gap-2 border border-ink-100 bg-ink-50/60 px-2.5 py-1.5 text-[11px]"
+                          className="flex items-center justify-between gap-2 border border-ink-700 bg-ink-800/60 px-2.5 py-1.5 text-[11px]"
                         >
                           <span>
-                            <span className="font-semibold text-ink-800">
+                            <span className="font-semibold text-ink-100">
                               {awayLabel(p.kind)}
                             </span>
-                            <span className="ml-1.5 tabular-nums text-ink-500">
+                            <span className="ml-1.5 tabular-nums text-ink-300">
                               {formatClock(p.startedAt)}–{formatClock(p.endedAt)}
                             </span>
                           </span>
-                          <span className="font-semibold tabular-nums text-ink-800">
+                          <span className="font-semibold tabular-nums text-ink-100">
                             {formatDuration(p.durationMs)}
                           </span>
                         </li>
@@ -623,11 +627,11 @@ export function AdminActivityPanel() {
 
           {/* Bottom: Check-ins — own scroll, separate from rest */}
           <section className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            <div className="shrink-0 border-b border-ink-200 px-4 py-2">
-              <h3 className="text-sm font-semibold text-ink-900">
+            <div className="shrink-0 border-b border-ink-600 px-4 py-2">
+              <h3 className="text-sm font-semibold text-ink-50">
                 {selected ? `${selected.name}'s check-ins` : 'Check-ins'}
               </h3>
-              <p className="text-[11px] text-ink-500">
+              <p className="text-[11px] text-ink-300">
                 This list scrolls separately · click a row to filter apps & websites
               </p>
             </div>
@@ -665,8 +669,8 @@ export function AdminActivityPanel() {
                             );
                           }}
                           className={cn(
-                            'flex w-full items-center gap-3 border-b border-ink-100 px-4 py-2.5 text-left transition-colors',
-                            active ? 'bg-teal-50' : 'hover:bg-ink-50',
+                            'flex w-full items-center gap-3 border-b border-ink-700 px-4 py-2.5 text-left transition-colors',
+                            active ? 'bg-brand-500/10' : 'hover:bg-ink-700',
                           )}
                         >
                           {member ? (
@@ -680,29 +684,29 @@ export function AdminActivityPanel() {
                           <div className="min-w-0 flex-1">
                             <div className="flex flex-wrap items-center gap-2">
                               {!selected && member ? (
-                                <span className="text-xs font-semibold text-ink-900">
+                                <span className="text-xs font-semibold text-ink-50">
                                   {member.name}
                                 </span>
                               ) : (
-                                <span className="text-xs font-semibold text-ink-900">
+                                <span className="text-xs font-semibold text-ink-50">
                                   Session {n}
                                 </span>
                               )}
                               {isLive ? (
-                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700">
-                                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
+                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#57f287]">
+                                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#23a559]" />
                                   Live
                                 </span>
                               ) : (
                                 <span className="text-[10px] font-medium text-ink-400">Out</span>
                               )}
                             </div>
-                            <p className="mt-0.5 text-[12px] tabular-nums text-ink-600">
-                              <span className="font-semibold text-ink-900">
+                            <p className="mt-0.5 text-[12px] tabular-nums text-ink-200">
+                              <span className="font-semibold text-ink-50">
                                 {formatClock(session.startedAt)}
                               </span>
                               <span className="mx-1 text-ink-300">→</span>
-                              <span className="font-semibold text-ink-900">
+                              <span className="font-semibold text-ink-50">
                                 {isLive ? 'now' : formatClock(session.endedAt)}
                               </span>
                               <span className="ml-2 text-ink-400">
@@ -714,7 +718,7 @@ export function AdminActivityPanel() {
                           <span
                             className={cn(
                               'shrink-0 text-[11px] font-semibold',
-                              active ? 'text-teal-800' : 'text-ink-400',
+                              active ? 'text-brand-300' : 'text-ink-400',
                             )}
                           >
                             {active ? 'Selected' : 'View'}

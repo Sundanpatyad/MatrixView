@@ -8,8 +8,8 @@ export function MyTasksPage() {
 
   return (
     <div className="mx-auto max-w-3xl">
-      <h1 className="font-display text-3xl font-semibold text-ink-900">My tasks</h1>
-      <p className="mt-2 text-sm text-ink-500">
+      <h1 className="font-display text-3xl font-semibold text-ink-50">My tasks</h1>
+      <p className="mt-2 text-sm text-ink-300">
         Execute work here. Full authoring stays on the web portal.
       </p>
 
@@ -20,15 +20,15 @@ export function MyTasksPage() {
             <article
               key={task.id}
               className={cn(
-                'rounded-xl border bg-white p-4',
-                active ? 'border-brand-300' : 'border-ink-200',
+                'rounded-xl border bg-ink-800 p-4',
+                active ? 'border-brand-300' : 'border-ink-600',
                 task.status === 'done' && 'opacity-60',
               )}
             >
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <p className="text-sm font-semibold text-ink-900">{task.title}</p>
-                  <p className="mt-1 text-xs text-ink-500">
+                  <p className="text-sm font-semibold text-ink-50">{task.title}</p>
+                  <p className="mt-1 text-xs text-ink-300">
                     {task.project} · {task.priority} · Due {task.due}
                   </p>
                 </div>
@@ -42,7 +42,7 @@ export function MyTasksPage() {
                     {active ? 'Pause' : 'Start'}
                   </Button>
                 ) : (
-                  <span className="text-xs font-semibold text-ink-500">Done</span>
+                  <span className="text-xs font-semibold text-ink-300">Done</span>
                 )}
               </div>
             </article>
@@ -50,7 +50,7 @@ export function MyTasksPage() {
         })}
       </div>
       {!checkedIn ? (
-        <p className="mt-4 text-xs text-ink-500">Check in on Today to start tracking a task.</p>
+        <p className="mt-4 text-xs text-ink-300">Check in on Today to start tracking a task.</p>
       ) : null}
     </div>
   );

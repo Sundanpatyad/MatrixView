@@ -22,7 +22,7 @@ function ClockMark({ mode }: { mode: 'confirm' | 'success' }) {
   return (
     <div
       className={cn(
-        'attendance-mark relative flex h-16 w-16 items-center justify-center border border-ink-200 bg-ink-50',
+        'attendance-mark relative flex h-16 w-16 items-center justify-center border border-ink-600 bg-ink-900',
         mode === 'success' && 'attendance-mark-pop',
       )}
     >
@@ -30,7 +30,7 @@ function ClockMark({ mode }: { mode: 'confirm' | 'success' }) {
       <svg
         viewBox="0 0 48 48"
         className={cn(
-          'relative z-[1] h-9 w-9 text-ink-800',
+          'relative z-[1] h-9 w-9 text-ink-100',
           mode === 'confirm' && 'attendance-tick',
         )}
         fill="none"
@@ -128,7 +128,7 @@ export function AttendanceMomentModal({
   }
 
   return createPortal(
-    <div className="attendance-backdrop fixed inset-0 z-[10000] flex items-center justify-center bg-ink-950/40 p-4">
+    <div className="attendance-backdrop fixed inset-0 z-[10000] flex items-center justify-center bg-black/55 p-4">
       <button
         type="button"
         className="absolute inset-0"
@@ -144,7 +144,7 @@ export function AttendanceMomentModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="attendance-card relative z-10 w-full max-w-sm border border-ink-200 bg-white shadow-lg"
+        className="attendance-card relative z-10 w-full max-w-sm border border-ink-600 bg-ink-800 shadow-lg"
         onClick={(e) => e.stopPropagation()}
         onMouseEnter={() => setHoverPause(true)}
         onMouseLeave={() => setHoverPause(false)}
@@ -156,20 +156,20 @@ export function AttendanceMomentModal({
             <ClockMark mode={mode} />
           </div>
 
-          <p className="mt-4 text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-500">
+          <p className="mt-4 text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-300">
             {eyebrow}
           </p>
 
           <h2
             id={titleId}
-            className="font-display mt-2 text-xl font-semibold leading-tight text-ink-900"
+            className="font-display mt-2 text-xl font-semibold leading-tight text-ink-50"
           >
             {title}
           </h2>
 
           <p
             className={cn(
-              'mt-2 min-h-[3.25rem] text-sm leading-relaxed text-ink-600',
+              'mt-2 min-h-[3.25rem] text-sm leading-relaxed text-ink-200',
               shake && 'attendance-msg-shake',
             )}
           >
@@ -181,7 +181,7 @@ export function AttendanceMomentModal({
               type="button"
               onClick={handleShuffle}
               disabled={busy}
-              className="mt-2 border border-ink-200 bg-white px-3 py-1 text-[11px] font-semibold text-ink-600 transition hover:border-ink-300 hover:bg-ink-50 hover:text-ink-900 active:scale-[0.98] disabled:opacity-40"
+              className="mt-2 border border-ink-600 bg-ink-800 px-3 py-1 text-[11px] font-semibold text-ink-200 transition hover:border-ink-500 hover:bg-ink-900 hover:text-ink-50 active:scale-[0.98] disabled:opacity-40"
             >
               Another line
             </button>
@@ -218,11 +218,11 @@ export function AttendanceMomentModal({
           </div>
 
           {!isConfirm ? (
-            <div className="mt-4 h-1 overflow-hidden bg-ink-100">
+            <div className="mt-4 h-1 overflow-hidden bg-ink-700">
               <div
                 key={message}
                 className={cn(
-                  'attendance-dismiss-bar h-full bg-brand-700',
+                  'attendance-dismiss-bar h-full bg-brand-500',
                   hoverPause && 'attendance-dismiss-paused',
                 )}
               />

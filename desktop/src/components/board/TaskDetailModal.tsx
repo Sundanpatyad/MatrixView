@@ -31,7 +31,7 @@ type Props = {
 
 const MAX_FILE_BYTES = 2 * 1024 * 1024;
 
-const labelClass = 'text-[10px] font-bold tracking-wide text-ink-500 uppercase';
+const labelClass = 'text-[10px] font-bold tracking-wide text-ink-300 uppercase';
 
 function filterFiles(files: FileList | File[]): { ok: File[]; skipped: string[] } {
   const ok: File[] = [];
@@ -69,9 +69,9 @@ function AttachmentList({
         return (
           <li
             key={att.id}
-            className="flex items-center gap-2 border border-ink-200 bg-white px-2.5 py-2"
+            className="flex items-center gap-2 border border-ink-600 bg-ink-800 px-2.5 py-2"
           >
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center bg-ink-100 text-[10px] font-bold text-ink-600">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center bg-ink-700 text-[10px] font-bold text-ink-200">
               {att.mimeType.startsWith('image/') ? 'IMG' : 'FILE'}
             </span>
             <div className="min-w-0 flex-1">
@@ -85,9 +85,9 @@ function AttachmentList({
                   {att.name}
                 </a>
               ) : (
-                <p className="truncate text-xs font-semibold text-ink-800">{att.name}</p>
+                <p className="truncate text-xs font-semibold text-ink-100">{att.name}</p>
               )}
-              <p className="text-[10px] text-ink-500">
+              <p className="text-[10px] text-ink-300">
                 {formatFileSize(att.size)} · {att.uploadedBy}
               </p>
             </div>
@@ -95,14 +95,14 @@ function AttachmentList({
               <img
                 src={href}
                 alt=""
-                className="h-8 w-8 shrink-0 object-cover ring-1 ring-ink-200"
+                className="h-8 w-8 shrink-0 object-cover ring-1 ring-ink-600"
               />
             ) : null}
             {onRemove ? (
               <button
                 type="button"
                 onClick={() => onRemove(att.id)}
-                className="text-[11px] font-semibold text-ink-400 hover:text-red-600"
+                className="text-[11px] font-semibold text-ink-400 hover:text-[#ed4245]"
               >
                 Remove
               </button>
@@ -203,7 +203,7 @@ export function TaskDetailModal({ task, projectName, columns, onClose }: Props) 
     ) ?? null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-ink-950/40 p-3 sm:p-6">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/55 p-3 sm:p-6">
       <button
         type="button"
         className="absolute inset-0 cursor-default"
@@ -213,10 +213,10 @@ export function TaskDetailModal({ task, projectName, columns, onClose }: Props) 
       <div
         role="dialog"
         aria-modal="true"
-        className="relative z-10 flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden border border-ink-200 bg-white shadow-xl"
+        className="relative z-10 flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden border border-ink-600 bg-ink-800 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <header className="flex shrink-0 items-start justify-between gap-4 border-b border-ink-200 px-5 py-3.5">
+        <header className="flex shrink-0 items-start justify-between gap-4 border-b border-ink-600 px-5 py-3.5">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <span
@@ -236,12 +236,12 @@ export function TaskDetailModal({ task, projectName, columns, onClose }: Props) 
                   aria-label="Issue type"
                 />
               </div>
-              <span className="text-xs font-bold text-ink-600">{liveTask.key}</span>
+              <span className="text-xs font-bold text-ink-200">{liveTask.key}</span>
               <span className="text-xs text-ink-400">·</span>
-              <span className="text-xs font-semibold text-ink-700">{projectName}</span>
+              <span className="text-xs font-semibold text-ink-200">{projectName}</span>
             </div>
             <input
-              className="mt-1.5 w-full border-0 bg-transparent text-lg font-semibold text-ink-950 outline-none"
+              className="mt-1.5 w-full border-0 bg-transparent text-lg font-semibold text-ink-50 outline-none"
               value={liveTask.title}
               onChange={(e) => patch({ title: e.target.value })}
             />
@@ -256,7 +256,7 @@ export function TaskDetailModal({ task, projectName, columns, onClose }: Props) 
             <section>
               <p className={labelClass}>Description</p>
               <textarea
-                className="mt-1.5 min-h-[100px] w-full border border-ink-200 px-3 py-2 text-sm text-ink-900 outline-none focus:border-ink-400"
+                className="mt-1.5 min-h-[100px] w-full border border-ink-600 px-3 py-2 text-sm text-ink-50 outline-none focus:border-ink-400"
                 value={liveTask.description}
                 onChange={(e) => patch({ description: e.target.value })}
                 placeholder="Add a description…"
@@ -294,8 +294,8 @@ export function TaskDetailModal({ task, projectName, columns, onClose }: Props) 
             <section>
               <p className={labelClass}>Time tracking</p>
               <div className="mt-2 grid grid-cols-3 gap-2">
-                <label className="border border-ink-200 bg-ink-50/60 px-2.5 py-2">
-                  <span className="text-[10px] font-bold text-ink-500 uppercase">Estimate</span>
+                <label className="border border-ink-600 bg-ink-800/60 px-2.5 py-2">
+                  <span className="text-[10px] font-bold text-ink-300 uppercase">Estimate</span>
                   <Input
                     type="number"
                     min={0}
@@ -305,8 +305,8 @@ export function TaskDetailModal({ task, projectName, columns, onClose }: Props) 
                     onChange={(e) => patch({ estimateHours: Number(e.target.value) || 0 })}
                   />
                 </label>
-                <label className="border border-ink-200 bg-ink-50/60 px-2.5 py-2">
-                  <span className="text-[10px] font-bold text-ink-500 uppercase">Logged</span>
+                <label className="border border-ink-600 bg-ink-800/60 px-2.5 py-2">
+                  <span className="text-[10px] font-bold text-ink-300 uppercase">Logged</span>
                   <Input
                     type="number"
                     min={0}
@@ -316,9 +316,9 @@ export function TaskDetailModal({ task, projectName, columns, onClose }: Props) 
                     onChange={(e) => patch({ loggedHours: Number(e.target.value) || 0 })}
                   />
                 </label>
-                <div className="border border-ink-200 bg-ink-50/60 px-2.5 py-2">
-                  <p className="text-[10px] font-bold text-ink-500 uppercase">Remaining</p>
-                  <p className="mt-1.5 text-base font-semibold text-ink-900">
+                <div className="border border-ink-600 bg-ink-800/60 px-2.5 py-2">
+                  <p className="text-[10px] font-bold text-ink-300 uppercase">Remaining</p>
+                  <p className="mt-1.5 text-base font-semibold text-ink-50">
                     {liveTask.remainingHours}h
                   </p>
                 </div>
@@ -334,7 +334,7 @@ export function TaskDetailModal({ task, projectName, columns, onClose }: Props) 
                     type="button"
                     title="Remove label"
                     onClick={() => patch({ labels: liveTask.labels.filter((l) => l !== label) })}
-                    className="bg-ink-100 px-2 py-0.5 text-[11px] font-semibold text-ink-700"
+                    className="bg-ink-700 px-2 py-0.5 text-[11px] font-semibold text-ink-200"
                   >
                     {label} ×
                   </button>
@@ -357,7 +357,7 @@ export function TaskDetailModal({ task, projectName, columns, onClose }: Props) 
               <p className={labelClass}>Comments</p>
               <form onSubmit={onAddComment} className="mt-2 space-y-2">
                 <textarea
-                  className="min-h-[72px] w-full border border-ink-200 px-3 py-2 text-sm text-ink-900 outline-none focus:border-ink-400"
+                  className="min-h-[72px] w-full border border-ink-600 px-3 py-2 text-sm text-ink-50 outline-none focus:border-ink-400"
                   placeholder={`Comment as ${user?.name ?? 'you'}…`}
                   value={comment}
                   onChange={(e) => setComment(e.target.value)}
@@ -367,14 +367,14 @@ export function TaskDetailModal({ task, projectName, columns, onClose }: Props) 
                     {commentFiles.map((file, idx) => (
                       <li
                         key={`${file.name}-${idx}`}
-                        className="flex items-center justify-between border border-ink-200 px-2.5 py-1.5 text-xs"
+                        className="flex items-center justify-between border border-ink-600 px-2.5 py-1.5 text-xs"
                       >
-                        <span className="truncate font-semibold text-ink-800">
+                        <span className="truncate font-semibold text-ink-100">
                           {file.name} · {formatFileSize(file.size)}
                         </span>
                         <button
                           type="button"
-                          className="font-semibold text-ink-400 hover:text-red-600"
+                          className="font-semibold text-ink-400 hover:text-[#ed4245]"
                           onClick={() =>
                             setCommentFiles((prev) => prev.filter((_, i) => i !== idx))
                           }
@@ -389,7 +389,7 @@ export function TaskDetailModal({ task, projectName, columns, onClose }: Props) 
                   <button
                     type="button"
                     onClick={() => commentFileRef.current?.click()}
-                    className="text-[11px] font-semibold text-ink-600 hover:text-ink-900"
+                    className="text-[11px] font-semibold text-ink-200 hover:text-ink-50"
                   >
                     Attach to comment
                   </button>
@@ -410,7 +410,7 @@ export function TaskDetailModal({ task, projectName, columns, onClose }: Props) 
                 </div>
               </form>
               {fileError ? (
-                <p className="mt-2 text-[11px] font-medium text-red-600">{fileError}</p>
+                <p className="mt-2 text-[11px] font-medium text-[#ed4245]">{fileError}</p>
               ) : null}
 
               <div className="mt-4 space-y-2">
@@ -418,7 +418,7 @@ export function TaskDetailModal({ task, projectName, columns, onClose }: Props) 
                   <p className="text-xs text-ink-400">No comments yet.</p>
                 ) : (
                   comments.map((c) => (
-                    <article key={c.id} className="border border-ink-200 bg-ink-50/50 px-3 py-2.5">
+                    <article key={c.id} className="border border-ink-600 bg-ink-800/50 px-3 py-2.5">
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
                           <UserAvatar
@@ -427,14 +427,14 @@ export function TaskDetailModal({ task, projectName, columns, onClose }: Props) 
                             seed={c.authorName}
                             size="sm"
                           />
-                          <p className="text-xs font-semibold text-ink-900">{c.authorName}</p>
+                          <p className="text-xs font-semibold text-ink-50">{c.authorName}</p>
                         </div>
                         <p className="text-[10px] font-medium text-ink-400">
                           {formatDateTime(c.createdAt)}
                         </p>
                       </div>
                       {c.body ? (
-                        <p className="mt-1.5 whitespace-pre-wrap text-sm text-ink-800">{c.body}</p>
+                        <p className="mt-1.5 whitespace-pre-wrap text-sm text-ink-100">{c.body}</p>
                       ) : null}
                       <AttachmentList items={c.attachments ?? []} />
                     </article>
@@ -444,7 +444,7 @@ export function TaskDetailModal({ task, projectName, columns, onClose }: Props) 
             </section>
           </div>
 
-          <aside className="min-h-0 space-y-4 overflow-y-auto border-t border-ink-200 bg-[#F8F9FB] p-4 md:border-t-0 md:border-l">
+          <aside className="min-h-0 space-y-4 overflow-y-auto border-t border-ink-600 bg-ink-950 p-4 md:border-t-0 md:border-l">
             <div>
               <p className={labelClass}>Status</p>
               <div className="mt-1">
@@ -459,10 +459,10 @@ export function TaskDetailModal({ task, projectName, columns, onClose }: Props) 
 
             <div>
               <p className={labelClass}>Assignee</p>
-              <p className="mt-1 text-[11px] text-ink-500">Pick a project member</p>
+              <p className="mt-1 text-[11px] text-ink-300">Pick a project member</p>
 
               {selectedMember || liveTask.assigneeName === 'Unassigned' || !liveTask.assigneeName ? (
-                <div className="mt-2 flex items-center gap-2 border border-ink-200 bg-white px-2.5 py-2">
+                <div className="mt-2 flex items-center gap-2 border border-ink-600 bg-ink-800 px-2.5 py-2">
                   {selectedMember ? (
                     <>
                       <UserAvatar
@@ -473,24 +473,24 @@ export function TaskDetailModal({ task, projectName, columns, onClose }: Props) 
                         className="!h-7 !w-7 !text-[10px]"
                       />
                       <div className="min-w-0">
-                        <p className="truncate text-xs font-semibold text-ink-900">
+                        <p className="truncate text-xs font-semibold text-ink-50">
                           {selectedMember.name}
                         </p>
-                        <p className="truncate text-[10px] text-ink-500">{selectedMember.role}</p>
+                        <p className="truncate text-[10px] text-ink-300">{selectedMember.role}</p>
                       </div>
                     </>
                   ) : (
-                    <p className="text-xs font-medium text-ink-500">Unassigned</p>
+                    <p className="text-xs font-medium text-ink-300">Unassigned</p>
                   )}
                 </div>
               ) : (
-                <div className="mt-2 border border-ink-200 bg-white px-2.5 py-2">
-                  <p className="text-xs font-semibold text-ink-800">{liveTask.assigneeName}</p>
+                <div className="mt-2 border border-ink-600 bg-ink-800 px-2.5 py-2">
+                  <p className="text-xs font-semibold text-ink-100">{liveTask.assigneeName}</p>
                   <p className="text-[10px] text-ink-400">Not in team list</p>
                 </div>
               )}
 
-              <div className="mt-2 max-h-48 space-y-1 overflow-y-auto border border-ink-200 bg-white p-1">
+              <div className="mt-2 max-h-48 space-y-1 overflow-y-auto border border-ink-600 bg-ink-800 p-1">
                 <button
                   type="button"
                   onClick={() => assignMember(null)}
@@ -498,11 +498,11 @@ export function TaskDetailModal({ task, projectName, columns, onClose }: Props) 
                     'flex w-full items-center gap-2 px-2 py-1.5 text-left text-xs',
                     !selectedMember &&
                       (liveTask.assigneeName === 'Unassigned' || !liveTask.assigneeName)
-                      ? 'bg-ink-100 font-semibold text-ink-900'
-                      : 'text-ink-600 hover:bg-ink-50',
+                      ? 'bg-brand-500/10 font-semibold text-ink-50'
+                      : 'text-ink-200 hover:bg-ink-700',
                   )}
                 >
-                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-ink-200 text-[9px] font-bold text-ink-600">
+                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-ink-700 text-[9px] font-bold text-ink-200">
                     —
                   </span>
                   Unassigned
@@ -525,8 +525,8 @@ export function TaskDetailModal({ task, projectName, columns, onClose }: Props) 
                         className={cn(
                           'flex w-full items-center gap-2 px-2 py-1.5 text-left',
                           active
-                            ? 'bg-brand-50 ring-1 ring-brand-600/30'
-                            : 'hover:bg-ink-50',
+                            ? 'bg-brand-500/10 ring-1 ring-brand-500/30'
+                            : 'hover:bg-ink-700',
                         )}
                       >
                         <UserAvatar
@@ -536,8 +536,8 @@ export function TaskDetailModal({ task, projectName, columns, onClose }: Props) 
                           size="sm"
                         />
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-xs font-semibold text-ink-900">{m.name}</p>
-                          <p className="truncate text-[10px] text-ink-500">{m.email}</p>
+                          <p className="truncate text-xs font-semibold text-ink-50">{m.name}</p>
+                          <p className="truncate text-[10px] text-ink-300">{m.email}</p>
                         </div>
                         <span className="shrink-0 text-[10px] font-semibold capitalize text-ink-400">
                           {m.role}
@@ -616,15 +616,15 @@ export function TaskDetailModal({ task, projectName, columns, onClose }: Props) 
               </div>
             </div>
 
-            <div className="border-t border-ink-200 pt-3">
+            <div className="border-t border-ink-600 pt-3">
               <p className={labelClass}>Created by</p>
-              <p className="mt-1 text-xs font-semibold text-ink-900">{liveTask.createdByName}</p>
-              <p className="text-[11px] text-ink-500">{formatDateTime(liveTask.createdAt)}</p>
+              <p className="mt-1 text-xs font-semibold text-ink-50">{liveTask.createdByName}</p>
+              <p className="text-[11px] text-ink-300">{formatDateTime(liveTask.createdAt)}</p>
             </div>
 
             <div>
               <p className={labelClass}>Updated</p>
-              <p className="mt-1 text-[11px] text-ink-600">{formatDateTime(liveTask.updatedAt)}</p>
+              <p className="mt-1 text-[11px] text-ink-200">{formatDateTime(liveTask.updatedAt)}</p>
             </div>
           </aside>
         </div>

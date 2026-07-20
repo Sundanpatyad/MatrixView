@@ -2,16 +2,16 @@ import type { DesktopTask } from '@/data/mockTasks';
 import { cn } from '@/lib/cn';
 
 const priorityStyles = {
-  low: 'bg-emerald-100 text-emerald-900 border border-emerald-200',
-  medium: 'bg-amber-100 text-amber-950 border border-amber-200',
-  high: 'bg-red-100 text-red-900 border border-red-200',
+  low: 'bg-[#23a559]/15 text-[#18783f] dark:text-[#57f287] border border-[#23a559]/25',
+  medium: 'bg-[#f0b232]/15 text-[#b77900] dark:text-[#fee75c] border border-[#f0b232]/30',
+  high: 'bg-[#ed4245]/15 text-[#c03537] dark:text-[#ed4245] border border-[#ed4245]/30',
 } as const;
 
 const barStyles = {
   todo: 'bg-ink-500',
   in_progress: 'bg-amber-600',
-  review: 'bg-sky-600',
-  done: 'bg-emerald-600',
+  review: 'bg-[#00a8fc]',
+  done: 'bg-[#23a559]',
 } as const;
 
 type Props = {
@@ -46,11 +46,11 @@ export function TaskCard({
       }}
       onDragEnd={() => onDragEnd?.()}
       className={cn(
-        'w-full rounded-2xl border bg-white p-3.5 text-left shadow-sm transition',
+        'w-full rounded-2xl border bg-ink-800 p-3.5 text-left shadow-sm transition',
         draggable && 'cursor-grab active:cursor-grabbing',
         active
           ? 'border-brand-700 ring-2 ring-brand-600/30'
-          : 'border-ink-300 hover:border-ink-400',
+          : 'border-ink-500 hover:border-ink-400',
       )}
     >
       <div className="flex items-start justify-between gap-2">
@@ -63,25 +63,25 @@ export function TaskCard({
           {task.priority}
         </span>
         {draggable ? (
-          <span className="text-ink-500" title="Drag to move" aria-hidden>
+          <span className="text-ink-300" title="Drag to move" aria-hidden>
             ⋮⋮
           </span>
         ) : null}
       </div>
 
       <button type="button" onClick={onSelect} className="mt-2 w-full text-left">
-        <p className="text-sm font-bold text-ink-950">{task.title}</p>
-        <p className="mt-0.5 text-xs font-medium text-ink-600">{task.subtitle}</p>
+        <p className="text-sm font-bold text-ink-50">{task.title}</p>
+        <p className="mt-0.5 text-xs font-medium text-ink-200">{task.subtitle}</p>
       </button>
 
       <div className="mt-3">
-        <div className="mb-1 flex items-center justify-between text-[11px] font-semibold text-ink-600">
+        <div className="mb-1 flex items-center justify-between text-[11px] font-semibold text-ink-200">
           <span>
             {task.progressDone}/{task.progressTotal}
           </span>
           <span>{pct}%</span>
         </div>
-        <div className="h-1.5 overflow-hidden rounded-full bg-ink-200">
+        <div className="h-1.5 overflow-hidden rounded-full bg-ink-700">
           <div
             className={cn('h-full rounded-full', barStyles[task.status])}
             style={{ width: `${Math.max(pct, 4)}%` }}
@@ -89,20 +89,20 @@ export function TaskCard({
         </div>
       </div>
 
-      <p className="mt-3 text-[11px] font-semibold text-ink-700">Due: {task.due}</p>
+      <p className="mt-3 text-[11px] font-semibold text-ink-200">Due: {task.due}</p>
 
       <div className="mt-3 flex items-center justify-between gap-2">
         <div className="flex -space-x-1.5">
           {task.assignees.map((a) => (
             <span
               key={a}
-              className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-brand-700 text-[9px] font-bold text-white"
+              className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-ink-800 bg-brand-500 text-[9px] font-bold text-white"
             >
               {a}
             </span>
           ))}
         </div>
-        <div className="flex items-center gap-2 text-[11px] font-semibold text-ink-600">
+        <div className="flex items-center gap-2 text-[11px] font-semibold text-ink-200">
           <span>{task.attachments} files</span>
           <span>{task.comments} notes</span>
         </div>

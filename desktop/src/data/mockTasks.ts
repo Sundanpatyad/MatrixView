@@ -133,7 +133,7 @@ export const myTasks: DesktopTask[] = [
 
 export const boardColumns: { id: DesktopTaskStatus; label: string; accent: string }[] = [
   { id: 'todo', label: 'Not started', accent: 'bg-ink-400' },
-  { id: 'in_progress', label: 'In progress', accent: 'bg-amber-500' },
-  { id: 'review', label: 'Under review', accent: 'bg-sky-500' },
-  { id: 'done', label: 'Completed', accent: 'bg-emerald-500' },
+  { id: 'in_progress', label: 'In progress', accent: 'bg-[#f0b232]' },
+  { id: 'review', label: 'Under review', accent: 'bg-[#00a8fc]' },
+  { id: 'done', label: 'Completed', accent: 'bg-[#23a559]' },
 ];

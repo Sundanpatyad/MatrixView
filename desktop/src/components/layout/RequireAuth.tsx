@@ -6,7 +6,7 @@ export function RequireAuth() {
 
   if (isBootstrapping) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-white text-sm text-ink-500">
+      <div className="flex min-h-screen items-center justify-center bg-ink-800 text-sm text-ink-300">
         Restoring session…
       </div>
     );

@@ -1,14 +1,14 @@
 import { cn } from '@/lib/cn';
 
 const AVATAR_COLORS = [
-  'bg-teal-700',
-  'bg-sky-700',
-  'bg-amber-700',
-  'bg-rose-700',
-  'bg-indigo-700',
-  'bg-emerald-700',
-  'bg-orange-700',
-  'bg-cyan-800',
+  'bg-[#5865f2]',
+  'bg-[#57f287]',
+  'bg-[#eb459e]',
+  'bg-[#00a8fc]',
+  'bg-[#fee75c]',
+  'bg-[#ed4245]',
+  'bg-[#4752c4]',
+  'bg-[#23a559]',
 ];
 
 function initials(name: string) {
@@ -67,7 +67,7 @@ export function UserAvatar({
         'relative grid shrink-0 place-items-center overflow-hidden rounded-full leading-none',
         !bare && 'ring-1 ring-black/5',
         sizeClass[size],
-        src ? 'bg-ink-200' : color,
+        src ? 'bg-ink-700' : color,
         !src && 'font-bold text-white',
         className,
       )}

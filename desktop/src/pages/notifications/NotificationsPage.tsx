@@ -22,16 +22,16 @@ const items = [
 export function NotificationsPage() {
   return (
     <div className="mx-auto max-w-3xl">
-      <h1 className="font-display text-3xl font-semibold text-ink-900">Notifications</h1>
-      <p className="mt-2 text-sm text-ink-500">In-app feed — OS toasts come from the tray agent.</p>
+      <h1 className="font-display text-3xl font-semibold text-ink-50">Notifications</h1>
+      <p className="mt-2 text-sm text-ink-300">In-app feed — OS toasts come from the tray agent.</p>
 
       <div className="mt-8 space-y-2">
         {items.map((item) => (
-          <article key={item.id} className="rounded-xl border border-ink-200 bg-white px-4 py-3">
+          <article key={item.id} className="rounded-xl border border-ink-600 bg-ink-800 px-4 py-3">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-sm font-semibold text-ink-900">{item.title}</p>
-                <p className="mt-1 text-sm text-ink-500">{item.body}</p>
+                <p className="text-sm font-semibold text-ink-50">{item.title}</p>
+                <p className="mt-1 text-sm text-ink-300">{item.body}</p>
               </div>
               <span className="shrink-0 text-xs text-ink-400">{item.time}</span>
             </div>

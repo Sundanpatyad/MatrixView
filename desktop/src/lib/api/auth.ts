@@ -28,7 +28,7 @@ export function loginRequest(input: {
       email: input.email,
       password: input.password,
       deviceType: 'desktop',
-      deviceId: 'tasktrack-desktop',
+      deviceId: 'dockx-desktop',
     }),
   });
 }
@@ -48,7 +48,7 @@ export function registerRequest(input: {
       password: input.password,
       ...(input.inviteToken ? { inviteToken: input.inviteToken } : {}),
       deviceType: 'desktop',
-      deviceId: 'tasktrack-desktop',
+      deviceId: 'dockx-desktop',
     }),
   });
 }

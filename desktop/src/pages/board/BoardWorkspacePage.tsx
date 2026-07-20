@@ -9,6 +9,9 @@ import {
 } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { CreateTaskModal } from '@/components/board/CreateTaskModal';
+import { MemberBoardPicker } from '@/components/board/MemberBoardPicker';
+import { ProjectAvatar } from '@/components/board/ProjectAvatar';
+import { ProjectSelect } from '@/components/board/ProjectSelect';
 import { TaskDetailModal } from '@/components/board/TaskDetailModal';
 import { CreateProjectModal } from '@/components/dashboard/CreateProjectModal';
 import { DashboardTaskCard } from '@/components/dashboard/DashboardTaskCard';
@@ -56,6 +59,8 @@ export function BoardWorkspacePage() {
     removeColumn,
     reorderColumns,
     isProjectAdmin,
+    uploadProjectAvatar,
+    removeProjectAvatar,
   } = useWorkspace();
   const { checkedIn, onBreak, elapsedLabel, checkIn, checkOut, toggleBreak } = useAttendance();
 
@@ -82,8 +87,12 @@ export function BoardWorkspacePage() {
   const [columnToRemove, setColumnToRemove] = useState<{ id: string; label: string } | null>(
     null,
   );
+  const [memberSearch, setMemberSearch] = useState('');
+  const [sidebarMembersOpen, setSidebarMembersOpen] = useState(false);
+  const [avatarBusy, setAvatarBusy] = useState(false);
   const renameInputRef = useRef<HTMLInputElement>(null);
   const addColumnInputRef = useRef<HTMLInputElement>(null);
+  const SIDEBAR_VISIBLE = 5;
 
   useEffect(() => {
     if (queryProjectId && projects.some((p) => p.id === queryProjectId)) {
@@ -218,6 +227,26 @@ export function BoardWorkspacePage() {
     [members, boardMemberIds],
   );
 
+  const filteredSidebarMembers = useMemo(() => {
+    const q = memberSearch.trim().toLowerCase();
+    if (!q) return members;
+    return members.filter(
+      (m) =>
+        m.name.toLowerCase().includes(q) ||
+        m.email.toLowerCase().includes(q),
+    );
+  }, [members, memberSearch]);
+
+  const isMemberSearching = memberSearch.trim().length > 0;
+  const sidebarVisibleMembers =
+    isMemberSearching || sidebarMembersOpen
+      ? filteredSidebarMembers
+      : filteredSidebarMembers.slice(0, SIDEBAR_VISIBLE);
+  const sidebarOverflow =
+    isMemberSearching || sidebarMembersOpen
+      ? 0
+      : Math.max(0, filteredSidebarMembers.length - SIDEBAR_VISIBLE);
+
   function toggleBoardMember(memberId: string) {
     setBoardMemberIds((prev) => {
       if (prev.includes(memberId)) {
@@ -344,8 +373,8 @@ export function BoardWorkspacePage() {
     <div className="flex h-full min-h-0">
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Toolbar */}
-        <div className="flex flex-wrap items-center gap-1.5 border-b border-ink-200 bg-white px-4 py-2">
-          <div className="flex items-center gap-1 rounded-lg border border-ink-200 bg-ink-50/80 p-0.5">
+        <div className="flex flex-wrap items-center gap-1.5 border-b border-ink-600 bg-ink-800 px-4 py-2">
+          <div className="flex items-center gap-1 rounded-lg border border-ink-600 bg-ink-900/80 p-0.5">
             {!checkedIn ? (
               <Button size="xs" onClick={() => void checkIn()}>
                 Check in
@@ -362,7 +391,7 @@ export function BoardWorkspacePage() {
             )}
           </div>
 
-          <div className="flex items-center gap-1 rounded-lg border border-ink-200 bg-ink-50/80 p-0.5">
+          <div className="flex items-center gap-1 rounded-lg border border-ink-600 bg-ink-900/80 p-0.5">
             <Button
               size="xs"
               variant="ghost"
@@ -395,7 +424,7 @@ export function BoardWorkspacePage() {
                     }}
                     placeholder="Column name"
                     disabled={columnBusy}
-                    className="h-7 w-36 rounded-md border border-ink-200 bg-white px-2 text-xs outline-none focus:border-brand-500"
+                    className="h-7 w-36 rounded-md border border-ink-600 bg-ink-800 px-2 text-xs outline-none focus:border-brand-500"
                   />
                   <Button
                     type="submit"
@@ -430,114 +459,112 @@ export function BoardWorkspacePage() {
             ) : null}
           </div>
 
-          <div className="ml-auto flex items-center gap-1.5 rounded-md border border-ink-200 bg-ink-50 px-2 py-1">
+          <div className="ml-auto flex items-center gap-1.5 rounded-md border border-ink-600 bg-ink-900 px-2 py-1">
             <span
               className={cn(
                 'h-1.5 w-1.5 rounded-full',
-                !checkedIn ? 'bg-ink-300' : onBreak ? 'bg-amber-500' : 'bg-emerald-500',
+                !checkedIn ? 'bg-ink-300' : onBreak ? 'bg-[#f0b232]' : 'bg-[#23a559]',
               )}
             />
-            <span className="text-[11px] tabular-nums font-semibold text-ink-800">
+            <span className="text-[11px] tabular-nums font-semibold text-ink-100">
               {checkedIn ? elapsedLabel : '00:00:00'}
             </span>
           </div>
         </div>
 
-        {/* Project name + tabs + filters */}
-        <div className="border-b border-ink-200 bg-white px-4 py-2.5">
+        {/* Project overview + filters */}
+        <div className="border-b border-ink-600 bg-ink-800 px-4 py-3">
           {project ? (
-            <div className="mb-2 flex flex-wrap items-center gap-3">
-              <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-ink-900">{project.name}</p>
-                <p className="text-[11px] text-ink-500">
-                  {project.key}
-                  {project.description ? ` · ${project.description}` : ''}
-                  {boardLabel ? (
-                    <>
-                      {' '}
-                      · Board:{' '}
-                      <span className="font-semibold text-ink-700">{boardLabel}</span>
-                    </>
+            <div className="flex flex-col gap-3 border-b border-ink-600/80 pb-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex min-w-0 items-start gap-3">
+                <ProjectAvatar
+                  name={project.name}
+                  avatarUrl={project.avatarUrl}
+                  size="md"
+                  editable={canEditColumns}
+                  busy={avatarBusy}
+                  onUpload={async (file) => {
+                    setAvatarBusy(true);
+                    try {
+                      await uploadProjectAvatar(project.id, file);
+                    } finally {
+                      setAvatarBusy(false);
+                    }
+                  }}
+                  onRemove={async () => {
+                    setAvatarBusy(true);
+                    try {
+                      await removeProjectAvatar(project.id);
+                    } finally {
+                      setAvatarBusy(false);
+                    }
+                  }}
+                />
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h1 className="truncate text-base font-bold text-ink-50">{project.name}</h1>
+                    <span className="rounded-md border border-brand-500/25 bg-brand-500/10 px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-brand-600 uppercase dark:text-brand-300">
+                      {project.key}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 max-w-2xl truncate text-xs text-ink-300">
+                    {project.description || 'Organize, assign, and track work across the team.'}
+                  </p>
+                  {canEditColumns ? (
+                    <p className="mt-1 text-[10px] font-medium text-ink-400">
+                      Click the image to add, change, or remove
+                    </p>
                   ) : null}
-                </p>
-                <p className="text-[10px] text-ink-400">
-                  Multi-select avatars to combine boards
-                </p>
+                  {boardLabel ? (
+                    <p className="mt-1 text-[11px] font-medium text-ink-400">
+                      Viewing <span className="text-ink-200">{boardLabel}</span>
+                    </p>
+                  ) : null}
+                </div>
               </div>
-              <div className="flex items-center" role="group" aria-label="Member boards">
-                {members.map((m, i) => {
-                  const active = boardMemberIds.includes(m.id);
-                  return (
-                    <button
-                      key={m.id}
-                      type="button"
-                      title={
-                        active
-                          ? `Hide ${m.name}'s tasks (click again)`
-                          : `Add ${m.name}'s tasks`
-                      }
-                      aria-pressed={active}
-                      onClick={() => toggleBoardMember(m.id)}
-                      style={{ zIndex: i + 1 }}
-                      className={cn(
-                        'relative h-8 w-8 shrink-0 rounded-full p-0 transition',
-                        'shadow-[0_0_0_2px_#fff]',
-                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink-400',
-                        i > 0 && '-ml-2.5',
-                        active ? 'opacity-100' : 'opacity-40 hover:opacity-100',
-                      )}
-                    >
-                      <UserAvatar
-                        name={m.name}
-                        src={m.avatarUrl}
-                        seed={m.email || m.name}
-                        size="md"
-                        bare
-                        className="!h-8 !w-8 !text-[9px]"
-                      />
-                      {active ? (
-                        <span className="absolute -right-0.5 -bottom-0.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-ink-900" />
-                      ) : null}
-                    </button>
-                  );
-                })}
+
+              <div className="flex shrink-0 items-center gap-3 rounded-xl border border-ink-600 bg-ink-900/70 px-3 py-2">
+                <MemberBoardPicker
+                  members={members}
+                  selectedIds={boardMemberIds}
+                  onToggle={toggleBoardMember}
+                />
               </div>
             </div>
           ) : null}
 
-          <div className="flex flex-wrap items-center gap-2">
-            {projects.length === 0 ? (
-              <span className="text-xs text-ink-500">No projects</span>
-            ) : (
-              projects.map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => selectProject(p.id)}
-                  className={cn(
-                    'px-2.5 py-1 text-left text-xs',
-                    projectId === p.id
-                      ? 'bg-ink-900 text-white'
-                      : 'text-ink-600 hover:bg-ink-100',
-                  )}
+          <div className="flex flex-col gap-3 pt-3 xl:flex-row xl:items-center">
+            <ProjectSelect
+              projects={projects}
+              value={projectId}
+              onChange={selectProject}
+              placeholder="Select project"
+            />
+
+            <div className="flex flex-wrap items-center gap-2 xl:ml-auto xl:flex-nowrap">
+              <label className="relative min-w-44 flex-1 xl:w-48 xl:flex-none">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  className="pointer-events-none absolute top-1/2 left-3 h-3.5 w-3.5 -translate-y-1/2 text-ink-400"
+                  aria-hidden
                 >
-                  <span className="font-semibold">{p.name}</span>
-                  <span className={cn('ml-1.5', projectId === p.id ? 'text-white/70' : 'text-ink-400')}>
-                    {p.key}
-                  </span>
-                </button>
-              ))
-            )}
-            <div className="ml-auto flex flex-wrap items-center gap-1.5">
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Filter…"
-                className="h-8 w-36 border border-ink-200 bg-white px-2 text-xs outline-none focus:border-ink-400"
-              />
-              <div className="w-[110px]">
+                  <circle cx="11" cy="11" r="7" />
+                  <path d="m20 20-3.5-3.5" />
+                </svg>
+                <input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search tasks…"
+                  className="h-9 w-full rounded-lg border border-ink-600 bg-ink-900 pr-3 pl-9 text-xs text-ink-50 outline-none transition placeholder:text-ink-400 hover:border-ink-500 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/15"
+                />
+              </label>
+              <div className="w-[120px]">
                 <Select
-                  size="xs"
+                  size="sm"
+                  className="rounded-lg bg-ink-900"
                   value={typeFilter}
                   onChange={(v) => setTypeFilter(v as TaskType | 'all')}
                   options={[
@@ -547,9 +574,10 @@ export function BoardWorkspacePage() {
                   aria-label="Filter by type"
                 />
               </div>
-              <div className="w-[110px]">
+              <div className="w-[120px]">
                 <Select
-                  size="xs"
+                  size="sm"
+                  className="rounded-lg bg-ink-900"
                   value={priorityFilter}
                   onChange={(v) => setPriorityFilter(v as TaskPriority | 'all')}
                   options={[
@@ -559,9 +587,10 @@ export function BoardWorkspacePage() {
                   aria-label="Filter by priority"
                 />
               </div>
-              <div className="w-[110px]">
+              <div className="w-[120px]">
                 <Select
-                  size="xs"
+                  size="sm"
+                  className="rounded-lg bg-ink-900"
                   value={statusFilter}
                   onChange={setStatusFilter}
                   options={[
@@ -578,8 +607,8 @@ export function BoardWorkspacePage() {
         {/* Board */}
         <div className="min-h-0 flex-1 overflow-auto p-3">
           {!project ? (
-            <div className="flex h-full flex-col items-center justify-center rounded-xl border border-dashed border-ink-300 bg-white px-6 py-12 text-center">
-              <p className="text-sm font-semibold text-ink-900">Create a project to begin</p>
+            <div className="flex h-full flex-col items-center justify-center rounded-xl border border-dashed border-ink-500 bg-ink-800 px-6 py-12 text-center">
+              <p className="text-sm font-semibold text-ink-50">Create a project to begin</p>
               <Button className="mt-4" size="sm" onClick={() => setShowCreateProject(true)}>
                 New project
               </Button>
@@ -595,10 +624,10 @@ export function BoardWorkspacePage() {
                 const count = (byStatus[col.id] ?? []).length;
                 const accents = [
                   'bg-ink-400',
-                  'bg-amber-500',
-                  'bg-sky-500',
-                  'bg-emerald-500',
-                  'bg-teal-600',
+                  'bg-[#f0b232]',
+                  'bg-[#00a8fc]',
+                  'bg-[#23a559]',
+                  'bg-brand-500',
                 ];
                 const renaming = editingColumnId === col.id;
                 return (
@@ -609,7 +638,7 @@ export function BoardWorkspacePage() {
                     onDragLeave={(e) => leaveColumn(e, col.id)}
                     onDrop={(e) => void handleDrop(e, col.id)}
                     className={cn(
-                      'flex h-full min-h-0 flex-col rounded-xl border border-ink-200/90 bg-[#F7F8FA] transition',
+                      'flex h-full min-h-0 flex-col rounded-xl border border-ink-600/90 bg-ink-900 transition',
                       dropTarget === col.id &&
                         'border-brand-600 bg-brand-50/40 ring-2 ring-brand-600/20',
                     )}
@@ -630,7 +659,7 @@ export function BoardWorkspacePage() {
                             onBlur={() => void commitRenameColumn()}
                             onKeyDown={onRenameKeyDown}
                             disabled={columnBusy}
-                            className="h-7 min-w-0 flex-1 rounded-md border border-brand-500 bg-white px-2 text-xs font-semibold text-ink-800 outline-none"
+                            className="h-7 min-w-0 flex-1 rounded-md border border-brand-500 bg-ink-800 px-2 text-xs font-semibold text-ink-100 outline-none"
                             aria-label="Column name"
                           />
                         ) : (
@@ -640,9 +669,9 @@ export function BoardWorkspacePage() {
                             disabled={!canEditColumns}
                             onClick={() => beginRenameColumn(col.id, col.label)}
                             className={cn(
-                              'min-w-0 truncate text-left text-xs font-semibold text-ink-800',
+                              'min-w-0 truncate text-left text-xs font-semibold text-ink-100',
                               canEditColumns &&
-                                'rounded px-1 -mx-1 hover:bg-white hover:ring-1 hover:ring-ink-200',
+                                'rounded px-1 -mx-1 hover:bg-ink-800 hover:ring-1 hover:ring-ink-600',
                             )}
                           >
                             {col.label}
@@ -650,7 +679,7 @@ export function BoardWorkspacePage() {
                         )}
                       </div>
                       <div className="flex shrink-0 items-center gap-0.5">
-                        <span className="inline-flex min-w-5 items-center justify-center rounded-md bg-white px-1.5 py-0.5 text-[10px] font-bold text-ink-600 ring-1 ring-ink-200/80">
+                        <span className="inline-flex min-w-5 items-center justify-center rounded-md bg-ink-800 px-1.5 py-0.5 text-[10px] font-bold text-ink-200 ring-1 ring-ink-600/80">
                           {count}
                         </span>
                         {canEditColumns ? (
@@ -660,7 +689,7 @@ export function BoardWorkspacePage() {
                               title="Move column left"
                               disabled={columnBusy || idx === 0}
                               onClick={() => void onMoveColumn(col.id, -1)}
-                              className="rounded px-1 text-[11px] font-bold text-ink-400 hover:bg-white hover:text-ink-700 disabled:opacity-30"
+                              className="rounded px-1 text-[11px] font-bold text-ink-400 hover:bg-ink-800 hover:text-ink-200 disabled:opacity-30"
                             >
                               ‹
                             </button>
@@ -669,7 +698,7 @@ export function BoardWorkspacePage() {
                               title="Move column right"
                               disabled={columnBusy || idx === columns.length - 1}
                               onClick={() => void onMoveColumn(col.id, 1)}
-                              className="rounded px-1 text-[11px] font-bold text-ink-400 hover:bg-white hover:text-ink-700 disabled:opacity-30"
+                              className="rounded px-1 text-[11px] font-bold text-ink-400 hover:bg-ink-800 hover:text-ink-200 disabled:opacity-30"
                             >
                               ›
                             </button>
@@ -679,7 +708,7 @@ export function BoardWorkspacePage() {
                                 title="Remove column"
                                 disabled={columnBusy}
                                 onClick={() => requestRemoveColumn(col.id, col.label)}
-                                className="rounded px-1 text-xs font-bold text-ink-400 hover:bg-white hover:text-red-600"
+                                className="rounded px-1 text-xs font-bold text-ink-400 hover:bg-ink-800 hover:text-[#ed4245]"
                               >
                                 ×
                               </button>
@@ -710,7 +739,7 @@ export function BoardWorkspacePage() {
                         />
                       ))}
                       {count === 0 ? (
-                        <div className="flex flex-1 items-center justify-center rounded-lg border border-dashed border-ink-200 bg-white/50 px-3 py-8">
+                        <div className="flex flex-1 items-center justify-center rounded-lg border border-dashed border-ink-600 bg-ink-800/50 px-3 py-8">
                           <p className="text-center text-[11px] font-medium text-ink-400">
                             Drop tasks here
                           </p>
@@ -726,20 +755,12 @@ export function BoardWorkspacePage() {
       </div>
 
       {/* Team members */}
-      <aside className="flex w-60 shrink-0 flex-col border-l border-ink-200 bg-white">
-        <div className="border-b border-ink-200 px-3 py-3">
+      <aside className="flex w-60 shrink-0 flex-col border-l border-ink-600 bg-ink-800">
+        <div className="border-b border-ink-600 px-3 py-3">
           <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <p className="text-[11px] font-medium tracking-wide text-ink-500 uppercase">
-                Project
-              </p>
-              <p className="mt-0.5 truncate text-sm font-semibold text-ink-900">
-                {project?.name ?? 'No project'}
-              </p>
-              {project ? (
-                <p className="truncate text-[11px] text-ink-500">{project.key}</p>
-              ) : null}
-            </div>
+            <p className="text-[11px] font-medium tracking-wide text-ink-300 uppercase">
+              Project
+            </p>
             <button
               type="button"
               disabled={!project}
@@ -749,15 +770,46 @@ export function BoardWorkspacePage() {
               + Add
             </button>
           </div>
+          <div className="mt-2">
+            <ProjectSelect
+              projects={projects}
+              value={projectId}
+              onChange={selectProject}
+              className="w-full min-w-0 max-w-none"
+              placeholder="Select project"
+            />
+          </div>
         </div>
 
-        <div className="border-b border-ink-100 px-3 py-2">
-          <p className="text-[11px] font-medium tracking-wide text-ink-500 uppercase">
+        <div className="border-b border-ink-700 px-3 py-2">
+          <p className="text-[11px] font-medium tracking-wide text-ink-300 uppercase">
             Team boards · {members.length}
           </p>
           <p className="mt-0.5 text-[11px] text-ink-400">
             Multi-select to combine · {selectedMembers.length} selected
           </p>
+          <label className="relative mt-2 block">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              className="pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-ink-400"
+              aria-hidden
+            >
+              <circle cx="11" cy="11" r="7" />
+              <path d="m20 20-3.5-3.5" />
+            </svg>
+            <input
+              value={memberSearch}
+              onChange={(e) => {
+                setMemberSearch(e.target.value);
+                setSidebarMembersOpen(false);
+              }}
+              placeholder="Search members…"
+              className="h-8 w-full rounded-lg border border-ink-600 bg-ink-900 pr-2 pl-8 text-xs text-ink-50 outline-none placeholder:text-ink-400 focus:border-brand-500"
+            />
+          </label>
         </div>
 
         <div className="flex-1 overflow-y-auto px-2 py-2">
@@ -765,9 +817,11 @@ export function BoardWorkspacePage() {
             <p className="px-1 py-4 text-xs text-ink-400">Select or create a project.</p>
           ) : members.length === 0 ? (
             <p className="px-1 py-4 text-xs text-ink-400">No members yet.</p>
+          ) : filteredSidebarMembers.length === 0 ? (
+            <p className="px-1 py-4 text-xs text-ink-400">No members match.</p>
           ) : (
             <ul className="space-y-1">
-              {members.map((m) => {
+              {sidebarVisibleMembers.map((m) => {
                 const isYou =
                   m.email.toLowerCase() === (user?.email ?? '').toLowerCase() ||
                   m.name.toLowerCase() === (user?.name ?? '').toLowerCase();
@@ -783,8 +837,8 @@ export function BoardWorkspacePage() {
                       aria-pressed={active}
                       title={active ? `Remove ${m.name}` : `Add ${m.name}`}
                       className={cn(
-                        'flex w-full items-center gap-2.5 px-1.5 py-2 text-left transition',
-                        active ? 'bg-ink-100' : 'hover:bg-ink-50',
+                        'flex w-full items-center gap-2.5 rounded-lg px-1.5 py-2 text-left transition',
+                        active ? 'bg-brand-500/10' : 'hover:bg-ink-700',
                       )}
                     >
                       <span
@@ -802,26 +856,26 @@ export function BoardWorkspacePage() {
                           className="!h-9 !w-9 !text-[11px]"
                         />
                         {active ? (
-                          <span className="absolute -right-0.5 -bottom-0.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-ink-900" />
+                          <span className="absolute -right-0.5 -bottom-0.5 h-2.5 w-2.5 rounded-full border-2 border-ink-800 bg-brand-500" />
                         ) : null}
                       </span>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-xs font-semibold text-ink-900">
+                        <p className="truncate text-xs font-semibold text-ink-50">
                           {m.name}
                           {isYou ? (
                             <span className="ml-1 font-medium text-ink-400">(you)</span>
                           ) : null}
                         </p>
-                        <p className="truncate text-[11px] text-ink-500">
+                        <p className="truncate text-[11px] text-ink-300">
                           {count} task{count === 1 ? '' : 's'} · {m.role}
                         </p>
                       </div>
                       <span
                         className={cn(
-                          'flex h-4 w-4 shrink-0 items-center justify-center border text-[10px] font-bold',
+                          'flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] font-bold',
                           active
-                            ? 'border-ink-900 bg-ink-900 text-white'
-                            : 'border-ink-300 text-transparent',
+                            ? 'border-brand-500 bg-brand-500 text-white'
+                            : 'border-ink-500 text-transparent',
                         )}
                       >
                         ✓
@@ -830,12 +884,36 @@ export function BoardWorkspacePage() {
                   </li>
                 );
               })}
+              {!sidebarMembersOpen && sidebarOverflow > 0 ? (
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => setSidebarMembersOpen(true)}
+                    className="mt-1 flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-ink-600 px-2 py-2 text-xs font-semibold text-ink-200 transition hover:border-brand-500 hover:bg-brand-500/10 hover:text-brand-600 dark:hover:text-brand-300"
+                  >
+                    +{sidebarOverflow} more
+                  </button>
+                </li>
+              ) : null}
+              {sidebarMembersOpen &&
+              !isMemberSearching &&
+              filteredSidebarMembers.length > SIDEBAR_VISIBLE ? (
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => setSidebarMembersOpen(false)}
+                    className="mt-1 flex w-full items-center justify-center rounded-lg px-2 py-1.5 text-[11px] font-semibold text-ink-400 hover:text-ink-200"
+                  >
+                    Show less
+                  </button>
+                </li>
+              ) : null}
             </ul>
           )}
         </div>
 
         {project && selectedMembers.length > 0 ? (
-          <p className="border-t border-ink-100 px-3 py-2 text-[11px] text-ink-400">
+          <p className="border-t border-ink-700 px-3 py-2 text-[11px] text-ink-400">
             {filtered.length} task{filtered.length === 1 ? '' : 's'} · {boardLabel}
           </p>
         ) : null}

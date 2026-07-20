@@ -1,4 +1,4 @@
-/** TaskTrack must never appear in activity (dev binary is often named "app"). */
+/** DockX must never appear in activity (dev binary is often named "app"). */
 export function isExcludedApp(
   appName: string,
   processName = '',
@@ -9,11 +9,11 @@ export function isExcludedApp(
   const title = windowTitle.toLowerCase().trim();
   const hay = `${app} ${proc}`;
 
-  if (/tasktrack|com\.tasktrack/.test(hay)) return true;
+  if (/dockx|com\.dockx/.test(hay)) return true;
 
   const genericSelf = app === 'app' || app === 'app_lib' || proc === 'app' || proc === 'app_lib';
-  if (genericSelf && title.includes('tasktrack')) return true;
-  if (title === 'tasktrack' && genericSelf) return true;
+  if (genericSelf && title.includes('dockx')) return true;
+  if (title === 'dockx' && genericSelf) return true;
 
   return false;
 }

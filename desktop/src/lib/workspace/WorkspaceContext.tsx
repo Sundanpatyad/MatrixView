@@ -20,6 +20,7 @@ import {
   deleteProjectRequest,
   deleteTimelineRequest,
   fetchWorkspace,
+  removeProjectAvatarRequest,
   updateTimelineRequest,
   removeColumnRequest,
   removeMemberRequest,
@@ -28,6 +29,7 @@ import {
   reorderColumnsRequest,
   updateMemberRoleRequest,
   updateTaskRequest,
+  uploadProjectAvatarRequest,
 } from '@/lib/api/workspace';
 import {
   ensureProjectColumns,
@@ -89,7 +91,7 @@ type UpdateTimelineInput = {
   assigneeName?: string;
 };
 
-const ACTIVE_PROJECT_KEY = 'tasktrack.activeProjectId';
+const ACTIVE_PROJECT_KEY = 'dockx.activeProjectId';
 
 export type ActiveProjectId = string | 'all';
 
@@ -104,6 +106,8 @@ type WorkspaceContextValue = {
   refresh: () => Promise<void>;
   createProject: (input: CreateProjectInput) => Promise<Project>;
   deleteProject: (projectId: string) => Promise<void>;
+  uploadProjectAvatar: (projectId: string, file: File) => Promise<Project>;
+  removeProjectAvatar: (projectId: string) => Promise<Project>;
   getProject: (id: string) => Project | undefined;
   getProjectTasks: (projectId: string) => BoardTask[];
   createTask: (input: CreateTaskInput) => Promise<BoardTask>;
@@ -254,6 +258,26 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       }
       return next;
     });
+  }, []);
+
+  const uploadProjectAvatar = useCallback(async (projectId: string, file: File) => {
+    const { project } = await uploadProjectAvatarRequest(projectId, file);
+    const normalized = ensureProjectColumns(project);
+    setState((prev) => ({
+      ...prev,
+      projects: upsertProject(prev.projects, normalized),
+    }));
+    return normalized;
+  }, []);
+
+  const removeProjectAvatar = useCallback(async (projectId: string) => {
+    const { project } = await removeProjectAvatarRequest(projectId);
+    const normalized = ensureProjectColumns(project);
+    setState((prev) => ({
+      ...prev,
+      projects: upsertProject(prev.projects, normalized),
+    }));
+    return normalized;
   }, []);
 
   const createTask = useCallback(async (input: CreateTaskInput) => {
@@ -494,6 +518,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       refresh,
       createProject,
       deleteProject,
+      uploadProjectAvatar,
+      removeProjectAvatar,
       getProject: (id) => {
         const p = state.projects.find((x) => x.id === id);
         return p ? ensureProjectColumns(p) : undefined;
@@ -531,6 +557,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       refresh,
       createProject,
       deleteProject,
+      uploadProjectAvatar,
+      removeProjectAvatar,
       createTask,
       updateTaskStatus,
       updateTask,

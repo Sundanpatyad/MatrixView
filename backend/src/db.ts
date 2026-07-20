@@ -7,7 +7,7 @@ let memoryServer: MongoMemoryServer | null = null;
 export async function connectDb(): Promise<void> {
   if (config.useMemoryDb) {
     memoryServer = await MongoMemoryServer.create();
-    const uri = memoryServer.getUri('tasktrack');
+    const uri = memoryServer.getUri('dockx');
     await mongoose.connect(uri);
     console.log('[db] connected (in-memory MongoDB)');
     return;
@@ -24,7 +24,7 @@ export async function connectDb(): Promise<void> {
     }
     console.warn('[db] MongoDB unavailable, falling back to in-memory:', err);
     memoryServer = await MongoMemoryServer.create();
-    await mongoose.connect(memoryServer.getUri('tasktrack'));
+    await mongoose.connect(memoryServer.getUri('dockx'));
     console.log('[db] connected (in-memory MongoDB fallback)');
   }
 }

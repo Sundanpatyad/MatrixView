@@ -195,7 +195,7 @@ function MessageTicks({
   }
   const tone =
     status === 'read'
-      ? 'text-emerald-300'
+      ? 'text-[#57f287]'
       : status === 'delivered'
         ? 'text-white/80'
         : 'text-white/55';
@@ -220,8 +220,8 @@ function PresenceDot({
     <span
       className={cn(
         'absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-white',
-        active ? 'bg-emerald-500' : 'bg-ink-300',
-        online && active && 'ring-1 ring-emerald-300',
+        active ? 'bg-[#23a559]' : 'bg-ink-300',
+        online && active && 'ring-1 ring-[#23a559]/40',
         className,
       )}
       title={active ? 'Checked in' : 'Checked out'}
@@ -234,10 +234,10 @@ function ChatListSkeleton() {
     <div className="space-y-0 p-1">
       {Array.from({ length: 7 }).map((_, i) => (
         <div key={i} className="flex items-center gap-3 px-3 py-3">
-          <div className="h-10 w-10 shrink-0 animate-pulse rounded-full bg-ink-100" />
+          <div className="h-10 w-10 shrink-0 animate-pulse rounded-full bg-ink-700" />
           <div className="min-w-0 flex-1 space-y-2">
-            <div className="h-3 w-[66%] animate-pulse rounded bg-ink-100" />
-            <div className="h-2.5 w-[80%] animate-pulse rounded bg-ink-50" />
+            <div className="h-3 w-[66%] animate-pulse rounded bg-ink-700" />
+            <div className="h-2.5 w-[80%] animate-pulse rounded bg-ink-900" />
           </div>
         </div>
       ))}
@@ -248,21 +248,21 @@ function ChatListSkeleton() {
 function ChatThreadSkeleton() {
   return (
     <div className="flex flex-1 flex-col gap-3 px-4 py-6">
-      <div className="mx-auto h-5 w-20 animate-pulse rounded-full bg-ink-100" />
+      <div className="mx-auto h-5 w-20 animate-pulse rounded-full bg-ink-700" />
       <div className="flex justify-start">
-        <div className="h-12 w-[55%] animate-pulse rounded-2xl rounded-bl-md bg-ink-100" />
+        <div className="h-12 w-[55%] animate-pulse rounded-2xl rounded-bl-md bg-ink-700" />
       </div>
       <div className="flex justify-end">
         <div className="h-10 w-[45%] animate-pulse rounded-2xl rounded-br-md bg-brand-100" />
       </div>
       <div className="flex justify-start">
-        <div className="h-16 w-[60%] animate-pulse rounded-2xl rounded-bl-md bg-ink-100" />
+        <div className="h-16 w-[60%] animate-pulse rounded-2xl rounded-bl-md bg-ink-700" />
       </div>
       <div className="flex justify-end">
         <div className="h-10 w-[40%] animate-pulse rounded-2xl rounded-br-md bg-brand-100" />
       </div>
       <div className="flex justify-start">
-        <div className="h-8 w-[35%] animate-pulse rounded-2xl rounded-bl-md bg-ink-100" />
+        <div className="h-8 w-[35%] animate-pulse rounded-2xl rounded-bl-md bg-ink-700" />
       </div>
     </div>
   );
@@ -290,8 +290,8 @@ function VoiceNotePlayer({ att }: { att: ChatAttachment }) {
   }, [src]);
 
   return (
-    <div className="min-w-[220px] max-w-xs border border-ink-200/80 bg-white/80 px-2.5 py-2">
-      <div className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-ink-700">
+    <div className="min-w-[220px] max-w-xs border border-ink-600/80 bg-ink-800/80 px-2.5 py-2">
+      <div className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-ink-200">
         <IconMic className="h-3.5 w-3.5 text-brand-600" />
         <span className="truncate">{att.name || 'Voice note'}</span>
       </div>
@@ -351,19 +351,21 @@ function AttachmentBlock({ att }: { att: ChatAttachment }) {
         href={src}
         target="_blank"
         rel="noreferrer"
-        className="flex min-w-[200px] max-w-xs items-center gap-2.5 rounded-md border border-ink-200/80 bg-white/80 px-2.5 py-2.5 text-xs text-ink-800 hover:bg-white"
+        className="flex min-w-[200px] max-w-xs items-center gap-2.5 rounded-md border border-ink-600/80 bg-ink-800/80 px-2.5 py-2.5 text-xs text-ink-100 hover:bg-ink-800"
       >
         <span
           className={cn(
             'flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-[10px] font-bold uppercase tracking-wide',
-            pdf ? 'bg-rose-100 text-rose-700' : 'bg-ink-100 text-ink-700',
+            pdf
+              ? 'bg-[#ed4245]/10 text-[#c03537] dark:text-[#ed4245]'
+              : 'bg-ink-700 text-ink-200',
           )}
         >
           {pdf ? 'PDF' : <IconFile className="h-4 w-4" />}
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate font-medium">{att.name}</span>
-          <span className="mt-0.5 block text-[11px] text-ink-500">
+          <span className="mt-0.5 block text-[11px] text-ink-300">
             {pdf ? 'PDF document' : 'Document'}
             {att.size ? ` · ${formatBytes(att.size)}` : ''}
           </span>
@@ -396,23 +398,23 @@ type ModalProps = { onClose: () => void; children: React.ReactNode; title: strin
 
 function ModalShell({ onClose, children, title, subtitle }: ModalProps) {
   return createPortal(
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-ink-950/35 p-4">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/55 p-4">
       <button type="button" className="absolute inset-0" onClick={onClose} aria-label="Close" />
       <div
         role="dialog"
         aria-modal="true"
-        className="relative z-10 w-full max-w-md border border-ink-200 bg-white p-5 shadow-lg"
+        className="relative z-10 w-full max-w-md border border-ink-600 bg-ink-800 p-5 shadow-lg"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-base font-semibold text-ink-900">{title}</h2>
-            {subtitle ? <p className="mt-0.5 text-xs text-ink-500">{subtitle}</p> : null}
+            <h2 className="text-base font-semibold text-ink-50">{title}</h2>
+            {subtitle ? <p className="mt-0.5 text-xs text-ink-300">{subtitle}</p> : null}
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md p-1 text-ink-500 hover:bg-ink-100 hover:text-ink-800"
+            className="rounded-md p-1 text-ink-300 hover:bg-ink-600 hover:text-ink-100"
             aria-label="Close"
           >
             <IconX className="h-4 w-4" />
@@ -475,10 +477,10 @@ function NewDmModal({
     <ModalShell
       onClose={onClose}
       title="New chat"
-      subtitle="Project members, or anyone on TaskTrack by email"
+      subtitle="Project members, or anyone on DockX by email"
     >
       <form onSubmit={onEmailSubmit} className="mt-3 space-y-2">
-        <label className="block text-xs font-medium text-ink-600">
+        <label className="block text-xs font-medium text-ink-200">
           Chat by email
         </label>
         <div className="flex gap-2">
@@ -494,13 +496,13 @@ function NewDmModal({
             Start
           </Button>
         </div>
-        <p className="text-[11px] text-ink-500">
-          They must already have a TaskTrack account.
+        <p className="text-[11px] text-ink-300">
+          They must already have a DockX account.
         </p>
       </form>
 
-      <div className="mt-4 border-t border-ink-100 pt-3">
-        <p className="mb-2 text-xs font-medium text-ink-600">Shared project members</p>
+      <div className="mt-4 border-t border-ink-700 pt-3">
+        <p className="mb-2 text-xs font-medium text-ink-200">Shared project members</p>
         <Input
           placeholder="Search people…"
           value={q}
@@ -508,10 +510,10 @@ function NewDmModal({
           disabled={busy}
         />
       </div>
-      {error ? <p className="mt-2 text-xs font-medium text-red-700">{error}</p> : null}
+      {error ? <p className="mt-2 text-xs font-medium text-[#ed4245]">{error}</p> : null}
       <div className="mt-3 max-h-72 overflow-y-auto">
         {filtered.length === 0 ? (
-          <p className="py-6 text-center text-sm text-ink-500">
+          <p className="py-6 text-center text-sm text-ink-300">
             {users.filter((u) => u.id !== meId).length === 0
               ? 'No shared project members — use email above'
               : 'No people found'}
@@ -523,19 +525,19 @@ function NewDmModal({
               type="button"
               disabled={busy}
               onClick={() => openDm({ userId: u.id })}
-              className="flex w-full items-center gap-3 border-b border-ink-100 px-1 py-2.5 text-left hover:bg-ink-50 disabled:opacity-50"
+              className="flex w-full items-center gap-3 border-b border-ink-700 px-1 py-2.5 text-left hover:bg-ink-900 disabled:opacity-50"
             >
               <UserAvatar name={u.name} src={u.avatarUrl} seed={u.id} size="lg" className="!h-9 !w-9" />
               <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-2">
-                  <span className="block truncate text-sm font-semibold text-ink-900">{u.name}</span>
+                  <span className="block truncate text-sm font-semibold text-ink-50">{u.name}</span>
                   {u.checkedIn ? (
-                    <span className="shrink-0 text-[10px] font-semibold text-emerald-700">
+                    <span className="shrink-0 text-[10px] font-semibold text-[#57f287]">
                       In
                     </span>
                   ) : null}
                 </span>
-                <span className="block truncate text-xs text-ink-500">{u.email}</span>
+                <span className="block truncate text-xs text-ink-300">{u.email}</span>
               </span>
             </button>
           ))
@@ -654,13 +656,13 @@ function NewGroupModal({
             />
           </div>
         </div>
-        <div className="max-h-56 overflow-y-auto border border-ink-100">
+        <div className="max-h-56 overflow-y-auto border border-ink-700">
           {others.map((u) => {
             const on = selected.has(u.id);
             return (
               <label
                 key={u.id}
-                className="flex cursor-pointer items-center gap-3 border-b border-ink-100 px-3 py-2 hover:bg-ink-50"
+                className="flex cursor-pointer items-center gap-3 border-b border-ink-700 px-3 py-2 hover:bg-ink-900"
               >
                 <input
                   type="checkbox"
@@ -670,14 +672,14 @@ function NewGroupModal({
                 />
                 <UserAvatar name={u.name} src={u.avatarUrl} seed={u.id} size="sm" />
                 <span className="min-w-0">
-                  <span className="block truncate text-sm font-medium text-ink-900">{u.name}</span>
-                  <span className="block truncate text-xs text-ink-500">{u.email}</span>
+                  <span className="block truncate text-sm font-medium text-ink-50">{u.name}</span>
+                  <span className="block truncate text-xs text-ink-300">{u.email}</span>
                 </span>
               </label>
             );
           })}
         </div>
-        {error ? <p className="text-xs font-medium text-red-700">{error}</p> : null}
+        {error ? <p className="text-xs font-medium text-[#ed4245]">{error}</p> : null}
         <div className="flex justify-end gap-2">
           <Button type="button" variant="secondary" size="sm" onClick={onClose}>
             Cancel
@@ -828,22 +830,22 @@ function GroupManagePanel({
       </div>
 
       <div className="mt-4">
-        <p className="text-xs font-semibold uppercase tracking-wide text-ink-500">Members</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-ink-300">Members</p>
         <div className="mt-2 max-h-40 overflow-y-auto">
           {conversation.members.map((m) => (
             <div
               key={m.id}
-              className="flex items-center justify-between gap-2 border-b border-ink-100 py-2"
+              className="flex items-center justify-between gap-2 border-b border-ink-700 py-2"
             >
               <div className="min-w-0">
-                <p className="truncate text-sm font-medium text-ink-900">
+                <p className="truncate text-sm font-medium text-ink-50">
                   {m.name}
                   {m.id === meId ? ' (you)' : ''}
                   {m.id === conversation.createdBy ? (
                     <span className="ml-1 text-[10px] font-semibold text-brand-700">Admin</span>
                   ) : null}
                 </p>
-                <p className="truncate text-xs text-ink-500">{m.email}</p>
+                <p className="truncate text-xs text-ink-300">{m.email}</p>
               </div>
               {(isCreator && m.id !== meId) || m.id === meId ? (
                 <Button
@@ -863,12 +865,12 @@ function GroupManagePanel({
 
       {candidates.length > 0 ? (
         <div className="mt-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-ink-500">Add members</p>
-          <div className="mt-2 max-h-36 overflow-y-auto border border-ink-100">
+          <p className="text-xs font-semibold uppercase tracking-wide text-ink-300">Add members</p>
+          <div className="mt-2 max-h-36 overflow-y-auto border border-ink-700">
             {candidates.map((u) => (
               <label
                 key={u.id}
-                className="flex cursor-pointer items-center gap-2 border-b border-ink-100 px-2 py-1.5 text-sm hover:bg-ink-50"
+                className="flex cursor-pointer items-center gap-2 border-b border-ink-700 px-2 py-1.5 text-sm hover:bg-ink-900"
               >
                 <input
                   type="checkbox"
@@ -898,7 +900,7 @@ function GroupManagePanel({
         </div>
       ) : null}
 
-      {error ? <p className="mt-2 text-xs font-medium text-red-700">{error}</p> : null}
+      {error ? <p className="mt-2 text-xs font-medium text-[#ed4245]">{error}</p> : null}
     </ModalShell>
 
     <ConfirmModal
@@ -1635,17 +1637,17 @@ export function ChatPage() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-3.5rem)] min-h-[480px] overflow-hidden border border-ink-200 bg-white">
+    <div className="flex h-[calc(100vh-3.5rem)] min-h-[480px] overflow-hidden border border-ink-600 bg-ink-800">
       {/* Sidebar */}
-      <aside className="flex w-[300px] shrink-0 flex-col border-r border-ink-200 bg-ink-50/40">
-        <div className="border-b border-ink-200 p-3">
+      <aside className="flex w-[300px] shrink-0 flex-col border-r border-ink-600 bg-ink-800/40">
+        <div className="border-b border-ink-600 p-3">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
-              <h1 className="text-sm font-semibold text-ink-900">Chat</h1>
+              <h1 className="text-sm font-semibold text-ink-50">Chat</h1>
               <span
                 className={cn(
                   'h-1.5 w-1.5 rounded-full',
-                  socketReady ? 'bg-emerald-500' : 'bg-ink-300',
+                  socketReady ? 'bg-[#23a559]' : 'bg-ink-300',
                 )}
                 title={socketReady ? 'Live' : 'Connecting…'}
               />
@@ -1673,7 +1675,7 @@ export function ChatPage() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search chats…"
-              className="h-9 w-full rounded-md border border-ink-200 bg-white pl-8 pr-3 text-sm outline-none focus:border-brand-500"
+              className="h-9 w-full rounded-md border border-ink-600 bg-ink-800 pl-8 pr-3 text-sm outline-none focus:border-brand-500"
             />
           </div>
         </div>
@@ -1682,7 +1684,7 @@ export function ChatPage() {
           {showListSkeleton ? (
             <ChatListSkeleton />
           ) : filtered.length === 0 ? (
-            <div className="p-4 text-center text-sm text-ink-500">
+            <div className="p-4 text-center text-sm text-ink-300">
               <p>No chats yet.</p>
               <p className="mt-1 text-xs">Start a DM or create a group.</p>
             </div>
@@ -1698,8 +1700,8 @@ export function ChatPage() {
                   type="button"
                   onClick={() => setActiveId(c.id)}
                   className={cn(
-                    'flex w-full items-start gap-3 border-b border-ink-100 px-3 py-3 text-left transition-colors',
-                    selected ? 'bg-brand-50' : 'hover:bg-white',
+                    'flex w-full items-start gap-3 border-b border-ink-700 px-3 py-3 text-left transition-colors',
+                    selected ? 'bg-brand-500/10' : 'hover:bg-ink-700',
                   )}
                 >
                   <span className="relative mt-0.5 shrink-0">
@@ -1710,12 +1712,12 @@ export function ChatPage() {
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center justify-between gap-2">
-                      <span className="truncate text-sm font-semibold text-ink-900">{c.name}</span>
+                      <span className="truncate text-sm font-semibold text-ink-50">{c.name}</span>
                       <span className="shrink-0 text-[10px] text-ink-400">
                         {formatTime(c.lastMessageAt)}
                       </span>
                     </span>
-                    <span className="mt-0.5 block truncate text-xs text-ink-500">
+                    <span className="mt-0.5 block truncate text-xs text-ink-300">
                       {c.type === 'dm' && peer?.checkedIn
                         ? 'Checked in'
                         : c.lastMessagePreview ||
@@ -1730,15 +1732,15 @@ export function ChatPage() {
       </aside>
 
       {/* Thread */}
-      <section className="flex min-w-0 flex-1 flex-col bg-[linear-gradient(180deg,#f8faf9_0%,#f1f5f4_100%)]">
+      <section className="flex min-w-0 flex-1 flex-col bg-ink-900">
         {!active ? (
-          <div className="flex flex-1 flex-col items-center justify-center gap-2 text-ink-500">
+          <div className="flex flex-1 flex-col items-center justify-center gap-2 text-ink-300">
             <IconUsers className="h-10 w-10 opacity-40" />
             <p className="text-sm font-medium">Select a chat or start a new one</p>
           </div>
         ) : (
           <>
-            <header className="flex items-center justify-between gap-3 border-b border-ink-200 bg-white/90 px-4 py-3 backdrop-blur">
+            <header className="flex items-center justify-between gap-3 border-b border-ink-600 bg-ink-800/90 px-4 py-3 backdrop-blur">
               <div className="flex min-w-0 items-center gap-3">
                 <span className="relative shrink-0">
                   <ConversationAvatar conversation={active} meId={meId} size="lg" />
@@ -1750,8 +1752,8 @@ export function ChatPage() {
                   ) : null}
                 </span>
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-ink-900">{active.name}</p>
-                  <p className="truncate text-xs text-ink-500">
+                  <p className="truncate text-sm font-semibold text-ink-50">{active.name}</p>
+                  <p className="truncate text-xs text-ink-300">
                     {typingLabel ? (
                       <span className="font-medium text-brand-700">{typingLabel}</span>
                     ) : active.type === 'group' ? (
@@ -1763,7 +1765,7 @@ export function ChatPage() {
                       </>
                     ) : peerPresence && 'checkedIn' in peerPresence ? (
                       peerPresence.checkedIn ? (
-                        <span className="font-medium text-emerald-700">
+                        <span className="font-medium text-[#57f287]">
                           Checked in{peerPresence.online ? ' · online' : ''}
                         </span>
                       ) : (
@@ -1790,7 +1792,7 @@ export function ChatPage() {
               {showThreadSkeleton ? (
                 <ChatThreadSkeleton />
               ) : messages.length === 0 ? (
-                <p className="text-center text-sm text-ink-500">No messages yet. Say hello.</p>
+                <p className="text-center text-sm text-ink-300">No messages yet. Say hello.</p>
               ) : (
                 messages.map((msg, i) => {
                   const mine = msg.senderId === meId;
@@ -1802,7 +1804,7 @@ export function ChatPage() {
                     <div key={msg.id}>
                       {showDay ? (
                         <div className="my-3 flex justify-center">
-                          <span className="rounded-full bg-white/80 px-3 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-500 shadow-sm">
+                          <span className="rounded-full bg-ink-800/80 px-3 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-300 shadow-sm">
                             {formatDay(msg.createdAt)}
                           </span>
                         </div>
@@ -1829,8 +1831,8 @@ export function ChatPage() {
                           className={cn(
                             'relative max-w-[75%] rounded-2xl px-3 py-2 shadow-sm',
                             mine
-                              ? 'rounded-br-md bg-brand-700 text-white'
-                              : 'rounded-bl-md bg-white text-ink-900',
+                              ? 'rounded-br-md bg-brand-500 text-white'
+                              : 'rounded-bl-md bg-ink-800 text-ink-50',
                             deleted && 'opacity-70',
                           )}
                         >
@@ -1846,7 +1848,7 @@ export function ChatPage() {
                                 'mb-1.5 rounded-md border-l-2 px-2 py-1 text-[11px]',
                                 mine
                                   ? 'border-white/50 bg-black/15 text-white/90'
-                                  : 'border-brand-500 bg-ink-50 text-ink-600',
+                                  : 'border-brand-500 bg-ink-900 text-ink-200',
                               )}
                             >
                               <p className="font-semibold">{msg.replyTo.senderName}</p>
@@ -1906,11 +1908,11 @@ export function ChatPage() {
                                 mine ? 'right-0' : 'left-0',
                               )}
                             >
-                              <div className="relative flex items-center gap-0.5 rounded-lg border border-ink-200 bg-white p-0.5 text-ink-700 shadow-md">
+                              <div className="relative flex items-center gap-0.5 rounded-lg border border-ink-600 bg-ink-800 p-0.5 text-ink-200 shadow-md">
                                 <button
                                   type="button"
                                   title="Reply"
-                                  className="rounded-md p-1.5 hover:bg-ink-100"
+                                  className="rounded-md p-1.5 hover:bg-ink-600"
                                   onClick={() => startReply(msg)}
                                 >
                                   <IconReply className="h-3.5 w-3.5" />
@@ -1918,7 +1920,7 @@ export function ChatPage() {
                                 <button
                                   type="button"
                                   title="Forward"
-                                  className="rounded-md p-1.5 hover:bg-ink-100"
+                                  className="rounded-md p-1.5 hover:bg-ink-600"
                                   onClick={() => requestForward(msg)}
                                 >
                                   <IconForward className="h-3.5 w-3.5" />
@@ -1926,7 +1928,7 @@ export function ChatPage() {
                                 <button
                                   type="button"
                                   title="More"
-                                  className="rounded-md px-1.5 py-1 text-[11px] font-bold hover:bg-ink-100"
+                                  className="rounded-md px-1.5 py-1 text-[11px] font-bold hover:bg-ink-600"
                                   onClick={() =>
                                     setMenuMsgId((id) => (id === msg.id ? null : msg.id))
                                   }
@@ -1936,14 +1938,14 @@ export function ChatPage() {
                                 {menuMsgId === msg.id ? (
                                   <div
                                     className={cn(
-                                      'absolute top-full z-30 mt-1 min-w-[7.5rem] overflow-hidden rounded-lg border border-ink-200 bg-white py-1 text-ink-800 shadow-lg',
+                                      'absolute top-full z-30 mt-1 min-w-[7.5rem] overflow-hidden rounded-lg border border-ink-600 bg-ink-800 py-1 text-ink-100 shadow-lg',
                                       mine ? 'right-0' : 'left-0',
                                     )}
                                   >
                                     {mine ? (
                                       <button
                                         type="button"
-                                        className="block w-full px-3 py-1.5 text-left text-xs font-medium text-ink-800 hover:bg-ink-50"
+                                        className="block w-full px-3 py-1.5 text-left text-xs font-medium text-ink-100 hover:bg-ink-900"
                                         onClick={() => startEdit(msg)}
                                       >
                                         Edit
@@ -1951,7 +1953,7 @@ export function ChatPage() {
                                     ) : null}
                                     <button
                                       type="button"
-                                      className="block w-full px-3 py-1.5 text-left text-xs font-medium text-ink-800 hover:bg-ink-50"
+                                      className="block w-full px-3 py-1.5 text-left text-xs font-medium text-ink-100 hover:bg-ink-900"
                                       onClick={() => requestForward(msg)}
                                     >
                                       Forward
@@ -1959,7 +1961,7 @@ export function ChatPage() {
                                     {mine ? (
                                       <button
                                         type="button"
-                                        className="block w-full px-3 py-1.5 text-left text-xs font-medium text-red-700 hover:bg-red-50"
+                                        className="block w-full px-3 py-1.5 text-left text-xs font-medium text-[#ed4245] hover:bg-[#ed4245]/10"
                                         onClick={() => requestDelete(msg)}
                                       >
                                         Delete
@@ -1980,18 +1982,18 @@ export function ChatPage() {
             </div>
 
             {error ? (
-              <p className="border-t border-red-100 bg-red-50 px-4 py-1.5 text-xs font-medium text-red-700">
+              <p className="border-t border-[#ed4245]/25 bg-[#ed4245]/10 px-4 py-1.5 text-xs font-medium text-[#ed4245]">
                 {error}
               </p>
             ) : null}
 
             {(replyTo || editing) && (
-              <div className="flex items-center justify-between gap-2 border-t border-ink-200 bg-white px-4 py-2">
-                <div className="min-w-0 text-xs text-ink-600">
+              <div className="flex items-center justify-between gap-2 border-t border-ink-600 bg-ink-800 px-4 py-2">
+                <div className="min-w-0 text-xs text-ink-200">
                   {editing ? (
                     <span>
                       Editing message:{' '}
-                      <span className="font-medium text-ink-800">{editing.body.slice(0, 80)}</span>
+                      <span className="font-medium text-ink-100">{editing.body.slice(0, 80)}</span>
                     </span>
                   ) : replyTo ? (
                     <span className="flex items-center gap-1.5">
@@ -2003,7 +2005,7 @@ export function ChatPage() {
                 </div>
                 <button
                   type="button"
-                  className="rounded p-1 text-ink-500 hover:bg-ink-100"
+                  className="rounded p-1 text-ink-300 hover:bg-ink-600"
                   onClick={() => {
                     setReplyTo(null);
                     setEditing(null);
@@ -2016,20 +2018,20 @@ export function ChatPage() {
             )}
 
             {files.length > 0 ? (
-              <div className="flex flex-wrap gap-2 border-t border-ink-200 bg-white px-4 py-2">
+              <div className="flex flex-wrap gap-2 border-t border-ink-600 bg-ink-800 px-4 py-2">
                 {files.map((f, i) => (
                   <span
                     key={`${f.name}-${i}`}
-                    className="inline-flex max-w-[220px] items-center gap-1.5 rounded-md border border-ink-200 bg-ink-50 px-2 py-1 text-xs text-ink-700"
+                    className="inline-flex max-w-[220px] items-center gap-1.5 rounded-md border border-ink-600 bg-ink-900 px-2 py-1 text-xs text-ink-200"
                   >
-                    <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-ink-500">
+                    <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-ink-300">
                       {fileKindLabel(f)}
                     </span>
                     <span className="min-w-0 truncate">{f.name}</span>
                     <button
                       type="button"
                       onClick={() => setFiles((prev) => prev.filter((_, j) => j !== i))}
-                      className="text-ink-400 hover:text-ink-700"
+                      className="text-ink-400 hover:text-ink-200"
                     >
                       <IconX className="h-3 w-3" />
                     </button>
@@ -2039,7 +2041,7 @@ export function ChatPage() {
             ) : null}
 
             {recording ? (
-              <div className="flex items-center justify-between gap-3 border-t border-ink-200 bg-rose-50/80 px-4 py-2.5">
+              <div className="flex items-center justify-between gap-3 border-t border-ink-600 bg-rose-50/80 px-4 py-2.5">
                 <div className="flex items-center gap-2 text-sm text-rose-700">
                   <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-rose-500" />
                   Recording audio note…
@@ -2052,7 +2054,7 @@ export function ChatPage() {
                   <button
                     type="button"
                     onClick={cancelAudioNote}
-                    className="rounded-md px-2.5 py-1.5 text-xs font-medium text-ink-600 hover:bg-white"
+                    className="rounded-md px-2.5 py-1.5 text-xs font-medium text-ink-200 hover:bg-ink-800"
                   >
                     Cancel
                   </button>
@@ -2069,14 +2071,14 @@ export function ChatPage() {
             ) : null}
 
             {recordError ? (
-              <p className="border-t border-ink-200 bg-white px-4 py-2 text-xs text-rose-600">
+              <p className="border-t border-ink-600 bg-ink-800 px-4 py-2 text-xs text-rose-600">
                 {recordError}
               </p>
             ) : null}
 
             <form
               onSubmit={onSend}
-              className="flex items-end gap-2 border-t border-ink-200 bg-white px-3 py-3"
+              className="flex items-end gap-2 border-t border-ink-600 bg-ink-800 px-3 py-3"
             >
               <input
                 ref={photoInputRef}
@@ -2128,18 +2130,18 @@ export function ChatPage() {
                     title="Attach"
                     onClick={() => setAttachMenuOpen((o) => !o)}
                     className={cn(
-                      'rounded-md p-2 text-ink-500 hover:bg-ink-100 hover:text-ink-800',
-                      attachMenuOpen && 'bg-ink-100 text-ink-800',
+                      'rounded-md p-2 text-ink-300 hover:bg-ink-600 hover:text-ink-100',
+                      attachMenuOpen && 'bg-ink-700 text-ink-50',
                     )}
                   >
                     <IconPaperclip className="h-5 w-5" />
                   </button>
                   {attachMenuOpen ? (
-                    <div className="absolute bottom-full left-0 z-30 mb-2 w-52 overflow-hidden rounded-xl border border-ink-200 bg-white py-1 shadow-lg">
+                    <div className="absolute bottom-full left-0 z-30 mb-2 w-52 overflow-hidden rounded-xl border border-ink-600 bg-ink-800 py-1 shadow-lg">
                       <button
                         type="button"
                         onClick={() => openAttachPicker('photo')}
-                        className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm text-ink-800 hover:bg-ink-50"
+                        className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm text-ink-100 hover:bg-ink-900"
                       >
                         <IconImage className="h-4 w-4 text-brand-600" />
                         Photo
@@ -2147,7 +2149,7 @@ export function ChatPage() {
                       <button
                         type="button"
                         onClick={() => openAttachPicker('document')}
-                        className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm text-ink-800 hover:bg-ink-50"
+                        className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm text-ink-100 hover:bg-ink-900"
                       >
                         <IconFile className="h-4 w-4 text-brand-600" />
                         Document
@@ -2155,7 +2157,7 @@ export function ChatPage() {
                       <button
                         type="button"
                         onClick={() => void startAudioNote()}
-                        className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm text-ink-800 hover:bg-ink-50"
+                        className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm text-ink-100 hover:bg-ink-900"
                       >
                         <IconMic className="h-4 w-4 text-brand-600" />
                         Audio note
@@ -2163,15 +2165,15 @@ export function ChatPage() {
                       <button
                         type="button"
                         onClick={() => openAttachPicker('audio')}
-                        className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm text-ink-800 hover:bg-ink-50"
+                        className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm text-ink-100 hover:bg-ink-900"
                       >
-                        <IconMic className="h-4 w-4 text-ink-500" />
+                        <IconMic className="h-4 w-4 text-ink-300" />
                         Audio file
                       </button>
                       <button
                         type="button"
                         onClick={() => openAttachPicker('gallery')}
-                        className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm text-ink-800 hover:bg-ink-50"
+                        className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm text-ink-100 hover:bg-ink-900"
                       >
                         <IconGallery className="h-4 w-4 text-brand-600" />
                         Gallery
@@ -2188,7 +2190,7 @@ export function ChatPage() {
                 }}
                 rows={1}
                 placeholder={editing ? 'Edit message…' : 'Type a message…'}
-                className="max-h-28 min-h-[40px] flex-1 resize-none rounded-xl border border-ink-200 bg-ink-50/50 px-3 py-2.5 text-sm outline-none focus:border-brand-500 focus:bg-white"
+                className="max-h-28 min-h-[40px] flex-1 resize-none rounded-xl border border-ink-600 bg-ink-800/50 px-3 py-2.5 text-sm outline-none focus:border-brand-500 focus:bg-ink-800"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
@@ -2268,7 +2270,7 @@ export function ChatPage() {
         >
           <div className="mt-3 max-h-80 overflow-y-auto">
             {conversations.filter((c) => c.id !== activeId).length === 0 ? (
-              <p className="py-6 text-center text-sm text-ink-500">No other chats to forward to</p>
+              <p className="py-6 text-center text-sm text-ink-300">No other chats to forward to</p>
             ) : (
               conversations
                 .filter((c) => c.id !== activeId)
@@ -2278,14 +2280,14 @@ export function ChatPage() {
                     type="button"
                     disabled={forwardBusy}
                     onClick={() => void confirmForward(c.id)}
-                    className="flex w-full items-center gap-3 border-b border-ink-100 px-1 py-2.5 text-left hover:bg-ink-50 disabled:opacity-50"
+                    className="flex w-full items-center gap-3 border-b border-ink-700 px-1 py-2.5 text-left hover:bg-ink-900 disabled:opacity-50"
                   >
                     <ConversationAvatar conversation={c} meId={meId} size="md" />
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-semibold text-ink-900">
+                      <span className="block truncate text-sm font-semibold text-ink-50">
                         {c.name}
                       </span>
-                      <span className="block truncate text-xs text-ink-500">
+                      <span className="block truncate text-xs text-ink-300">
                         {c.type === 'group' ? 'Group' : 'Direct message'}
                       </span>
                     </span>
@@ -2294,7 +2296,7 @@ export function ChatPage() {
             )}
           </div>
           {forwardBusy ? (
-            <p className="mt-2 text-xs font-medium text-ink-500">Forwarding…</p>
+            <p className="mt-2 text-xs font-medium text-ink-300">Forwarding…</p>
           ) : null}
         </ModalShell>
       ) : null}

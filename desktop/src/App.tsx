@@ -6,7 +6,6 @@ import { RegisterPage } from '@/pages/auth/RegisterPage';
 import { DashboardPage } from '@/pages/dashboard/DashboardPage';
 import { BoardWorkspacePage } from '@/pages/board/BoardWorkspacePage';
 import { ChatPage } from '@/pages/chat/ChatPage';
-import { ProfilePage } from '@/pages/profile/ProfilePage';
 
 export default function App() {
   return (
@@ -18,7 +17,7 @@ export default function App() {
           <Route path="/" element={<DashboardPage />} />
           <Route path="/board" element={<BoardWorkspacePage />} />
           <Route path="/chat" element={<ChatPage />} />
-          <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/profile" element={<Navigate to="/" replace />} />
           {/* Legacy routes */}
           <Route path="/projects" element={<Navigate to="/board" replace />} />
           <Route path="/projects/:projectId" element={<Navigate to="/board" replace />} />

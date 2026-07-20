@@ -193,8 +193,8 @@ export function DatePicker({
         onClick={() => !disabled && setOpen((v) => !v)}
         onKeyDown={onKeyDown}
         className={cn(
-          'inline-flex w-full items-center justify-between gap-2 border border-ink-200 bg-white font-semibold text-ink-900 transition',
-          'hover:border-ink-300 focus:border-ink-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-45',
+          'inline-flex w-full items-center justify-between gap-2 border border-ink-600 bg-ink-800 font-semibold text-ink-50 transition',
+          'hover:border-ink-500 focus:border-ink-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-45',
           open && 'border-ink-500',
           sizes[size],
           className,
@@ -204,7 +204,7 @@ export function DatePicker({
           {value ? formatDisplay(value) : placeholder}
         </span>
         <span
-          className="flex h-4 w-4 shrink-0 items-center justify-center border border-ink-300 text-[9px] font-bold text-ink-500"
+          className="flex h-4 w-4 shrink-0 items-center justify-center border border-ink-500 text-[9px] font-bold text-ink-300"
           aria-hidden
         >
           {value ? String(parseValue(value)?.getDate() ?? '') : '·'}
@@ -217,7 +217,7 @@ export function DatePicker({
               ref={panelRef}
               role="dialog"
               aria-label="Calendar"
-              className="fixed z-[10000] w-72 border border-ink-200 bg-white p-3 shadow-[0_8px_24px_rgba(15,23,42,0.12)]"
+              className="fixed z-[10000] w-72 border border-ink-600 bg-ink-800 p-3 shadow-[0_8px_24px_rgba(15,23,42,0.12)]"
               style={{
                 top: pos.openUp ? undefined : pos.top,
                 bottom: pos.openUp ? window.innerHeight - pos.top + 4 : undefined,
@@ -227,7 +227,7 @@ export function DatePicker({
               <div className="mb-2 flex items-center justify-between gap-2">
                 <button
                   type="button"
-                  className="flex h-7 w-7 items-center justify-center text-ink-500 hover:bg-ink-100 hover:text-ink-900"
+                  className="flex h-7 w-7 items-center justify-center text-ink-300 hover:bg-ink-600 hover:text-ink-50"
                   onClick={() =>
                     setView(new Date(view.getFullYear(), view.getMonth() - 1, 1))
                   }
@@ -235,12 +235,12 @@ export function DatePicker({
                 >
                   ‹
                 </button>
-                <p className="text-xs font-bold text-ink-900">
+                <p className="text-xs font-bold text-ink-50">
                   {MONTHS[view.getMonth()]} {view.getFullYear()}
                 </p>
                 <button
                   type="button"
-                  className="flex h-7 w-7 items-center justify-center text-ink-500 hover:bg-ink-100 hover:text-ink-900"
+                  className="flex h-7 w-7 items-center justify-center text-ink-300 hover:bg-ink-600 hover:text-ink-50"
                   onClick={() =>
                     setView(new Date(view.getFullYear(), view.getMonth() + 1, 1))
                   }
@@ -273,9 +273,9 @@ export function DatePicker({
                       className={cn(
                         'flex h-8 items-center justify-center text-[11px] font-semibold transition',
                         !inMonth && 'text-ink-300',
-                        inMonth && !isSelected && 'text-ink-800 hover:bg-ink-100',
+                        inMonth && !isSelected && 'text-ink-100 hover:bg-ink-600',
                         isToday && !isSelected && 'ring-1 ring-ink-300',
-                        isSelected && 'bg-ink-900 text-white',
+                        isSelected && 'bg-brand-500 text-white',
                       )}
                     >
                       {date.getDate()}
@@ -284,7 +284,7 @@ export function DatePicker({
                 })}
               </div>
 
-              <div className="mt-2 flex items-center justify-between gap-2 border-t border-ink-100 pt-2">
+              <div className="mt-2 flex items-center justify-between gap-2 border-t border-ink-700 pt-2">
                 <button
                   type="button"
                   className="text-[11px] font-semibold text-brand-800 hover:underline"
@@ -295,7 +295,7 @@ export function DatePicker({
                 {clearable ? (
                   <button
                     type="button"
-                    className="text-[11px] font-semibold text-ink-500 hover:text-ink-800"
+                    className="text-[11px] font-semibold text-ink-300 hover:text-ink-100"
                     onClick={() => {
                       onChange('');
                       setOpen(false);

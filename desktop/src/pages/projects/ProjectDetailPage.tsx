@@ -59,18 +59,18 @@ export function ProjectDetailPage() {
 
   return (
     <div className="mx-auto max-w-3xl">
-      <div className="flex items-center gap-2 text-xs font-semibold text-ink-600">
+      <div className="flex items-center gap-2 text-xs font-semibold text-ink-200">
         <Link to="/projects" className="hover:text-brand-800">
           Projects
         </Link>
         <span>/</span>
-        <span className="text-ink-900">{project.key}</span>
+        <span className="text-ink-50">{project.key}</span>
       </div>
 
       <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="font-display text-3xl font-semibold text-ink-950">{project.name}</h1>
-          <p className="mt-2 text-sm font-medium text-ink-700">
+          <h1 className="font-display text-3xl font-semibold text-ink-50">{project.name}</h1>
+          <p className="mt-2 text-sm font-medium text-ink-200">
             {project.description || 'No description.'} · Created by {project.createdBy}
           </p>
         </div>
@@ -79,16 +79,16 @@ export function ProjectDetailPage() {
         </Link>
       </div>
 
-      <section className="mt-8 rounded-2xl border border-ink-300 bg-white p-5">
+      <section className="mt-8 rounded-2xl border border-ink-500 bg-ink-800 p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="text-lg font-bold text-ink-950">Members</h2>
-            <p className="text-sm font-medium text-ink-600">
-              Roles: <span className="font-bold text-ink-800">Admin</span> or{' '}
-              <span className="font-bold text-ink-800">Member</span>
+            <h2 className="text-lg font-bold text-ink-50">Members</h2>
+            <p className="text-sm font-medium text-ink-200">
+              Roles: <span className="font-bold text-ink-100">Admin</span> or{' '}
+              <span className="font-bold text-ink-100">Member</span>
             </p>
           </div>
-          <span className="rounded-lg bg-ink-100 px-2.5 py-1 text-xs font-bold text-ink-800">
+          <span className="rounded-lg bg-ink-700 px-2.5 py-1 text-xs font-bold text-ink-200">
             {project.members.length} people
           </span>
         </div>
@@ -110,14 +110,14 @@ export function ProjectDetailPage() {
           />
           <Button type="submit">Invite</Button>
         </form>
-        {error ? <p className="mt-2 text-sm font-semibold text-red-700">{error}</p> : null}
-        {info ? <p className="mt-2 text-sm font-semibold text-emerald-700">{info}</p> : null}
+        {error ? <p className="mt-2 text-sm font-semibold text-[#ed4245]">{error}</p> : null}
+        {info ? <p className="mt-2 text-sm font-semibold text-[#57f287]">{info}</p> : null}
 
         <div className="mt-6 space-y-2">
           {project.members.map((member) => (
             <div
               key={member.id}
-              className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-ink-200 px-4 py-3"
+              className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-ink-600 px-4 py-3"
             >
               <div className="flex items-center gap-3">
                 <UserAvatar
@@ -128,8 +128,8 @@ export function ProjectDetailPage() {
                   className="!h-9 !w-9"
                 />
                 <div>
-                  <p className="text-sm font-bold text-ink-950">{member.name}</p>
-                  <p className="text-xs font-semibold text-ink-600">{member.email}</p>
+                  <p className="text-sm font-bold text-ink-50">{member.name}</p>
+                  <p className="text-xs font-semibold text-ink-200">{member.email}</p>
                 </div>
               </div>
               <div className="flex items-center gap-2">

@@ -46,7 +46,7 @@ export function InviteMembersModal({ project, onClose }: Props) {
       setEmail('');
       setRole('member');
       if (res.result === 'added') {
-        setInfo('User found in TaskTrack — added to the project.');
+        setInfo('User found in DockX — added to the project.');
       } else {
         setInfo(
           res.emailSent
@@ -73,16 +73,16 @@ export function InviteMembersModal({ project, onClose }: Props) {
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-ink-950/35 p-4">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/55 p-4">
       <button type="button" className="absolute inset-0" onClick={onClose} aria-label="Close" />
       <div
         role="dialog"
         aria-modal="true"
-        className="relative z-10 w-full max-w-lg border border-ink-200 bg-white p-5"
+        className="relative z-10 w-full max-w-lg border border-ink-600 bg-ink-800 p-5"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-base font-semibold text-ink-900">Invite members</h2>
-        <p className="mt-1 text-xs text-ink-500">
+        <h2 className="text-base font-semibold text-ink-50">Invite members</h2>
+        <p className="mt-1 text-xs text-ink-300">
           {live.name} · If the email already exists, they join now. Otherwise we email an invite
           link; after they sign up they’re already on this project.
         </p>
@@ -107,14 +107,14 @@ export function InviteMembersModal({ project, onClose }: Props) {
             Invite
           </Button>
         </form>
-        {error ? <p className="mt-2 text-xs font-medium text-red-700">{error}</p> : null}
-        {info ? <p className="mt-2 text-xs font-medium text-emerald-700">{info}</p> : null}
+        {error ? <p className="mt-2 text-xs font-medium text-[#ed4245]">{error}</p> : null}
+        {info ? <p className="mt-2 text-xs font-medium text-[#57f287]">{info}</p> : null}
         {inviteLink ? (
           <div className="mt-2 flex gap-2">
             <input
               readOnly
               value={inviteLink}
-              className="h-8 min-w-0 flex-1 truncate rounded-md border border-ink-200 bg-ink-50 px-2 text-[11px] text-ink-700"
+              className="h-8 min-w-0 flex-1 truncate rounded-md border border-ink-600 bg-ink-900 px-2 text-[11px] text-ink-200"
             />
             <Button type="button" size="xs" variant="secondary" onClick={() => void copyLink()}>
               Copy link
@@ -122,22 +122,22 @@ export function InviteMembersModal({ project, onClose }: Props) {
           </div>
         ) : null}
 
-        <div className="mt-4 max-h-64 overflow-y-auto border-t border-ink-100">
+        <div className="mt-4 max-h-64 overflow-y-auto border-t border-ink-700">
           {live.members.map((member) => (
             <div
               key={member.id}
-              className="flex flex-wrap items-center justify-between gap-2 border-b border-ink-100 py-2.5"
+              className="flex flex-wrap items-center justify-between gap-2 border-b border-ink-700 py-2.5"
             >
               <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-ink-900">
+                <p className="truncate text-sm font-semibold text-ink-50">
                   {member.name}
                   {member.status === 'pending' ? (
-                    <span className="ml-1.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700">
+                    <span className="ml-1.5 text-[10px] font-semibold uppercase tracking-wide text-[#fee75c]">
                       Pending
                     </span>
                   ) : null}
                 </p>
-                <p className="truncate text-xs text-ink-500">{member.email}</p>
+                <p className="truncate text-xs text-ink-300">{member.email}</p>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-[110px]">

@@ -16,30 +16,30 @@ pub struct ForegroundApp {
   pub locked: bool,
 }
 
-/// Never record TaskTrack itself (dev binary is often named "app").
+/// Never record DockX itself (dev binary is often named "app").
 fn is_excluded(app_name: &str, process_name: &str, window_title: &str, process_path: &Path) -> bool {
   let app = app_name.to_lowercase();
   let proc = process_name.to_lowercase();
   let title = window_title.to_lowercase();
   let path = process_path.to_string_lossy().to_lowercase();
 
-  if app.contains("tasktrack")
-    || proc.contains("tasktrack")
-    || path.contains("tasktrack")
-    || path.contains("com.tasktrack")
+  if app.contains("dockx")
+    || proc.contains("dockx")
+    || path.contains("dockx")
+    || path.contains("com.dockx")
   {
     return true;
   }
 
-  // Dev / debug Tauri: process "app", window title "TaskTrack"
-  let generic_self = matches!(app.as_str(), "app" | "app_lib" | "tasktrack")
+  // Dev / debug Tauri: process "app", window title "DockX"
+  let generic_self = matches!(app.as_str(), "app" | "app_lib" | "dockx")
     || matches!(proc.as_str(), "app" | "app_lib");
-  if generic_self && title.contains("tasktrack") {
+  if generic_self && title.contains("dockx") {
     return true;
   }
 
   // Exact product window title on our binary
-  if title == "tasktrack" && (generic_self || path.contains("/desktop/src-tauri/")) {
+  if title == "dockx" && (generic_self || path.contains("/desktop/src-tauri/")) {
     return true;
   }
 
@@ -272,7 +272,7 @@ pub fn get_foreground_app() -> Result<ForegroundApp, String> {
       })
     }
     Err(_) => Err(
-      "Unable to read the active window. On macOS, grant Accessibility access to TaskTrack in System Settings → Privacy & Security → Accessibility."
+      "Unable to read the active window. On macOS, grant Accessibility access to DockX in System Settings → Privacy & Security → Accessibility."
         .into(),
     ),
   }

@@ -3,7 +3,7 @@
 **Status:** Living document — Part 1 of N
 **Owner:** Product Management
 **Last Updated:** 2026-07-19
-**Product brand:** TaskTrack
+**Product brand:** DockX
 **Distribution:** Product, Design, Frontend, Backend, Desktop, DevOps, QA, AI Engineering, Investors
 
 > This is Part 1 of an incrementally-built PRD. Because the full platform spans 26 modules with 24 required sub-sections each, plus full screen specs, this document is built module-by-module across multiple sessions and appended to. Part 1 covers the strategic foundation, system architecture, release phasing, and full detail for the three Phase 1 "trust layer" modules: **Authentication, Organization Management, Employee Management**.
@@ -650,7 +650,7 @@ Custom fields per org (e.g., "T-shirt size," "cost center"), org chart drag-to-r
 ## C1. Repo layout & stack (as built)
 
 ```text
-TaskTrack/
+DockX/
 ├── backend/     # Node.js + MongoDB modular monolith (folders scaffolded; API not started)
 ├── desktop/     # React (Vite) employee workspace UI designed; Tauri/Rust core still stubbed
 ├── web/         # React (Vite) management portal — full Phase 1 MVP screens designed
@@ -667,7 +667,7 @@ TaskTrack/
 | Desktop | React + TypeScript + Vite UI (port 5175); Tauri/Rust offline/tracking core still `scaffolded` | Employee dashboard UI `designed` (mock auth) |
 | AI | In-process `ai` module inside backend (not a microservice) | Not started |
 
-**Design system (locked for MVP):** light portal, slate neutrals + deep teal brand (`brand-700` / `#0F766E`), atmospheric mint wash on marketing/auth only, sidebar shells, no purple/cream default theme. Shared visual language across web + desktop.
+**Design system:** Discord dark theme — Blurple `#5865F2` brand, dark surfaces (`#1E1F22` → `#313338`), status greens/yellows/reds from Discord palette. Shared visual language across web + desktop.
 
 **Run locally**
 - Web: `cd web && npm install && npm run dev` → http://localhost:5173

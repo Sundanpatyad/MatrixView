@@ -50,7 +50,7 @@ export async function uploadToCloudinary(
 ): Promise<{ url: string; publicId: string; bytes: number; mimeType: string }> {
   ensureConfigured();
   const resourceType = resourceTypeForMime(opts.mimeType);
-  const safeFolder = `tasktrack/${opts.folder.replace(/^\/+|\/+$/g, '') || 'media'}`;
+  const safeFolder = `dockx/${opts.folder.replace(/^\/+|\/+$/g, '') || 'media'}`;
   const publicId = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}`;
 
   const result = await new Promise<UploadApiResponse>((resolve, reject) => {

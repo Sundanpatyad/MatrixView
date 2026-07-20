@@ -32,18 +32,18 @@ function greeting() {
 }
 
 const STATUS_META = [
-  { id: 'todo', label: 'To do', color: '#64748b', fill: 'fill-ink-400' },
-  { id: 'in_progress', label: 'In progress', color: '#f59e0b', fill: 'fill-amber-500' },
-  { id: 'review', label: 'In review', color: '#0ea5e9', fill: 'fill-sky-500' },
-  { id: 'done', label: 'Done', color: '#10b981', fill: 'fill-emerald-500' },
+  { id: 'todo', label: 'To do', color: '#80848e', fill: 'fill-ink-400' },
+  { id: 'in_progress', label: 'In progress', color: '#f0b232', fill: 'fill-[#f0b232]' },
+  { id: 'review', label: 'In review', color: '#00a8fc', fill: 'fill-[#00a8fc]' },
+  { id: 'done', label: 'Done', color: '#23a559', fill: 'fill-[#23a559]' },
 ] as const;
 
 const PRIORITY_META = [
-  { id: 'highest', label: 'Highest', color: '#dc2626' },
-  { id: 'high', label: 'High', color: '#ea580c' },
-  { id: 'medium', label: 'Medium', color: '#d97706' },
-  { id: 'low', label: 'Low', color: '#059669' },
-  { id: 'lowest', label: 'Lowest', color: '#94a3b8' },
+  { id: 'highest', label: 'Highest', color: '#ed4245' },
+  { id: 'high', label: 'High', color: '#f23f43' },
+  { id: 'medium', label: 'Medium', color: '#f0b232' },
+  { id: 'low', label: 'Low', color: '#57f287' },
+  { id: 'lowest', label: 'Lowest', color: '#80848e' },
 ] as const;
 
 function DonutChart({
@@ -59,7 +59,7 @@ function DonutChart({
   return (
     <div className="flex items-center gap-5">
       <svg viewBox="0 0 140 140" className="h-36 w-36 shrink-0">
-        <circle cx="70" cy="70" r={r} fill="none" stroke="#e2e8f0" strokeWidth="16" />
+        <circle cx="70" cy="70" r={r} fill="none" stroke="var(--chart-track)" strokeWidth="16" />
         {slices.map((slice) => {
           const len = (slice.value / total) * c;
           const el = (
@@ -83,8 +83,7 @@ function DonutChart({
           x="70"
           y="66"
           textAnchor="middle"
-          className="fill-ink-900"
-          style={{ fontSize: 22, fontWeight: 700 }}
+          style={{ fontSize: 22, fontWeight: 700, fill: 'var(--ink-50)' }}
         >
           {slices.reduce((s, x) => s + x.value, 0)}
         </text>
@@ -92,8 +91,7 @@ function DonutChart({
           x="70"
           y="84"
           textAnchor="middle"
-          className="fill-ink-500"
-          style={{ fontSize: 10, fontWeight: 600 }}
+          style={{ fontSize: 10, fontWeight: 600, fill: 'var(--ink-300)' }}
         >
           tasks
         </text>
@@ -102,8 +100,8 @@ function DonutChart({
         {slices.map((s) => (
           <li key={s.label} className="flex items-center gap-2 text-xs">
             <span className="h-2 w-2 shrink-0" style={{ background: s.color }} />
-            <span className="font-medium text-ink-700">{s.label}</span>
-            <span className="ml-auto tabular-nums text-ink-500">{s.value}</span>
+            <span className="font-medium text-ink-200">{s.label}</span>
+            <span className="ml-auto tabular-nums text-ink-300">{s.value}</span>
           </li>
         ))}
       </ul>
@@ -135,7 +133,7 @@ function BarChart({
               x={x + barW / 2}
               y={y - 6}
               textAnchor="middle"
-              style={{ fontSize: 10, fontWeight: 700, fill: '#0f172a' }}
+              style={{ fontSize: 10, fontWeight: 700, fill: 'var(--ink-50)' }}
             >
               {b.value}
             </text>
@@ -143,7 +141,7 @@ function BarChart({
               x={x + barW / 2}
               y={h + 16}
               textAnchor="middle"
-              style={{ fontSize: 9, fontWeight: 600, fill: '#64748b' }}
+              style={{ fontSize: 9, fontWeight: 600, fill: 'var(--ink-300)' }}
             >
               {b.label}
             </text>
@@ -396,7 +394,7 @@ export function DashboardPage() {
     const byProject = scopedProjects.map((p) => ({
       label: p.key.slice(0, 4),
       value: scope.filter((t) => t.projectId === p.id).length,
-      color: '#0f766e',
+      color: '#5865F2',
     }));
 
     return {
@@ -434,13 +432,13 @@ export function DashboardPage() {
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
       {/* Top bar */}
-      <section className="shrink-0 border-b border-ink-200 bg-white">
+      <section className="shrink-0 border-b border-ink-600 bg-ink-800">
         <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 md:px-5">
           <div className="min-w-0">
             <p className="text-[10px] font-semibold tracking-wide text-ink-400 uppercase">
               Dashboard
             </p>
-            <h1 className="truncate text-lg font-semibold text-ink-950 md:text-xl">
+            <h1 className="truncate text-lg font-semibold text-ink-50 md:text-xl">
               {greeting()}, {firstName}
             </h1>
           </div>
@@ -460,29 +458,29 @@ export function DashboardPage() {
                 className={cn(
                   'hidden rounded-md px-2 py-1 text-[10px] font-bold tracking-wide uppercase sm:inline',
                   myRoleOnActive === 'admin'
-                    ? 'bg-teal-50 text-teal-800'
-                    : 'bg-ink-100 text-ink-600',
+                    ? 'bg-brand-500/10 text-brand-300'
+                    : 'bg-ink-700 text-ink-200',
                 )}
               >
                 {myRoleOnActive}
               </span>
             ) : null}
 
-            <div className="flex h-8 items-center gap-2 border border-ink-200 bg-ink-50 px-2.5">
+            <div className="flex h-8 items-center gap-2 border border-ink-600 bg-ink-900 px-2.5">
               <span
                 className={cn(
                   'h-1.5 w-1.5 shrink-0 rounded-full',
                   !checkedIn
                     ? 'bg-ink-300'
                     : onBreak
-                      ? 'bg-amber-500'
-                      : 'bg-emerald-500',
+                      ? 'bg-[#f0b232]'
+                      : 'bg-[#23a559]',
                 )}
               />
-              <span className="text-[10px] font-semibold tracking-wide text-ink-500 uppercase">
+              <span className="text-[10px] font-semibold tracking-wide text-ink-300 uppercase">
                 {!checkedIn ? 'Out' : onBreak ? 'Break' : 'In'}
               </span>
-              <span className="text-sm font-semibold tabular-nums text-ink-950">
+              <span className="text-sm font-semibold tabular-nums text-ink-50">
                 {checkedIn ? elapsedLabel : '00:00:00'}
               </span>
               {checkedIn && checkInAt ? (
@@ -542,7 +540,7 @@ export function DashboardPage() {
         </div>
 
         {/* Tabs */}
-        <nav className="flex flex-wrap gap-0 border-t border-ink-100 px-2 md:px-3">
+        <nav className="flex flex-wrap gap-0 border-t border-ink-700 px-2 md:px-3">
           {tabs.map((t) => (
             <button
               key={t.id}
@@ -551,8 +549,8 @@ export function DashboardPage() {
               className={cn(
                 'border-b-2 px-3 py-2 text-xs font-semibold transition',
                 tab === t.id
-                  ? 'border-ink-900 text-ink-900'
-                  : 'border-transparent text-ink-500 hover:text-ink-800',
+                  ? 'border-ink-900 text-ink-50'
+                  : 'border-transparent text-ink-300 hover:text-ink-100',
               )}
             >
               {t.label}
@@ -577,11 +575,11 @@ export function DashboardPage() {
       ) : null}
 
       {tab === 'tasks' ? (
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-ink-200 px-4 py-2.5">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-ink-800">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-ink-600 px-4 py-2.5">
             <div>
-              <h2 className="text-sm font-semibold text-ink-900">Task list view</h2>
-              <p className="text-[11px] text-ink-500">{taskList.length} tasks</p>
+              <h2 className="text-sm font-semibold text-ink-50">Task list view</h2>
+              <p className="text-[11px] text-ink-300">{taskList.length} tasks</p>
             </div>
             <div className="flex items-center gap-1">
               {(['all', 'open', 'done'] as const).map((f) => (
@@ -592,8 +590,8 @@ export function DashboardPage() {
                   className={cn(
                     'px-2.5 py-1 text-[11px] font-semibold capitalize',
                     taskFilter === f
-                      ? 'bg-ink-900 text-white'
-                      : 'text-ink-600 hover:bg-ink-100',
+                      ? 'bg-brand-500 text-white'
+                      : 'text-ink-200 hover:bg-ink-700',
                   )}
                 >
                   {f}
@@ -618,7 +616,7 @@ export function DashboardPage() {
           </div>
           <div className="min-h-0 flex-1 overflow-auto">
             <table className="w-full min-w-[720px] text-left text-xs">
-              <thead className="sticky top-0 bg-ink-50 text-[10px] font-bold tracking-wide text-ink-500 uppercase">
+              <thead className="sticky top-0 bg-ink-900 text-[10px] font-bold tracking-wide text-ink-300 uppercase">
                 <tr>
                   <th className="px-4 py-2">Task</th>
                   <th className="px-3 py-2">Project</th>
@@ -639,12 +637,12 @@ export function DashboardPage() {
                   taskList.map((t) => {
                     const proj = getProject(t.projectId);
                     return (
-                      <tr key={t.id} className="border-t border-ink-100 hover:bg-ink-50/80">
+                      <tr key={t.id} className="border-t border-ink-700 hover:bg-ink-900/80">
                         <td className="px-4 py-2.5">
-                          <p className="font-semibold text-ink-900">{t.title}</p>
+                          <p className="font-semibold text-ink-50">{t.title}</p>
                           <p className="text-[10px] text-ink-400">{t.key}</p>
                         </td>
-                        <td className="px-3 py-2.5 text-ink-600">{proj?.name ?? '—'}</td>
+                        <td className="px-3 py-2.5 text-ink-200">{proj?.name ?? '—'}</td>
                         <td className="px-3 py-2.5">
                           <div className="flex items-center gap-1.5">
                             <UserAvatar
@@ -660,11 +658,11 @@ export function DashboardPage() {
                             {t.assigneeName}
                           </div>
                         </td>
-                        <td className="px-3 py-2.5 capitalize text-ink-600">
+                        <td className="px-3 py-2.5 capitalize text-ink-200">
                           {t.status.replace('_', ' ')}
                         </td>
                         <td className="px-3 py-2.5 capitalize">{t.priority}</td>
-                        <td className="px-4 py-2.5 text-ink-500">
+                        <td className="px-4 py-2.5 text-ink-300">
                           {t.dueDate
                             ? new Date(t.dueDate).toLocaleDateString(undefined, {
                                 month: 'short',
@@ -683,11 +681,11 @@ export function DashboardPage() {
       ) : null}
 
       {tab === 'users' ? (
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-ink-200 px-4 py-2.5">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-ink-800">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-ink-600 px-4 py-2.5">
             <div>
-              <h2 className="text-sm font-semibold text-ink-900">Users list</h2>
-              <p className="text-[11px] text-ink-500">
+              <h2 className="text-sm font-semibold text-ink-50">Users list</h2>
+              <p className="text-[11px] text-ink-300">
                 {teamUsers.length} people across projects · click to filter Tasks tab
               </p>
             </div>
@@ -699,7 +697,7 @@ export function DashboardPage() {
           </div>
           <div className="min-h-0 flex-1 overflow-auto">
             <table className="w-full min-w-[720px] text-left text-xs">
-              <thead className="sticky top-0 bg-ink-50 text-[10px] font-bold tracking-wide text-ink-500 uppercase">
+              <thead className="sticky top-0 bg-ink-900 text-[10px] font-bold tracking-wide text-ink-300 uppercase">
                 <tr>
                   <th className="px-4 py-2">User</th>
                   <th className="px-3 py-2">Email</th>
@@ -733,7 +731,7 @@ export function DashboardPage() {
                     return (
                       <tr
                         key={u.id}
-                        className="border-t border-ink-100 hover:bg-ink-50/80"
+                        className="border-t border-ink-700 hover:bg-ink-900/80"
                       >
                         <td
                           className="cursor-pointer px-4 py-2.5"
@@ -757,7 +755,7 @@ export function DashboardPage() {
                               size="sm"
                               className="!h-7 !w-7 !text-[9px]"
                             />
-                            <span className="font-semibold text-ink-900">
+                            <span className="font-semibold text-ink-50">
                               {u.name}
                               {isYou ? (
                                 <span className="ml-1 font-medium text-ink-400">(you)</span>
@@ -765,15 +763,15 @@ export function DashboardPage() {
                             </span>
                           </div>
                         </td>
-                        <td className="px-3 py-2.5 text-ink-600">{u.email}</td>
-                        <td className="px-3 py-2.5 capitalize text-ink-600">
+                        <td className="px-3 py-2.5 text-ink-200">{u.email}</td>
+                        <td className="px-3 py-2.5 capitalize text-ink-200">
                           {orgUser?.role ?? u.role}
                         </td>
-                        <td className="px-3 py-2.5 tabular-nums font-semibold text-ink-900">
+                        <td className="px-3 py-2.5 tabular-nums font-semibold text-ink-50">
                           {u.openCount}
                         </td>
-                        <td className="px-3 py-2.5 tabular-nums text-ink-600">{u.taskCount}</td>
-                        <td className="px-3 py-2.5 text-ink-500">
+                        <td className="px-3 py-2.5 tabular-nums text-ink-200">{u.taskCount}</td>
+                        <td className="px-3 py-2.5 text-ink-300">
                           {u.projects.length > 0 ? u.projects.join(', ') : '—'}
                         </td>
                         {isProjectAdminAnywhere ? (
@@ -781,7 +779,7 @@ export function DashboardPage() {
                             {orgUser ? (
                               <button
                                 type="button"
-                                className="text-[11px] font-semibold text-teal-800 hover:underline"
+                                className="text-[11px] font-semibold text-brand-300 hover:underline"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setAssignUser(orgUser);
@@ -805,7 +803,7 @@ export function DashboardPage() {
       {tab === 'overview' ? (
         <>
       {/* KPI strip */}
-      <section className="grid shrink-0 grid-cols-2 border-b border-ink-200 bg-white sm:grid-cols-4">
+      <section className="grid shrink-0 grid-cols-2 border-b border-ink-600 bg-ink-800 sm:grid-cols-4">
         {[
           { label: 'Open tasks', value: stats.open, hint: `${stats.totalTasks} total` },
           { label: 'Done', value: stats.byStatus.done, hint: `${stats.completion}%` },
@@ -820,15 +818,15 @@ export function DashboardPage() {
             key={card.label}
             className={cn(
               'px-4 py-3',
-              i < 3 && 'border-r border-ink-100',
-              i >= 2 && 'border-t border-ink-100 sm:border-t-0',
+              i < 3 && 'border-r border-ink-700',
+              i >= 2 && 'border-t border-ink-700 sm:border-t-0',
             )}
           >
-            <p className="text-[10px] font-bold tracking-wide text-ink-500 uppercase">
+            <p className="text-[10px] font-bold tracking-wide text-ink-300 uppercase">
               {card.label}
             </p>
-            <p className="mt-0.5 text-2xl font-semibold tabular-nums text-ink-950">{card.value}</p>
-            <p className="text-[11px] text-ink-500">{card.hint}</p>
+            <p className="mt-0.5 text-2xl font-semibold tabular-nums text-ink-50">{card.value}</p>
+            <p className="text-[11px] text-ink-300">{card.hint}</p>
           </div>
         ))}
       </section>
@@ -837,24 +835,24 @@ export function DashboardPage() {
       <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[1fr_320px]">
         <div className="min-h-0 overflow-y-auto">
           {/* Graphs */}
-          <section className="grid border-b border-ink-200 bg-white lg:grid-cols-3">
-            <div className="border-b border-ink-200 p-4 lg:border-r lg:border-b-0">
-              <h2 className="text-xs font-semibold text-ink-900">Status mix</h2>
-              <p className="text-[11px] text-ink-500">Tasks by column</p>
+          <section className="grid border-b border-ink-600 bg-ink-800 lg:grid-cols-3">
+            <div className="border-b border-ink-600 p-4 lg:border-r lg:border-b-0">
+              <h2 className="text-xs font-semibold text-ink-50">Status mix</h2>
+              <p className="text-[11px] text-ink-300">Tasks by column</p>
               <div className="mt-3">
                 <DonutChart slices={statusSlices} />
               </div>
             </div>
-            <div className="border-b border-ink-200 p-4 lg:border-r lg:border-b-0">
-              <h2 className="text-xs font-semibold text-ink-900">Priority</h2>
-              <p className="text-[11px] text-ink-500">Distribution</p>
+            <div className="border-b border-ink-600 p-4 lg:border-r lg:border-b-0">
+              <h2 className="text-xs font-semibold text-ink-50">Priority</h2>
+              <p className="text-[11px] text-ink-300">Distribution</p>
               <div className="mt-3 flex justify-center">
                 <BarChart bars={priorityBars} />
               </div>
             </div>
             <div className="p-4">
-              <h2 className="text-xs font-semibold text-ink-900">By project</h2>
-              <p className="text-[11px] text-ink-500">Workload</p>
+              <h2 className="text-xs font-semibold text-ink-50">By project</h2>
+              <p className="text-[11px] text-ink-300">Workload</p>
               <div className="mt-3 flex justify-center">
                 {stats.byProject.length === 0 ? (
                   <p className="py-10 text-xs text-ink-400">No projects yet</p>
@@ -862,7 +860,7 @@ export function DashboardPage() {
                   <BarChart
                     bars={stats.byProject.map((b, i) => ({
                       ...b,
-                      color: ['#0f766e', '#0369a1', '#b45309', '#be123c'][i % 4],
+                      color: ['#5865F2', '#0369a1', '#b45309', '#be123c'][i % 4],
                     }))}
                   />
                 )}
@@ -871,11 +869,11 @@ export function DashboardPage() {
           </section>
 
           {/* Task list */}
-          <section className="flex min-h-[320px] flex-col bg-white">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-ink-200 px-4 py-2.5">
+          <section className="flex min-h-[320px] flex-col bg-ink-800">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-ink-600 px-4 py-2.5">
               <div>
-                <h2 className="text-sm font-semibold text-ink-900">Task list</h2>
-                <p className="text-[11px] text-ink-500">
+                <h2 className="text-sm font-semibold text-ink-50">Task list</h2>
+                <p className="text-[11px] text-ink-300">
                   {taskList.length} shown
                   {selectedUserEmail !== 'all' ? ' · filtered by user' : ''}
                 </p>
@@ -889,8 +887,8 @@ export function DashboardPage() {
                     className={cn(
                       'px-2.5 py-1 text-[11px] font-semibold capitalize',
                       taskFilter === f
-                        ? 'bg-ink-900 text-white'
-                        : 'text-ink-600 hover:bg-ink-100',
+                        ? 'bg-brand-500 text-white'
+                        : 'text-ink-200 hover:bg-ink-700',
                     )}
                   >
                     {f}
@@ -906,7 +904,7 @@ export function DashboardPage() {
 
             <div className="overflow-x-auto">
               <table className="w-full min-w-[640px] text-left text-xs">
-                <thead className="sticky top-0 bg-ink-50 text-[10px] font-bold tracking-wide text-ink-500 uppercase">
+                <thead className="sticky top-0 bg-ink-900 text-[10px] font-bold tracking-wide text-ink-300 uppercase">
                   <tr>
                     <th className="px-4 py-2 font-bold">Task</th>
                     <th className="px-3 py-2 font-bold">Project</th>
@@ -929,13 +927,13 @@ export function DashboardPage() {
                       return (
                         <tr
                           key={t.id}
-                          className="border-t border-ink-100 transition hover:bg-ink-50/80"
+                          className="border-t border-ink-700 transition hover:bg-ink-900/80"
                         >
                           <td className="px-4 py-2.5">
-                            <p className="font-semibold text-ink-900">{t.title}</p>
+                            <p className="font-semibold text-ink-50">{t.title}</p>
                             <p className="text-[10px] text-ink-400">{t.key}</p>
                           </td>
-                          <td className="px-3 py-2.5 text-ink-600">{proj?.name ?? '—'}</td>
+                          <td className="px-3 py-2.5 text-ink-200">{proj?.name ?? '—'}</td>
                           <td className="px-3 py-2.5">
                             <div className="flex items-center gap-1.5">
                               <UserAvatar
@@ -948,14 +946,14 @@ export function DashboardPage() {
                                 seed={t.assigneeName || t.id}
                                 size="xs"
                               />
-                              <span className="truncate text-ink-700">{t.assigneeName}</span>
+                              <span className="truncate text-ink-200">{t.assigneeName}</span>
                             </div>
                           </td>
-                          <td className="px-3 py-2.5 capitalize text-ink-600">
+                          <td className="px-3 py-2.5 capitalize text-ink-200">
                             {t.status.replace('_', ' ')}
                           </td>
-                          <td className="px-3 py-2.5 capitalize text-ink-600">{t.priority}</td>
-                          <td className="px-4 py-2.5 text-ink-500">
+                          <td className="px-3 py-2.5 capitalize text-ink-200">{t.priority}</td>
+                          <td className="px-4 py-2.5 text-ink-300">
                             {t.dueDate
                               ? new Date(t.dueDate).toLocaleDateString(undefined, {
                                   month: 'short',
@@ -974,10 +972,10 @@ export function DashboardPage() {
         </div>
 
         {/* Users list */}
-        <aside className="flex min-h-0 flex-col border-t border-ink-200 bg-white lg:border-t-0 lg:border-l">
-          <div className="border-b border-ink-200 px-4 py-3">
-            <h2 className="text-sm font-semibold text-ink-900">Users</h2>
-            <p className="text-[11px] text-ink-500">
+        <aside className="flex min-h-0 flex-col border-t border-ink-600 bg-ink-800 lg:border-t-0 lg:border-l">
+          <div className="border-b border-ink-600 px-4 py-3">
+            <h2 className="text-sm font-semibold text-ink-50">Users</h2>
+            <p className="text-[11px] text-ink-300">
               Click to filter tasks · {teamUsers.length} people
             </p>
           </div>
@@ -986,16 +984,18 @@ export function DashboardPage() {
             type="button"
             onClick={() => setSelectedUserEmail('all')}
             className={cn(
-              'flex items-center gap-2.5 border-b border-ink-100 px-4 py-2.5 text-left text-xs',
-              selectedUserEmail === 'all' ? 'bg-ink-100 font-semibold' : 'hover:bg-ink-50',
+              'flex items-center gap-2.5 border-b border-ink-700 px-4 py-2.5 text-left text-xs',
+              selectedUserEmail === 'all'
+                ? 'bg-brand-500/10 font-semibold'
+                : 'hover:bg-ink-700',
             )}
           >
-            <span className="flex h-8 w-8 items-center justify-center bg-ink-900 text-[10px] font-bold text-white">
+            <span className="flex h-8 w-8 items-center justify-center bg-brand-500 text-[10px] font-bold text-white">
               All
             </span>
             <div>
-              <p className="text-ink-900">All users</p>
-              <p className="text-[11px] font-normal text-ink-500">Full workspace view</p>
+              <p className="text-ink-50">All users</p>
+              <p className="text-[11px] font-normal text-ink-300">Full workspace view</p>
             </div>
           </button>
 
@@ -1016,8 +1016,8 @@ export function DashboardPage() {
                       type="button"
                       onClick={() => setSelectedUserEmail(u.email.toLowerCase())}
                       className={cn(
-                        'flex w-full items-center gap-2.5 border-b border-ink-100 px-4 py-2.5 text-left',
-                        active ? 'bg-brand-50' : 'hover:bg-ink-50',
+                        'flex w-full items-center gap-2.5 border-b border-ink-700 px-4 py-2.5 text-left',
+                        active ? 'bg-brand-500/10' : 'hover:bg-ink-700',
                       )}
                     >
                       <UserAvatar
@@ -1035,13 +1035,13 @@ export function DashboardPage() {
                         className={cn(active && 'ring-2 ring-ink-900 ring-offset-1')}
                       />
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-xs font-semibold text-ink-900">
+                        <p className="truncate text-xs font-semibold text-ink-50">
                           {u.name}
                           {isYou ? (
                             <span className="ml-1 font-medium text-ink-400">(you)</span>
                           ) : null}
                         </p>
-                        <p className="truncate text-[11px] text-ink-500">
+                        <p className="truncate text-[11px] text-ink-300">
                           {u.openCount} open · {u.taskCount} total · {u.role}
                         </p>
                       </div>
@@ -1052,7 +1052,7 @@ export function DashboardPage() {
             )}
           </ul>
 
-          <div className="border-t border-ink-200 p-3">
+          <div className="border-t border-ink-600 p-3">
             <Link to="/board" className="block">
               <Button size="xs" className="w-full">
                 Open board

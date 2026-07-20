@@ -20,7 +20,7 @@ import {
 } from '@/lib/api/auth';
 import { configureApiAuth } from '@/lib/api/client';
 
-const STORAGE_KEY = 'tasktrack.desktop.auth';
+const STORAGE_KEY = 'dockx.desktop.auth';
 
 export type DesktopUser = AuthUser;
 

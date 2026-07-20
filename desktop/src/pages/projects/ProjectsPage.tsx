@@ -35,8 +35,8 @@ export function ProjectsPage() {
     <div className="mx-auto max-w-4xl">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="font-display text-3xl font-semibold text-ink-950">Projects</h1>
-          <p className="mt-2 text-sm font-medium text-ink-700">
+          <h1 className="font-display text-3xl font-semibold text-ink-50">Projects</h1>
+          <p className="mt-2 text-sm font-medium text-ink-200">
             Create a project, add members, then work on the board.
           </p>
         </div>
@@ -44,9 +44,9 @@ export function ProjectsPage() {
       </div>
 
       {projects.length === 0 && !showCreate ? (
-        <div className="mt-10 rounded-2xl border-2 border-dashed border-ink-300 bg-white px-6 py-16 text-center">
-          <p className="text-lg font-bold text-ink-950">No projects yet</p>
-          <p className="mt-2 text-sm font-medium text-ink-600">
+        <div className="mt-10 rounded-2xl border-2 border-dashed border-ink-500 bg-ink-800 px-6 py-16 text-center">
+          <p className="text-lg font-bold text-ink-50">No projects yet</p>
+          <p className="mt-2 text-sm font-medium text-ink-200">
             Create a project to start adding your team.
           </p>
           <Button className="mt-6" onClick={() => setShowCreate(true)}>
@@ -59,18 +59,18 @@ export function ProjectsPage() {
         {projects.map((project) => (
           <div
             key={project.id}
-            className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-ink-300 bg-white px-5 py-4 shadow-sm"
+            className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-ink-500 bg-ink-800 px-5 py-4 shadow-sm"
           >
             <Link
               to={`/projects/${project.id}/board`}
               className="flex min-w-0 flex-1 items-center gap-3 rounded-xl transition hover:opacity-90"
             >
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-700 text-sm font-bold text-white">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-500 text-sm font-bold text-white">
                 {project.key.slice(0, 2)}
               </span>
               <div className="min-w-0">
-                <p className="text-base font-bold text-ink-950">{project.name}</p>
-                <p className="text-xs font-semibold text-ink-600">
+                <p className="text-base font-bold text-ink-50">{project.name}</p>
+                <p className="text-xs font-semibold text-ink-200">
                   {project.key} · {project.members.length} members · by {project.createdBy}
                 </p>
               </div>
@@ -97,14 +97,14 @@ export function ProjectsPage() {
             onClick={() => projects.length > 0 && setShowCreate(false)}
             aria-label="Close"
           />
-          <div className="relative z-10 w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl">
-            <h2 className="text-xl font-bold text-ink-950">Create project</h2>
-            <p className="mt-1 text-sm font-medium text-ink-600">
+          <div className="relative z-10 w-full max-w-md rounded-2xl bg-ink-800 p-5 shadow-2xl">
+            <h2 className="text-xl font-bold text-ink-50">Create project</h2>
+            <p className="mt-1 text-sm font-medium text-ink-200">
               You become Admin. Add members next.
             </p>
             <form onSubmit={onSubmit} className="mt-5 space-y-3">
               <div>
-                <label className="mb-1 block text-xs font-bold text-ink-700 uppercase" htmlFor="name">
+                <label className="mb-1 block text-xs font-bold text-ink-200 uppercase" htmlFor="name">
                   Project name
                 </label>
                 <Input
@@ -116,7 +116,7 @@ export function ProjectsPage() {
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-bold text-ink-700 uppercase" htmlFor="key">
+                <label className="mb-1 block text-xs font-bold text-ink-200 uppercase" htmlFor="key">
                   Project key
                 </label>
                 <Input
@@ -128,7 +128,7 @@ export function ProjectsPage() {
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-bold text-ink-700 uppercase" htmlFor="desc">
+                <label className="mb-1 block text-xs font-bold text-ink-200 uppercase" htmlFor="desc">
                   Description
                 </label>
                 <textarea
@@ -136,7 +136,7 @@ export function ProjectsPage() {
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   rows={3}
-                  className="w-full rounded-lg border border-ink-300 px-3 py-2 text-sm font-medium"
+                  className="w-full rounded-lg border border-ink-500 px-3 py-2 text-sm font-medium"
                   placeholder="What is this project for?"
                 />
               </div>

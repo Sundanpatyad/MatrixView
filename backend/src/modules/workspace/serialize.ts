@@ -36,6 +36,7 @@ export function serializeProject(doc: ProjectDoc) {
     name: doc.name,
     key: doc.key,
     description: doc.description ?? '',
+    avatarUrl: (doc as { avatarUrl?: string | null }).avatarUrl ?? null,
     createdAt: iso(doc.createdAt),
     createdBy: doc.createdBy,
     createdByUserId: doc.createdByUserId ? String(doc.createdByUserId) : null,

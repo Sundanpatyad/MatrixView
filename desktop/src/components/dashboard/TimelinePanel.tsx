@@ -29,7 +29,7 @@ function formatDate(iso: string) {
   }
 }
 
-const label = 'text-[10px] font-bold tracking-wide text-ink-500 uppercase';
+const label = 'text-[10px] font-bold tracking-wide text-ink-300 uppercase';
 
 function AttachmentChips({
   items,
@@ -47,7 +47,7 @@ function AttachmentChips({
         <li
           key={att.id}
           className={cn(
-            'flex items-center gap-2 border border-ink-200 bg-white',
+            'flex items-center gap-2 border border-ink-600 bg-ink-800',
             compact ? 'px-2 py-1' : 'px-2.5 py-2',
           )}
         >
@@ -63,7 +63,7 @@ function AttachmentChips({
           ) : (
             <span
               className={cn(
-                'flex shrink-0 items-center justify-center bg-ink-100 text-[9px] font-bold text-ink-600',
+                'flex shrink-0 items-center justify-center bg-ink-700 text-[9px] font-bold text-ink-200',
                 compact ? 'h-6 w-6' : 'h-7 w-7',
               )}
             >
@@ -76,12 +76,12 @@ function AttachmentChips({
                 href={attachmentHref(att)}
                 target="_blank"
                 rel="noreferrer"
-                className="block max-w-[160px] truncate text-[11px] font-semibold text-ink-800 hover:text-brand-800"
+                className="block max-w-[160px] truncate text-[11px] font-semibold text-ink-100 hover:text-brand-800"
               >
                 {att.name}
               </a>
             ) : (
-              <p className="max-w-[160px] truncate text-[11px] font-semibold text-ink-800">
+              <p className="max-w-[160px] truncate text-[11px] font-semibold text-ink-100">
                 {att.name}
               </p>
             )}
@@ -93,7 +93,7 @@ function AttachmentChips({
             <button
               type="button"
               onClick={() => onRemove(att.id)}
-              className="text-[11px] font-semibold text-ink-400 hover:text-red-600"
+              className="text-[11px] font-semibold text-ink-400 hover:text-[#ed4245]"
             >
               ×
             </button>
@@ -201,10 +201,10 @@ export function TimelinePanel() {
 
   if (adminProjects.length === 0) {
     return (
-      <div className="flex h-full items-center justify-center bg-[#F7F8FA] p-8">
-        <div className="max-w-sm border border-ink-200 bg-white px-6 py-8 text-center">
-          <p className="text-sm font-semibold text-ink-900">Admin timeline</p>
-          <p className="mt-2 text-xs leading-relaxed text-ink-500">
+      <div className="flex h-full items-center justify-center bg-ink-900 p-8">
+        <div className="max-w-sm border border-ink-600 bg-ink-800 px-6 py-8 text-center">
+          <p className="text-sm font-semibold text-ink-50">Admin timeline</p>
+          <p className="mt-2 text-xs leading-relaxed text-ink-300">
             You need to be a project Admin to create timeline tasks. Create a project on the
             board (you become Admin) or ask an admin to promote you.
           </p>
@@ -214,15 +214,15 @@ export function TimelinePanel() {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-[#F7F8FA] lg:flex-row">
+    <div className="flex h-full min-h-0 flex-col bg-ink-900 lg:flex-row">
       {/* Create form */}
-      <section className="w-full shrink-0 overflow-y-auto border-b border-ink-200 bg-white lg:w-[340px] lg:border-r lg:border-b-0">
-        <div className="border-b border-ink-100 px-5 py-4">
-          <p className="text-[10px] font-bold tracking-wide text-ink-500 uppercase">
+      <section className="w-full shrink-0 overflow-y-auto border-b border-ink-600 bg-ink-800 lg:w-[340px] lg:border-r lg:border-b-0">
+        <div className="border-b border-ink-700 px-5 py-4">
+          <p className="text-[10px] font-bold tracking-wide text-ink-300 uppercase">
             New item
           </p>
-          <h2 className="mt-0.5 text-base font-semibold text-ink-950">Create timeline task</h2>
-          <p className="mt-1 text-[11px] leading-relaxed text-ink-500">
+          <h2 className="mt-0.5 text-base font-semibold text-ink-50">Create timeline task</h2>
+          <p className="mt-1 text-[11px] leading-relaxed text-ink-300">
             Park work with files now. Assign to the team when you are ready.
           </p>
         </div>
@@ -261,7 +261,7 @@ export function TimelinePanel() {
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
-              className="mt-1 w-full border border-ink-200 bg-white px-2.5 py-2 text-xs outline-none focus:border-ink-500"
+              className="mt-1 w-full border border-ink-600 bg-ink-800 px-2.5 py-2 text-xs outline-none focus:border-ink-500"
             />
           </div>
 
@@ -321,9 +321,9 @@ export function TimelinePanel() {
               <button
                 type="button"
                 onClick={() => fileRef.current?.click()}
-                className="mt-2 flex w-full flex-col items-center justify-center border border-dashed border-ink-300 bg-[#FAFBFC] px-3 py-5 text-center transition hover:border-ink-400 hover:bg-ink-50"
+                className="mt-2 flex w-full flex-col items-center justify-center border border-dashed border-ink-500 bg-ink-900 px-3 py-5 text-center transition hover:border-brand-500 hover:bg-brand-500/5"
               >
-                <span className="text-xs font-semibold text-ink-700">Drop or browse files</span>
+                <span className="text-xs font-semibold text-ink-200">Drop or browse files</span>
                 <span className="mt-0.5 text-[10px] text-ink-400">Optional · max 2MB</span>
               </button>
             ) : (
@@ -331,14 +331,14 @@ export function TimelinePanel() {
                 {files.map((file, idx) => (
                   <li
                     key={`${file.name}-${idx}`}
-                    className="flex items-center justify-between border border-ink-200 bg-white px-2.5 py-1.5 text-[11px]"
+                    className="flex items-center justify-between border border-ink-600 bg-ink-800 px-2.5 py-1.5 text-[11px]"
                   >
-                    <span className="truncate font-semibold text-ink-800">
+                    <span className="truncate font-semibold text-ink-100">
                       {file.name} · {formatFileSize(file.size)}
                     </span>
                     <button
                       type="button"
-                      className="font-semibold text-ink-400 hover:text-red-600"
+                      className="font-semibold text-ink-400 hover:text-[#ed4245]"
                       onClick={() => setFiles((prev) => prev.filter((_, i) => i !== idx))}
                     >
                       Remove
@@ -348,7 +348,7 @@ export function TimelinePanel() {
               </ul>
             )}
             {fileError ? (
-              <p className="mt-1.5 text-[11px] font-medium text-red-600">{fileError}</p>
+              <p className="mt-1.5 text-[11px] font-medium text-[#ed4245]">{fileError}</p>
             ) : null}
           </div>
 
@@ -359,15 +359,15 @@ export function TimelinePanel() {
       </section>
 
       {/* Timeline list — full width */}
-      <section className="flex min-h-0 min-w-0 flex-1 flex-col bg-white">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-ink-200 px-4 py-2.5 md:px-5">
+      <section className="flex min-h-0 min-w-0 flex-1 flex-col bg-ink-800">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-ink-600 px-4 py-2.5 md:px-5">
           <div>
-            <h2 className="text-sm font-semibold text-ink-950">Timeline</h2>
-            <p className="text-[11px] text-ink-500">
+            <h2 className="text-sm font-semibold text-ink-50">Timeline</h2>
+            <p className="text-[11px] text-ink-300">
               {pendingCount} pending · {assignedCount} assigned · {items.length} shown
             </p>
           </div>
-          <div className="flex gap-0.5 border border-ink-200 bg-ink-50 p-0.5">
+          <div className="flex gap-0.5 border border-ink-600 bg-ink-900 p-0.5">
             {(['pending', 'assigned', 'all'] as const).map((f) => (
               <button
                 key={f}
@@ -376,8 +376,8 @@ export function TimelinePanel() {
                 className={cn(
                   'px-3 py-1 text-[11px] font-semibold capitalize',
                   filter === f
-                    ? 'bg-ink-900 text-white'
-                    : 'text-ink-500 hover:bg-white hover:text-ink-800',
+                    ? 'bg-brand-500 text-white'
+                    : 'text-ink-300 hover:bg-ink-700 hover:text-ink-50',
                 )}
               >
                 {f}
@@ -389,14 +389,14 @@ export function TimelinePanel() {
         <div className="min-h-0 flex-1 overflow-auto">
           {items.length === 0 ? (
             <div className="flex h-full min-h-[240px] flex-col items-center justify-center px-6 py-16 text-center">
-              <p className="text-sm font-semibold text-ink-800">No items in this view</p>
-              <p className="mt-1 max-w-sm text-xs text-ink-500">
+              <p className="text-sm font-semibold text-ink-100">No items in this view</p>
+              <p className="mt-1 max-w-sm text-xs text-ink-300">
                 Create a timeline task on the left. Attach files if needed, then assign later.
               </p>
             </div>
           ) : (
             <table className="w-full min-w-[880px] text-left">
-              <thead className="sticky top-0 z-[1] border-b border-ink-200 bg-ink-50 text-[10px] font-bold tracking-wide text-ink-500 uppercase">
+              <thead className="sticky top-0 z-[1] border-b border-ink-600 bg-ink-900 text-[10px] font-bold tracking-wide text-ink-300 uppercase">
                 <tr>
                   <th className="px-4 py-2.5 font-bold md:px-5">Task</th>
                   <th className="px-3 py-2.5 font-bold">Project</th>
@@ -427,17 +427,17 @@ export function TimelinePanel() {
                   return (
                     <tr
                       key={item.id}
-                      className="border-b border-ink-100 transition hover:bg-ink-50/70"
+                      className="border-b border-ink-700 transition hover:bg-ink-800/70"
                     >
                       <td className="px-4 py-3 md:px-5">
                         <div className="flex items-start gap-2.5">
-                          <span className="mt-0.5 bg-ink-100 px-1.5 py-0.5 text-[9px] font-bold tracking-wide text-ink-600 uppercase">
+                          <span className="mt-0.5 bg-ink-700 px-1.5 py-0.5 text-[9px] font-bold tracking-wide text-ink-200 uppercase">
                             {item.type}
                           </span>
                           <div className="min-w-0">
-                            <p className="text-sm font-semibold text-ink-950">{item.title}</p>
+                            <p className="text-sm font-semibold text-ink-50">{item.title}</p>
                             {item.description ? (
-                              <p className="mt-0.5 line-clamp-1 text-[11px] text-ink-500">
+                              <p className="mt-0.5 line-clamp-1 text-[11px] text-ink-300">
                                 {item.description}
                               </p>
                             ) : null}
@@ -447,7 +447,7 @@ export function TimelinePanel() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-3 py-3 text-xs font-medium text-ink-700">
+                      <td className="px-3 py-3 text-xs font-medium text-ink-200">
                         {proj?.name ?? '—'}
                       </td>
                       <td className="px-3 py-3">
@@ -455,17 +455,17 @@ export function TimelinePanel() {
                           className={cn(
                             'inline-block px-1.5 py-0.5 text-[10px] font-bold uppercase',
                             item.taskId
-                              ? 'bg-emerald-50 text-emerald-800'
-                              : 'bg-amber-50 text-amber-800',
+                              ? 'bg-[#23a559]/15 text-[#18783f] dark:text-[#57f287]'
+                              : 'bg-[#f0b232]/15 text-[#9a6700] dark:text-[#fee75c]',
                           )}
                         >
                           {item.taskId ? 'Assigned' : 'Pending'}
                         </span>
                       </td>
-                      <td className="px-3 py-3 text-xs capitalize text-ink-600">
+                      <td className="px-3 py-3 text-xs capitalize text-ink-200">
                         {item.priority}
                       </td>
-                      <td className="px-3 py-3 text-xs text-ink-600">
+                      <td className="px-3 py-3 text-xs text-ink-200">
                         {item.dueDate
                           ? new Date(item.dueDate).toLocaleDateString(undefined, {
                               month: 'short',
@@ -517,7 +517,7 @@ export function TimelinePanel() {
                               seed={item.assigneeName}
                               size="sm"
                             />
-                            <span className="text-xs font-semibold text-ink-800">
+                            <span className="text-xs font-semibold text-ink-100">
                               {item.assigneeName}
                             </span>
                           </div>
@@ -538,7 +538,7 @@ export function TimelinePanel() {
                             <button
                               type="button"
                               onClick={() => setEditingItem(item)}
-                              className="text-[11px] font-semibold text-ink-600 hover:text-ink-900"
+                              className="text-[11px] font-semibold text-ink-200 hover:text-ink-50"
                             >
                               Edit
                             </button>
@@ -547,7 +547,7 @@ export function TimelinePanel() {
                             <button
                               type="button"
                               onClick={() => setItemToDelete(item)}
-                              className="text-[11px] font-semibold text-ink-400 hover:text-red-600"
+                              className="text-[11px] font-semibold text-ink-400 hover:text-[#ed4245]"
                             >
                               Remove
                             </button>
@@ -567,7 +567,7 @@ export function TimelinePanel() {
         </div>
 
         {members.length > 0 && activeProjectId ? (
-          <p className="border-t border-ink-200 px-4 py-2 text-[11px] text-ink-400 md:px-5">
+          <p className="border-t border-ink-600 px-4 py-2 text-[11px] text-ink-400 md:px-5">
             {project?.name} · {members.length} members ready to assign
           </p>
         ) : null}

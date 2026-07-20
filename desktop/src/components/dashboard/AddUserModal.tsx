@@ -90,18 +90,18 @@ export function AddUserModal({ onClose, onSaved, assignTo }: Props) {
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-ink-950/35 p-4">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/55 p-4">
       <button type="button" className="absolute inset-0" onClick={onClose} aria-label="Close" />
       <div
         role="dialog"
         aria-modal="true"
-        className="relative z-10 max-h-[90vh] w-full max-w-md overflow-y-auto border border-ink-200 bg-white p-5"
+        className="relative z-10 max-h-[90vh] w-full max-w-md overflow-y-auto border border-ink-600 bg-ink-800 p-5"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-base font-semibold text-ink-900">
+        <h2 className="text-base font-semibold text-ink-50">
           {isAssign ? 'Assign projects' : 'Add user'}
         </h2>
-        <p className="mt-1 text-xs text-ink-500">
+        <p className="mt-1 text-xs text-ink-300">
           {isAssign
             ? `Add ${assignTo?.name} to one or more projects.`
             : 'Create a login for this person. Optionally assign projects now, or later.'}
@@ -133,7 +133,7 @@ export function AddUserModal({ onClose, onSaved, assignTo }: Props) {
                 minLength={8}
               />
               <div>
-                <p className="mb-1 text-[10px] font-bold tracking-wide text-ink-500 uppercase">
+                <p className="mb-1 text-[10px] font-bold tracking-wide text-ink-300 uppercase">
                   Org role
                 </p>
                 <Select
@@ -149,7 +149,7 @@ export function AddUserModal({ onClose, onSaved, assignTo }: Props) {
 
           <div>
             <div className="mb-1.5 flex items-center justify-between">
-              <p className="text-[10px] font-bold tracking-wide text-ink-500 uppercase">
+              <p className="text-[10px] font-bold tracking-wide text-ink-300 uppercase">
                 Projects {isAssign ? '' : '(optional)'}
               </p>
               {!isAssign ? (
@@ -157,13 +157,13 @@ export function AddUserModal({ onClose, onSaved, assignTo }: Props) {
               ) : null}
             </div>
             {availableProjects.length === 0 ? (
-              <p className="border border-dashed border-ink-200 px-3 py-4 text-center text-xs text-ink-400">
+              <p className="border border-dashed border-ink-600 px-3 py-4 text-center text-xs text-ink-400">
                 {isAssign
                   ? 'Already on all projects.'
                   : 'No projects yet — create one first, or add the user and assign later.'}
               </p>
             ) : (
-              <ul className="max-h-40 space-y-1 overflow-y-auto border border-ink-200 p-2">
+              <ul className="max-h-40 space-y-1 overflow-y-auto border border-ink-600 p-2">
                 {availableProjects.map((p) => {
                   const checked = selectedProjects.includes(p.id);
                   return (
@@ -171,16 +171,16 @@ export function AddUserModal({ onClose, onSaved, assignTo }: Props) {
                       <label
                         className={cn(
                           'flex cursor-pointer items-center gap-2 px-2 py-1.5 text-xs',
-                          checked ? 'bg-ink-50' : 'hover:bg-ink-50/80',
+                          checked ? 'bg-ink-900' : 'hover:bg-ink-900/80',
                         )}
                       >
                         <input
                           type="checkbox"
                           checked={checked}
                           onChange={() => toggleProject(p.id)}
-                          className="accent-teal-700"
+                          className="accent-brand-500"
                         />
-                        <span className="font-semibold text-ink-900">{p.name}</span>
+                        <span className="font-semibold text-ink-50">{p.name}</span>
                         <span className="text-ink-400">{p.key}</span>
                       </label>
                     </li>
@@ -192,7 +192,7 @@ export function AddUserModal({ onClose, onSaved, assignTo }: Props) {
 
           {selectedProjects.length > 0 || isAssign ? (
             <div>
-              <p className="mb-1 text-[10px] font-bold tracking-wide text-ink-500 uppercase">
+              <p className="mb-1 text-[10px] font-bold tracking-wide text-ink-300 uppercase">
                 Role on selected projects
               </p>
               <Select
@@ -205,7 +205,7 @@ export function AddUserModal({ onClose, onSaved, assignTo }: Props) {
             </div>
           ) : null}
 
-          {error ? <p className="text-sm text-red-600">{error}</p> : null}
+          {error ? <p className="text-sm text-[#ed4245]">{error}</p> : null}
 
           <div className="flex justify-end gap-2 pt-1">
             <Button type="button" size="sm" variant="secondary" onClick={onClose}>

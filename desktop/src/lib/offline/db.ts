@@ -1,7 +1,7 @@
 import Database from '@tauri-apps/plugin-sql';
 import { isTauriRuntime } from '@/lib/activity/native';
 
-export const OFFLINE_DB_URL = 'sqlite:tasktrack.db';
+export const OFFLINE_DB_URL = 'sqlite:dockx.db';
 
 let dbPromise: Promise<Database | null> | null = null;
 

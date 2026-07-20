@@ -14,7 +14,7 @@ async function main() {
   initSocket(server);
 
   server.listen(config.port, () => {
-    console.log(`[api] TaskTrack backend listening on http://localhost:${config.port}`);
+    console.log(`[api] DockX backend listening on http://localhost:${config.port}`);
     console.log(`[api] Socket.io ready on /socket.io`);
     console.log(`[api] Demo login: ${config.seedEmail} / ${config.seedPassword}`);
   });

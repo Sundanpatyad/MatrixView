@@ -9,7 +9,7 @@ function required(name: string, fallback?: string): string {
 export const config = {
   environment: process.env.ENVIRONMENT ?? 'development',
   port: Number(process.env.PORT ?? 4000),
-  mongoUri: process.env.MONGODB_URI ?? 'mongodb://127.0.0.1:27017/tasktrack',
+  mongoUri: process.env.MONGODB_URI ?? 'mongodb://127.0.0.1:27017/dockx',
   useMemoryDb: (process.env.USE_MEMORY_DB ?? 'false').toLowerCase() === 'true',
   jwtAccessSecret: required('JWT_ACCESS_SECRET', 'dev-access-secret-change-me-32chars'),
   jwtRefreshSecret: required('JWT_REFRESH_SECRET', 'dev-refresh-secret-change-me-32chars'),

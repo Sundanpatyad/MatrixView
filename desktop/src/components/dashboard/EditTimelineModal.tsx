@@ -99,16 +99,16 @@ export function EditTimelineModal({ item, onClose }: Props) {
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-ink-950/35 p-4">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/55 p-4">
       <button type="button" className="absolute inset-0" onClick={onClose} aria-label="Close" />
       <div
         role="dialog"
         aria-modal="true"
-        className="relative z-10 max-h-[90vh] w-full max-w-lg overflow-y-auto border border-ink-200 bg-white p-5"
+        className="relative z-10 max-h-[90vh] w-full max-w-lg overflow-y-auto border border-ink-600 bg-ink-800 p-5"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-base font-semibold text-ink-900">Edit timeline task</h2>
-        <p className="mt-1 text-xs text-ink-500">
+        <h2 className="text-base font-semibold text-ink-50">Edit timeline task</h2>
+        <p className="mt-1 text-xs text-ink-300">
           Update name, assignee, details, and files
           {item.taskId ? ' — board task stays in sync.' : '.'}
         </p>
@@ -126,7 +126,7 @@ export function EditTimelineModal({ item, onClose }: Props) {
             onChange={(e) => setDescription(e.target.value)}
             rows={3}
             placeholder="Description"
-            className="w-full border border-ink-200 px-3 py-2 text-sm outline-none focus:border-ink-400"
+            className="w-full border border-ink-600 px-3 py-2 text-sm outline-none focus:border-ink-400"
           />
           <div className="grid grid-cols-2 gap-2">
             <Select
@@ -150,7 +150,7 @@ export function EditTimelineModal({ item, onClose }: Props) {
           <DatePicker value={dueDate} onChange={setDueDate} />
 
           <div>
-            <p className="mb-1.5 text-[10px] font-bold tracking-wide text-ink-500 uppercase">
+            <p className="mb-1.5 text-[10px] font-bold tracking-wide text-ink-300 uppercase">
               Assignee
             </p>
             {members.length === 0 ? (
@@ -183,7 +183,7 @@ export function EditTimelineModal({ item, onClose }: Props) {
 
           <div>
             <div className="flex items-center justify-between">
-              <p className="text-[10px] font-bold tracking-wide text-ink-500 uppercase">
+              <p className="text-[10px] font-bold tracking-wide text-ink-300 uppercase">
                 Files / images
               </p>
               <button
@@ -212,23 +212,23 @@ export function EditTimelineModal({ item, onClose }: Props) {
                   return (
                     <li
                       key={att.id}
-                      className="flex items-center gap-2 border border-ink-200 px-2.5 py-2"
+                      className="flex items-center gap-2 border border-ink-600 px-2.5 py-2"
                     >
                       {att.mimeType.startsWith('image/') && href ? (
                         <img src={href} alt="" className="h-8 w-8 object-cover" />
                       ) : (
-                        <span className="flex h-8 w-8 items-center justify-center bg-ink-100 text-[9px] font-bold text-ink-600">
+                        <span className="flex h-8 w-8 items-center justify-center bg-ink-700 text-[9px] font-bold text-ink-200">
                           FILE
                         </span>
                       )}
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-xs font-semibold text-ink-800">{att.name}</p>
+                        <p className="truncate text-xs font-semibold text-ink-100">{att.name}</p>
                         <p className="text-[10px] text-ink-400">{formatFileSize(att.size)}</p>
                       </div>
                       <button
                         type="button"
                         onClick={() => removeExisting(att.id)}
-                        className="text-[11px] font-semibold text-ink-400 hover:text-red-600"
+                        className="text-[11px] font-semibold text-ink-400 hover:text-[#ed4245]"
                       >
                         Remove
                       </button>
@@ -238,15 +238,15 @@ export function EditTimelineModal({ item, onClose }: Props) {
                 {newFiles.map((file, idx) => (
                   <li
                     key={`${file.name}-${idx}`}
-                    className="flex items-center justify-between border border-dashed border-ink-300 px-2.5 py-2 text-xs"
+                    className="flex items-center justify-between border border-dashed border-ink-500 px-2.5 py-2 text-xs"
                   >
-                    <span className="truncate font-semibold text-ink-800">
+                    <span className="truncate font-semibold text-ink-100">
                       New · {file.name} · {formatFileSize(file.size)}
                     </span>
                     <button
                       type="button"
                       onClick={() => setNewFiles((prev) => prev.filter((_, i) => i !== idx))}
-                      className="font-semibold text-ink-400 hover:text-red-600"
+                      className="font-semibold text-ink-400 hover:text-[#ed4245]"
                     >
                       Remove
                     </button>
@@ -255,11 +255,11 @@ export function EditTimelineModal({ item, onClose }: Props) {
               </ul>
             )}
             {fileError ? (
-              <p className="mt-1.5 text-[11px] font-medium text-red-600">{fileError}</p>
+              <p className="mt-1.5 text-[11px] font-medium text-[#ed4245]">{fileError}</p>
             ) : null}
           </div>
 
-          {error ? <p className="text-sm text-red-600">{error}</p> : null}
+          {error ? <p className="text-sm text-[#ed4245]">{error}</p> : null}
 
           <div className="flex justify-end gap-2 pt-1">
             <Button type="button" size="sm" variant="secondary" onClick={onClose}>

@@ -4,11 +4,11 @@ import { TASK_TYPES, type BoardTask } from '@/lib/workspace/types';
 import { cn } from '@/lib/cn';
 
 const priorityStyles: Record<string, string> = {
-  lowest: 'text-ink-700 bg-ink-100',
-  low: 'text-emerald-900 bg-emerald-100',
-  medium: 'text-amber-950 bg-amber-100',
-  high: 'text-red-900 bg-red-100',
-  highest: 'text-white bg-red-700',
+  lowest: 'text-ink-200 bg-ink-700',
+  low: 'text-[#18783f] dark:text-[#57f287] bg-[#23a559]/15',
+  medium: 'text-[#9a6700] dark:text-[#fee75c] bg-[#f0b232]/15',
+  high: 'text-[#c03537] dark:text-[#ed4245] bg-[#ed4245]/15',
+  highest: 'text-white bg-[#ed4245]',
 };
 
 type Props = {
@@ -60,7 +60,7 @@ export function BoardTaskCard({
         onOpen();
       }}
       className={cn(
-        'select-none rounded-lg border border-ink-300 bg-white p-3 shadow-sm transition hover:border-ink-500',
+        'select-none rounded-lg border border-ink-500 bg-ink-800 p-3 shadow-sm transition hover:border-ink-500',
         'cursor-grab active:cursor-grabbing',
         dragging && 'opacity-40 ring-2 ring-brand-600',
       )}
@@ -74,10 +74,10 @@ export function BoardTaskCard({
         >
           {typeMeta?.label ?? task.type}
         </span>
-        <span className="text-[10px] font-bold text-ink-600">{task.key}</span>
+        <span className="text-[10px] font-bold text-ink-200">{task.key}</span>
       </div>
 
-      <p className="mt-2 text-sm font-bold text-ink-950">{task.title}</p>
+      <p className="mt-2 text-sm font-bold text-ink-50">{task.title}</p>
 
       <div className="mt-3 flex flex-wrap items-center gap-1.5">
         <span
@@ -88,18 +88,18 @@ export function BoardTaskCard({
         >
           {task.priority}
         </span>
-        <span className="rounded bg-ink-100 px-1.5 py-0.5 text-[10px] font-bold text-ink-800">
+        <span className="rounded bg-ink-700 px-1.5 py-0.5 text-[10px] font-bold text-ink-200">
           {task.estimateHours}h est
         </span>
         {task.loggedHours > 0 ? (
-          <span className="rounded bg-brand-100 px-1.5 py-0.5 text-[10px] font-bold text-brand-900">
+          <span className="rounded bg-brand-500/10 px-1.5 py-0.5 text-[10px] font-bold text-brand-600 dark:text-brand-300">
             {task.loggedHours}h logged
           </span>
         ) : null}
       </div>
 
       <div className="mt-3 flex items-center justify-between">
-        <span className="text-[11px] font-semibold text-ink-700">{task.assigneeName}</span>
+        <span className="text-[11px] font-semibold text-ink-200">{task.assigneeName}</span>
         <UserAvatar
           name={task.assigneeName || 'Unassigned'}
           src={avatarUrl}

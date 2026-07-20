@@ -326,7 +326,7 @@ export async function getOrCreateDm(
     });
     if (!other) {
       throw new AuthError(
-        'No TaskTrack account found with that email',
+        'No DockX account found with that email',
         404,
         'NOT_FOUND',
       );

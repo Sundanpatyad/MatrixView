@@ -1,8 +1,8 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "TaskTrack",
+  "productName": "DockX",
   "version": "0.1.0",
-  "identifier": "com.tasktrack.desktop",
+  "identifier": "com.dockx.desktop",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:5175",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "TaskTrack",
+        "title": "DockX",
         "width": 1100,
         "height": 720,
         "minWidth": 880,
@@ -28,7 +28,7 @@
   },
   "plugins": {
     "sql": {
-      "preload": ["sqlite:tasktrack.db"]
+      "preload": ["sqlite:dockx.db"]
     }
   },
   "bundle": {

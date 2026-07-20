@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { ApiError, apiFetch } from '@/lib/api/client';
 
@@ -53,7 +54,7 @@ export function RegisterPage() {
 
   if (isBootstrapping) {
     return (
-      <div className="atmosphere flex min-h-screen items-center justify-center text-sm text-ink-500">
+      <div className="atmosphere flex min-h-screen items-center justify-center text-sm text-ink-300">
         Restoring session…
       </div>
     );
@@ -83,13 +84,23 @@ export function RegisterPage() {
   const isInvite = Boolean(inviteToken);
 
   return (
-    <div className="atmosphere flex min-h-screen items-center justify-center px-6">
+    <div className="atmosphere relative flex min-h-screen items-center justify-center px-6">
+      <ThemeToggle className="absolute top-5 right-5" />
       <div className="w-full max-w-sm">
-        <p className="font-display text-3xl font-semibold text-ink-900">TaskTrack</p>
-        <h1 className="mt-2 text-lg font-semibold text-ink-800">
-          {isInvite ? 'Join project' : 'Create your account'}
-        </h1>
-        <p className="mt-1 text-sm text-ink-500">
+        <div className="flex items-center gap-3">
+          <img
+            src="/logo.png"
+            alt="DockX"
+            className="h-12 w-12 rounded-xl object-cover shadow-sm shadow-brand-500/25"
+          />
+          <div>
+            <p className="font-display text-3xl font-semibold text-ink-50">DockX</p>
+            <h1 className="text-lg font-semibold text-ink-100">
+              {isInvite ? 'Join project' : 'Create your account'}
+            </h1>
+          </div>
+        </div>
+        <p className="mt-3 text-sm text-ink-300">
           {isInvite
             ? invite
               ? `You’ve been invited to ${invite.projectName} as ${invite.role}. Create your account to get in.`
@@ -98,9 +109,9 @@ export function RegisterPage() {
         </p>
 
         {isInvite && inviteError ? (
-          <p className="mt-6 text-sm text-red-600">
+          <p className="mt-6 text-sm text-[#ed4245]">
             {inviteError}{' '}
-            <Link to="/register" className="font-medium text-teal-700 underline">
+            <Link to="/register" className="font-medium text-brand-400 underline">
               Sign up without invite
             </Link>{' '}
             instead.
@@ -108,13 +119,13 @@ export function RegisterPage() {
         ) : (
           <form onSubmit={onSubmit} className="mt-8 space-y-4">
             <div>
-              <label htmlFor="name" className="mb-1.5 block text-sm font-medium text-ink-700">
+              <label htmlFor="name" className="mb-1.5 block text-sm font-medium text-ink-200">
                 Your name
               </label>
               <Input id="name" value={name} onChange={(e) => setName(e.target.value)} required />
             </div>
             <div>
-              <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-ink-700">
+              <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-ink-200">
                 Email
               </label>
               <Input
@@ -124,11 +135,11 @@ export function RegisterPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 readOnly={isInvite}
-                className={isInvite ? 'bg-ink-50' : undefined}
+                className={isInvite ? 'bg-ink-900' : undefined}
               />
             </div>
             <div>
-              <label htmlFor="password" className="mb-1.5 block text-sm font-medium text-ink-700">
+              <label htmlFor="password" className="mb-1.5 block text-sm font-medium text-ink-200">
                 Password
               </label>
               <Input
@@ -140,7 +151,7 @@ export function RegisterPage() {
                 minLength={8}
               />
             </div>
-            {error ? <p className="text-sm text-red-600">{error}</p> : null}
+            {error ? <p className="text-sm text-[#ed4245]">{error}</p> : null}
             <Button
               type="submit"
               className="w-full"
@@ -150,9 +161,9 @@ export function RegisterPage() {
             </Button>
           </form>
         )}
-        <p className="mt-4 text-center text-sm text-ink-500">
+        <p className="mt-4 text-center text-sm text-ink-300">
           Already have an account?{' '}
-          <Link to="/login" className="font-medium text-teal-700 underline-offset-2 hover:underline">
+          <Link to="/login" className="font-medium text-brand-400 underline-offset-2 hover:underline">
             Sign in
           </Link>
         </p>

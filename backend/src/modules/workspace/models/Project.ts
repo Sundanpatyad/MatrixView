@@ -30,6 +30,7 @@ const projectSchema = new Schema(
     name: { type: String, required: true, trim: true },
     key: { type: String, required: true, uppercase: true, trim: true },
     description: { type: String, default: '' },
+    avatarUrl: { type: String, default: null },
     createdBy: { type: String, required: true },
     createdByUserId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     columns: { type: [columnSchema], default: [] },

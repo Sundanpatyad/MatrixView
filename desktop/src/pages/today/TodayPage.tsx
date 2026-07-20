@@ -19,16 +19,16 @@ export function TodayPage() {
 
   return (
     <div className="mx-auto max-w-2xl">
-      <h1 className="font-display text-3xl font-semibold text-ink-950">
+      <h1 className="font-display text-3xl font-semibold text-ink-50">
         {greeting()}, {firstName}
       </h1>
-      <p className="mt-2 text-sm font-medium text-ink-700">
+      <p className="mt-2 text-sm font-medium text-ink-200">
         Check in / out, then open projects and boards.
       </p>
 
-      <section className="mt-8 rounded-2xl border border-ink-300 bg-white p-6">
-        <p className="text-xs font-bold tracking-wide text-ink-700 uppercase">Attendance</p>
-        <p className="mt-2 text-2xl font-bold text-ink-950">
+      <section className="mt-8 rounded-2xl border border-ink-500 bg-ink-800 p-6">
+        <p className="text-xs font-bold tracking-wide text-ink-200 uppercase">Attendance</p>
+        <p className="mt-2 text-2xl font-bold text-ink-50">
           {!checkedIn
             ? 'Not checked in'
             : onBreak
@@ -54,9 +54,9 @@ export function TodayPage() {
         </div>
       </section>
 
-      <section className="mt-6 rounded-2xl border border-ink-300 bg-white p-5">
-        <h2 className="text-base font-bold text-ink-950">Projects</h2>
-        <p className="mt-1 text-sm font-medium text-ink-600">
+      <section className="mt-6 rounded-2xl border border-ink-500 bg-ink-800 p-5">
+        <h2 className="text-base font-bold text-ink-50">Projects</h2>
+        <p className="mt-1 text-sm font-medium text-ink-200">
           {projects.length === 0
             ? 'Create a project, add members, then use the board.'
             : `${projects.length} project${projects.length === 1 ? '' : 's'} ready.`}

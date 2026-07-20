@@ -125,6 +125,39 @@ export async function createProject(
   return presentProject(project);
 }
 
+export async function updateProjectAvatar(
+  actor: Actor,
+  projectId: string,
+  avatarUrl: string,
+) {
+  const project = await getAccessibleProject(projectId, actor);
+  requireAdmin(project, actor.email);
+
+  const previousUrl = (project as { avatarUrl?: string | null }).avatarUrl ?? null;
+  (project as { avatarUrl?: string | null }).avatarUrl = avatarUrl;
+  await project.save();
+
+  if (previousUrl && previousUrl !== avatarUrl) {
+    await deleteStoredMedia(previousUrl);
+  }
+
+  return presentProject(project);
+}
+
+export async function removeProjectAvatar(actor: Actor, projectId: string) {
+  const project = await getAccessibleProject(projectId, actor);
+  requireAdmin(project, actor.email);
+
+  const previousUrl = (project as { avatarUrl?: string | null }).avatarUrl ?? null;
+  if (!previousUrl) return presentProject(project);
+
+  (project as { avatarUrl?: string | null }).avatarUrl = null;
+  await project.save();
+  await deleteStoredMedia(previousUrl);
+
+  return presentProject(project);
+}
+
 /** Project admins (including creator) can permanently delete a project and its data. */
 export async function deleteProject(actor: Actor, projectId: string) {
   const project = await getAccessibleProject(projectId, actor);
@@ -136,6 +169,10 @@ export async function deleteProject(actor: Actor, projectId: string) {
   const tasks = await Task.find({ projectId: pid }).select('attachments comments').lean();
   const timeline = await TimelineItem.find({ projectId: pid }).select('attachments').lean();
   const mediaRefs: StoredMediaRef[] = [];
+  const projectAvatarUrl = (project as { avatarUrl?: string | null }).avatarUrl;
+  if (projectAvatarUrl) {
+    mediaRefs.push({ url: projectAvatarUrl });
+  }
   for (const t of tasks) {
     for (const a of t.attachments ?? []) {
       mediaRefs.push({
@@ -192,7 +229,7 @@ export async function addMember(
     throw new AuthError('Member already on project', 409, 'MEMBER_EXISTS');
   }
 
-  // Any existing TaskTrack account can be added (personal workspaces are separate)
+  // Any existing DockX account can be added (personal workspaces are separate)
   const existingUser = await User.findOne({ email });
 
   const displayName =
@@ -311,7 +348,7 @@ export async function getInvitePreview(rawToken: string) {
     name: invite.name || '',
     role: invite.role as 'admin' | 'member',
     projectName: project?.name ?? 'Project',
-    orgName: project?.name ?? 'TaskTrack',
+    orgName: project?.name ?? 'DockX',
     expiresAt: invite.expiresAt.toISOString(),
   };
 }

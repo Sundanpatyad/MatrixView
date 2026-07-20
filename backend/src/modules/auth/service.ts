@@ -15,6 +15,29 @@ import { AuthError } from './errors.js';
 const MAX_FAILED = 5;
 const LOCK_MS = 15 * 60 * 1000;
 
+const DEMO_MEMBERS = [
+  ['Aarav Mehta', 'aarav@acme.dev'],
+  ['Ananya Singh', 'ananya@acme.dev'],
+  ['Arjun Verma', 'arjun@acme.dev'],
+  ['Diya Nair', 'diya@acme.dev'],
+  ['Kabir Khan', 'kabir@acme.dev'],
+  ['Meera Joshi', 'meera@acme.dev'],
+  ['Vikram Rao', 'vikram@acme.dev'],
+  ['Neha Gupta', 'neha@acme.dev'],
+  ['Ishan Kapoor', 'ishan@acme.dev'],
+  ['Priya Desai', 'priya@acme.dev'],
+  ['Rohit Kumar', 'rohit@acme.dev'],
+  ['Sneha Iyer', 'sneha@acme.dev'],
+  ['Dev Malhotra', 'dev@acme.dev'],
+  ['Kavya Reddy', 'kavya@acme.dev'],
+  ['Aditya Bose', 'aditya@acme.dev'],
+  ['Nisha Shah', 'nisha@acme.dev'],
+  ['Sameer Jain', 'sameer@acme.dev'],
+  ['Tara Menon', 'tara@acme.dev'],
+  ['Varun Sethi', 'varun@acme.dev'],
+  ['Zoya Ali', 'zoya@acme.dev'],
+] as const;
+
 export type PublicUser = {
   id: string;
   name: string;
@@ -375,5 +398,40 @@ export async function ensureSeedUser(email: string, password: string): Promise<v
     // Keep both demo accounts in the same org for chat testing
     member.orgId = orgId;
     await member.save();
+  }
+
+  if (!orgId) return;
+
+  let demoPasswordHash: string | null = null;
+  for (const [name, demoEmail] of DEMO_MEMBERS) {
+    const existing = await User.findOne({ email: demoEmail });
+    if (!existing) {
+      demoPasswordHash ??= await hashPassword(password);
+      await User.create({
+        orgId,
+        email: demoEmail,
+        name,
+        passwordHash: demoPasswordHash,
+        role: 'Member',
+        status: 'active',
+      });
+      console.log(`[seed] demo member ${demoEmail}`);
+      continue;
+    }
+
+    let changed = false;
+    if (String(existing.orgId) !== String(orgId)) {
+      existing.orgId = orgId;
+      changed = true;
+    }
+    if (existing.name !== name) {
+      existing.name = name;
+      changed = true;
+    }
+    if (existing.status !== 'active') {
+      existing.status = 'active';
+      changed = true;
+    }
+    if (changed) await existing.save();
   }
 }
