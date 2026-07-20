@@ -8,6 +8,14 @@
 @import "@fontsource/geist-sans/700.css";
 @import "@fontsource/geist-mono/500.css";
 @import "@fontsource/geist-mono/600.css";
+@import "@fontsource/syne/500.css";
+@import "@fontsource/syne/600.css";
+@import "@fontsource/syne/700.css";
+@import "@fontsource/syne/800.css";
+@import "@fontsource/dm-sans/400.css";
+@import "@fontsource/dm-sans/500.css";
+@import "@fontsource/dm-sans/600.css";
+@import "@fontsource/dm-sans/700.css";
 
 @custom-variant dark (&:where(.dark, .dark *));
 
@@ -15,6 +23,8 @@
   --font-display: "Geist Sans", ui-sans-serif, system-ui, sans-serif;
   --font-sans: "Geist Sans", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "Geist Mono", ui-monospace, monospace;
+  --font-landing: "Syne", ui-sans-serif, system-ui, sans-serif;
+  --font-landing-body: "DM Sans", ui-sans-serif, system-ui, sans-serif;
 
   /* Discord Blurple scale */
   --color-brand-50: var(--brand-50);
@@ -187,6 +197,55 @@
   font-family: var(--font-display);
   letter-spacing: -0.02em;
   font-weight: 600;
+}
+
+@utility font-landing {
+  font-family: var(--font-landing);
+  letter-spacing: -0.03em;
+}
+
+.landing-root {
+  font-family: var(--font-landing-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@media (pointer: fine) {
+  html.landing-cursor-hide,
+  html.landing-cursor-hide * {
+    cursor: none !important;
+  }
+}
+
+.landing-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    110deg,
+    transparent 25%,
+    rgba(255, 255, 255, 0.28) 45%,
+    transparent 65%
+  );
+  background-size: 200% 100%;
+  animation: landing-shimmer 2.8s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes landing-shimmer {
+  0% {
+    background-position: 120% 0;
+  }
+  100% {
+    background-position: -80% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-shimmer::after {
+    animation: none;
+  }
 }
 
 @layer base {

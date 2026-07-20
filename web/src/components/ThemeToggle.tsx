@@ -11,6 +11,7 @@ export function ThemeToggle({ className = "" }: { className?: string }) {
     <button
       type="button"
       onClick={toggleTheme}
+      data-cursor="grow"
       className={`inline-flex h-9 w-9 items-center justify-center rounded-full border border-ink-600 bg-ink-800 text-ink-200 transition-colors hover:bg-ink-700 hover:text-ink-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${className}`}
       title="Toggle light and dark mode"
       aria-label="Toggle light and dark mode"
