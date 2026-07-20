@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import multer from 'multer';
 import { Types } from 'mongoose';
 import { AuthError } from '../auth/errors.js';
-import { User } from '../auth/models/User.js';
+import { User, type UserDoc } from '../auth/models/User.js';
 import { ActivitySession } from '../activity/models/ActivitySession.js';
 import { Project } from '../workspace/models/Project.js';
 import {
@@ -333,7 +333,7 @@ export async function getOrCreateDm(
   const email = input.email?.trim().toLowerCase() ?? '';
   const userId = input.userId?.trim() ?? '';
 
-  let other: Awaited<ReturnType<typeof User.findOne>>;
+  let other: UserDoc | null = null;
 
   if (email) {
     other = await User.findOne({
