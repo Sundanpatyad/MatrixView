@@ -40,9 +40,9 @@ const STATUS_META = [
 
 const PRIORITY_META = [
   { id: 'highest', label: 'Highest', color: '#ed4245' },
-  { id: 'high', label: 'High', color: '#f23f43' },
+  { id: 'high', label: 'High', color: '#f07178' },
   { id: 'medium', label: 'Medium', color: '#f0b232' },
-  { id: 'low', label: 'Low', color: '#57f287' },
+  { id: 'low', label: 'Low', color: '#3ba55d' },
   { id: 'lowest', label: 'Lowest', color: '#80848e' },
 ] as const;
 
@@ -51,57 +51,51 @@ function DonutChart({
 }: {
   slices: { label: string; value: number; color: string }[];
 }) {
-  const total = slices.reduce((s, x) => s + x.value, 0) || 1;
-  const r = 54;
+  const total = slices.reduce((s, x) => s + x.value, 0);
+  const denom = total || 1;
+  const r = 48;
   const c = 2 * Math.PI * r;
   let offset = 0;
 
   return (
-    <div className="flex items-center gap-5">
-      <svg viewBox="0 0 140 140" className="h-36 w-36 shrink-0">
-        <circle cx="70" cy="70" r={r} fill="none" stroke="var(--chart-track)" strokeWidth="16" />
-        {slices.map((slice) => {
-          const len = (slice.value / total) * c;
-          const el = (
-            <circle
-              key={slice.label}
-              cx="70"
-              cy="70"
-              r={r}
-              fill="none"
-              stroke={slice.color}
-              strokeWidth="16"
-              strokeDasharray={`${len} ${c - len}`}
-              strokeDashoffset={-offset}
-              transform="rotate(-90 70 70)"
-            />
-          );
-          offset += len;
-          return el;
-        })}
-        <text
-          x="70"
-          y="66"
-          textAnchor="middle"
-          style={{ fontSize: 22, fontWeight: 700, fill: 'var(--ink-50)' }}
-        >
-          {slices.reduce((s, x) => s + x.value, 0)}
-        </text>
-        <text
-          x="70"
-          y="84"
-          textAnchor="middle"
-          style={{ fontSize: 10, fontWeight: 600, fill: 'var(--ink-300)' }}
-        >
-          tasks
-        </text>
-      </svg>
-      <ul className="space-y-1.5">
+    <div className="flex items-center gap-4">
+      <div className="relative h-28 w-28 shrink-0">
+        <svg viewBox="0 0 120 120" className="h-full w-full">
+          <circle cx="60" cy="60" r={r} fill="none" stroke="var(--chart-track)" strokeWidth="12" />
+          {slices.map((slice) => {
+            if (slice.value <= 0) return null;
+            const len = (slice.value / denom) * c;
+            const draw = Math.max(len - 2.5, 0);
+            const el = (
+              <circle
+                key={slice.label}
+                cx="60"
+                cy="60"
+                r={r}
+                fill="none"
+                stroke={slice.color}
+                strokeWidth="12"
+                strokeLinecap="round"
+                strokeDasharray={`${draw} ${c - draw}`}
+                strokeDashoffset={-offset}
+                transform="rotate(-90 60 60)"
+              />
+            );
+            offset += len;
+            return el;
+          })}
+        </svg>
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+          <p className="text-xl font-bold tabular-nums text-ink-50">{total}</p>
+          <p className="text-[9px] font-semibold tracking-wide text-ink-400 uppercase">tasks</p>
+        </div>
+      </div>
+      <ul className="min-w-0 flex-1 space-y-1">
         {slices.map((s) => (
-          <li key={s.label} className="flex items-center gap-2 text-xs">
-            <span className="h-2 w-2 shrink-0" style={{ background: s.color }} />
-            <span className="font-medium text-ink-200">{s.label}</span>
-            <span className="ml-auto tabular-nums text-ink-300">{s.value}</span>
+          <li key={s.label} className="flex items-center gap-2 text-[11px]">
+            <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: s.color }} />
+            <span className="min-w-0 flex-1 truncate text-ink-200">{s.label}</span>
+            <span className="tabular-nums font-semibold text-ink-50">{s.value}</span>
           </li>
         ))}
       </ul>
@@ -115,33 +109,42 @@ function BarChart({
   bars: { label: string; value: number; color: string }[];
 }) {
   const max = Math.max(...bars.map((b) => b.value), 1);
-  const h = 140;
-  const gap = 12;
-  const barW = 36;
-  const width = bars.length * (barW + gap) + gap;
+  const h = 112;
+  const gap = 10;
+  const barW = 28;
+  const width = Math.max(bars.length * (barW + gap) + gap, 120);
 
   return (
-    <svg viewBox={`0 0 ${width} ${h + 28}`} className="h-44 w-full max-w-md">
+    <svg viewBox={`0 0 ${width} ${h + 22}`} className="h-36 w-full">
       {bars.map((b, i) => {
-        const bh = (b.value / max) * (h - 16);
+        const bh = (b.value / max) * (h - 14);
         const x = gap + i * (barW + gap);
         const y = h - bh;
         return (
           <g key={b.label}>
-            <rect x={x} y={y} width={barW} height={Math.max(bh, 2)} fill={b.color} />
+            <rect
+              x={x}
+              y={4}
+              width={barW}
+              height={h - 4}
+              rx={6}
+              fill="var(--chart-track)"
+              opacity={0.35}
+            />
+            <rect x={x} y={y} width={barW} height={Math.max(bh, 3)} rx={6} fill={b.color} />
             <text
               x={x + barW / 2}
-              y={y - 6}
+              y={y - 4}
               textAnchor="middle"
-              style={{ fontSize: 10, fontWeight: 700, fill: 'var(--ink-50)' }}
+              style={{ fontSize: 9, fontWeight: 700, fill: 'var(--ink-50)' }}
             >
               {b.value}
             </text>
             <text
               x={x + barW / 2}
-              y={h + 16}
+              y={h + 14}
               textAnchor="middle"
-              style={{ fontSize: 9, fontWeight: 600, fill: 'var(--ink-300)' }}
+              style={{ fontSize: 8, fontWeight: 600, fill: 'var(--ink-300)' }}
             >
               {b.label}
             </text>
@@ -445,18 +448,18 @@ export function DashboardPage() {
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
       {/* Top bar */}
       <section className="shrink-0 border-b border-ink-600 bg-ink-800">
-        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 md:px-5">
-          <div className="min-w-0">
+        <div className="flex flex-col gap-2 px-3 py-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:px-4">
+          <div className="min-w-0 shrink-0">
             <p className="text-[10px] font-semibold tracking-wide text-ink-400 uppercase">
               Dashboard
             </p>
-            <h1 className="truncate text-lg font-semibold text-ink-50 md:text-xl">
+            <h1 className="truncate text-base font-semibold text-ink-50 sm:text-lg">
               {greeting()}, {firstName}
             </h1>
           </div>
 
-          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-            <div className="min-w-0 w-full max-w-none flex-1 basis-full sm:basis-auto sm:min-w-[200px] sm:max-w-[280px] sm:flex-none">
+          <div className="flex flex-wrap items-center gap-1.5 sm:justify-end">
+            <div className="w-[160px] shrink-0 sm:w-[200px]">
               <Select
                 value={activeProjectId}
                 onChange={(value) => setActiveProjectId(value as typeof activeProjectId)}
@@ -468,7 +471,7 @@ export function DashboardPage() {
             {myRoleOnActive ? (
               <span
                 className={cn(
-                  'hidden rounded-md px-2 py-1 text-[10px] font-bold tracking-wide uppercase sm:inline',
+                  'hidden rounded-md px-2 py-1 text-[10px] font-bold tracking-wide uppercase md:inline',
                   myRoleOnActive === 'admin'
                     ? 'bg-brand-500/10 text-brand-300'
                     : 'bg-ink-700 text-ink-200',
@@ -478,7 +481,7 @@ export function DashboardPage() {
               </span>
             ) : null}
 
-            <div className="flex h-8 items-center gap-2 border border-ink-600 bg-ink-900 px-2.5">
+            <div className="flex h-7 shrink-0 items-center gap-1.5 border border-ink-600 bg-ink-900 px-2">
               <span
                 className={cn(
                   'h-1.5 w-1.5 shrink-0 rounded-full',
@@ -492,16 +495,16 @@ export function DashboardPage() {
               <span className="hidden text-[10px] font-semibold tracking-wide text-ink-300 uppercase sm:inline">
                 {!checkedIn ? 'Out' : onBreak ? 'Break' : 'In'}
               </span>
-              <span className="text-sm font-semibold tabular-nums text-ink-50">
+              <span className="text-xs font-semibold tabular-nums text-ink-50">
                 {checkedIn ? elapsedLabel : '00:00:00'}
               </span>
               {checkedIn && checkInAt ? (
-                <span className="hidden text-[10px] text-ink-400 md:inline">
+                <span className="hidden text-[10px] text-ink-400 lg:inline">
                   · in {checkInAt}
                 </span>
               ) : null}
               {!checkedIn && checkOutAt ? (
-                <span className="hidden text-[10px] text-ink-400 md:inline">
+                <span className="hidden text-[10px] text-ink-400 lg:inline">
                   · out {checkOutAt}
                 </span>
               ) : null}
@@ -537,7 +540,7 @@ export function DashboardPage() {
                 onClick={() => setProjectToDelete(activeProjectId)}
                 className="hidden sm:inline-flex"
               >
-                Delete project
+                Delete
               </Button>
             ) : null}
             <Link
@@ -951,62 +954,66 @@ export function DashboardPage() {
       {/* KPI strip */}
       <section className="grid shrink-0 grid-cols-2 border-b border-ink-600 bg-ink-800 sm:grid-cols-4">
         {[
-          { label: 'Open tasks', value: stats.open, hint: `${stats.totalTasks} total` },
-          { label: 'Done', value: stats.byStatus.done, hint: `${stats.completion}%` },
-          { label: 'Due week', value: stats.dueSoon, hint: `${stats.overdue} overdue` },
+          { label: 'Open tasks', value: stats.open, hint: `${stats.totalTasks} total`, accent: '#00a8fc' },
+          { label: 'Done', value: stats.byStatus.done, hint: `${stats.completion}%`, accent: '#23a559' },
+          { label: 'Due week', value: stats.dueSoon, hint: `${stats.overdue} overdue`, accent: '#f0b232' },
           {
             label: 'Projects',
             value: scopedProjects.length,
             hint: `${teamUsers.length} users`,
+            accent: '#5865F2',
           },
         ].map((card, i) => (
           <div
             key={card.label}
             className={cn(
-              'px-4 py-3',
+              'px-4 py-2.5',
               i < 3 && 'border-r border-ink-700',
               i >= 2 && 'border-t border-ink-700 sm:border-t-0',
             )}
           >
-            <p className="text-[10px] font-bold tracking-wide text-ink-300 uppercase">
-              {card.label}
-            </p>
+            <div className="flex items-center gap-1.5">
+              <span className="h-1.5 w-1.5 rounded-full" style={{ background: card.accent }} />
+              <p className="text-[10px] font-bold tracking-wide text-ink-400 uppercase">
+                {card.label}
+              </p>
+            </div>
             <p className="mt-0.5 text-2xl font-semibold tabular-nums text-ink-50">{card.value}</p>
-            <p className="text-[11px] text-ink-300">{card.hint}</p>
+            <p className="text-[11px] text-ink-400">{card.hint}</p>
           </div>
         ))}
       </section>
 
       {/* Main full-screen grid */}
-      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[1fr_320px]">
+      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[1fr_280px]">
         <div className="min-h-0 overflow-y-auto">
           {/* Graphs */}
           <section className="grid border-b border-ink-600 bg-ink-800 lg:grid-cols-3">
-            <div className="border-b border-ink-600 p-4 lg:border-r lg:border-b-0">
+            <div className="border-b border-ink-600 p-3 lg:border-r lg:border-b-0">
               <h2 className="text-xs font-semibold text-ink-50">Status mix</h2>
-              <p className="text-[11px] text-ink-300">Tasks by column</p>
-              <div className="mt-3">
+              <p className="text-[10px] text-ink-400">Tasks by column</p>
+              <div className="mt-2">
                 <DonutChart slices={statusSlices} />
               </div>
             </div>
-            <div className="border-b border-ink-600 p-4 lg:border-r lg:border-b-0">
+            <div className="border-b border-ink-600 p-3 lg:border-r lg:border-b-0">
               <h2 className="text-xs font-semibold text-ink-50">Priority</h2>
-              <p className="text-[11px] text-ink-300">Distribution</p>
-              <div className="mt-3 flex justify-center">
+              <p className="text-[10px] text-ink-400">Distribution</p>
+              <div className="mt-2">
                 <BarChart bars={priorityBars} />
               </div>
             </div>
-            <div className="p-4">
+            <div className="p-3">
               <h2 className="text-xs font-semibold text-ink-50">By project</h2>
-              <p className="text-[11px] text-ink-300">Workload</p>
-              <div className="mt-3 flex justify-center">
+              <p className="text-[10px] text-ink-400">Workload</p>
+              <div className="mt-2">
                 {stats.byProject.length === 0 ? (
-                  <p className="py-10 text-xs text-ink-400">No projects yet</p>
+                  <p className="py-8 text-xs text-ink-400">No projects yet</p>
                 ) : (
                   <BarChart
                     bars={stats.byProject.map((b, i) => ({
                       ...b,
-                      color: ['#5865F2', '#0369a1', '#b45309', '#be123c'][i % 4],
+                      color: ['#00a8fc', '#23a559', '#f0b232', '#ed4245'][i % 4],
                     }))}
                   />
                 )}
@@ -1015,11 +1022,11 @@ export function DashboardPage() {
           </section>
 
           {/* Task list */}
-          <section className="flex min-h-[320px] flex-col bg-ink-800">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-ink-600 px-4 py-2.5">
+          <section className="flex min-h-[280px] flex-col bg-ink-800">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-ink-600 px-3 py-2">
               <div>
                 <h2 className="text-sm font-semibold text-ink-50">Task list</h2>
-                <p className="text-[11px] text-ink-300">
+                <p className="text-[10px] text-ink-400">
                   {taskList.length} shown
                   {selectedUserEmail !== 'all' ? ' · filtered by user' : ''}
                 </p>
@@ -1031,7 +1038,7 @@ export function DashboardPage() {
                     type="button"
                     onClick={() => setTaskFilter(f)}
                     className={cn(
-                      'px-2.5 py-1 text-[11px] font-semibold capitalize',
+                      'px-2 py-1 text-[11px] font-semibold capitalize',
                       taskFilter === f
                         ? 'bg-brand-500 text-white'
                         : 'text-ink-200 hover:bg-ink-700',
@@ -1040,7 +1047,7 @@ export function DashboardPage() {
                     {f}
                   </button>
                 ))}
-                <Link to="/board" className="ml-2">
+                <Link to="/board" className="ml-1">
                   <Button size="xs" variant="secondary">
                     Board
                   </Button>
@@ -1050,37 +1057,41 @@ export function DashboardPage() {
 
             <div className="overflow-x-auto">
               <table className="w-full min-w-[520px] text-left text-xs sm:min-w-[640px]">
-                <thead className="sticky top-0 bg-ink-900 text-[10px] font-bold tracking-wide text-ink-300 uppercase">
+                <thead className="sticky top-0 bg-ink-900 text-[10px] font-bold tracking-wide text-ink-400 uppercase">
                   <tr>
-                    <th className="px-4 py-2 font-bold">Task</th>
+                    <th className="px-3 py-2 font-bold">Task</th>
                     <th className="px-3 py-2 font-bold">Project</th>
                     <th className="px-3 py-2 font-bold">Assignee</th>
                     <th className="px-3 py-2 font-bold">Status</th>
                     <th className="px-3 py-2 font-bold">Priority</th>
-                    <th className="px-4 py-2 font-bold">Due</th>
+                    <th className="px-3 py-2 font-bold">Due</th>
                   </tr>
                 </thead>
                 <tbody>
                   {taskList.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="px-4 py-10 text-center text-ink-400">
+                      <td colSpan={6} className="px-3 py-8 text-center text-ink-400">
                         No tasks in this view. Open the board to create one.
                       </td>
                     </tr>
                   ) : (
                     taskList.map((t) => {
                       const proj = getProject(t.projectId);
+                      const statusColor =
+                        STATUS_META.find((s) => s.id === t.status)?.color ?? '#80848e';
+                      const priorityColor =
+                        PRIORITY_META.find((p) => p.id === t.priority)?.color ?? '#80848e';
                       return (
                         <tr
                           key={t.id}
-                          className="border-t border-ink-700 transition hover:bg-ink-900/80"
+                          className="border-t border-ink-700 transition hover:bg-ink-900/70"
                         >
-                          <td className="px-4 py-2.5">
+                          <td className="px-3 py-2">
                             <p className="font-semibold text-ink-50">{t.title}</p>
                             <p className="text-[10px] text-ink-400">{t.key}</p>
                           </td>
-                          <td className="px-3 py-2.5 text-ink-200">{proj?.name ?? '—'}</td>
-                          <td className="px-3 py-2.5">
+                          <td className="px-3 py-2 text-ink-200">{proj?.name ?? '—'}</td>
+                          <td className="px-3 py-2">
                             <div className="flex items-center gap-1.5">
                               <UserAvatar
                                 name={t.assigneeName || 'Unassigned'}
@@ -1095,11 +1106,24 @@ export function DashboardPage() {
                               <span className="truncate text-ink-200">{t.assigneeName}</span>
                             </div>
                           </td>
-                          <td className="px-3 py-2.5 capitalize text-ink-200">
-                            {t.status.replace('_', ' ')}
+                          <td className="px-3 py-2">
+                            <span className="inline-flex items-center gap-1 text-[11px] capitalize text-ink-200">
+                              <span
+                                className="h-1.5 w-1.5 rounded-full"
+                                style={{ background: statusColor }}
+                              />
+                              {t.status.replace('_', ' ')}
+                            </span>
                           </td>
-                          <td className="px-3 py-2.5 capitalize text-ink-200">{t.priority}</td>
-                          <td className="px-4 py-2.5 text-ink-300">
+                          <td className="px-3 py-2">
+                            <span
+                              className="text-[11px] font-semibold capitalize"
+                              style={{ color: priorityColor }}
+                            >
+                              {t.priority}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 text-ink-300">
                             {t.dueDate
                               ? new Date(t.dueDate).toLocaleDateString(undefined, {
                                   month: 'short',
@@ -1119,10 +1143,10 @@ export function DashboardPage() {
 
         {/* Users list */}
         <aside className="flex min-h-0 flex-col border-t border-ink-600 bg-ink-800 lg:border-t-0 lg:border-l">
-          <div className="border-b border-ink-600 px-4 py-3">
+          <div className="border-b border-ink-600 px-3 py-2">
             <h2 className="text-sm font-semibold text-ink-50">Users</h2>
-            <p className="text-[11px] text-ink-300">
-              Click to filter tasks · {teamUsers.length} people
+            <p className="text-[10px] text-ink-400">
+              Click to filter · {teamUsers.length} people
             </p>
           </div>
 
@@ -1130,24 +1154,24 @@ export function DashboardPage() {
             type="button"
             onClick={() => setSelectedUserEmail('all')}
             className={cn(
-              'flex items-center gap-2.5 border-b border-ink-700 px-4 py-2.5 text-left text-xs',
+              'flex items-center gap-2 border-b border-ink-700 px-3 py-2 text-left text-xs',
               selectedUserEmail === 'all'
                 ? 'bg-brand-500/10 font-semibold'
                 : 'hover:bg-ink-700',
             )}
           >
-            <span className="flex h-8 w-8 items-center justify-center bg-brand-500 text-[10px] font-bold text-white">
+            <span className="flex h-7 w-7 items-center justify-center rounded-md bg-brand-500 text-[10px] font-bold text-white">
               All
             </span>
             <div>
               <p className="text-ink-50">All users</p>
-              <p className="text-[11px] font-normal text-ink-300">Full workspace view</p>
+              <p className="text-[10px] font-normal text-ink-400">Full workspace</p>
             </div>
           </button>
 
           <ul className="min-h-0 flex-1 overflow-y-auto">
             {teamUsers.length === 0 ? (
-              <li className="px-4 py-8 text-center text-xs text-ink-400">
+              <li className="px-3 py-6 text-center text-xs text-ink-400">
                 Invite members from the board.
               </li>
             ) : (
@@ -1162,7 +1186,7 @@ export function DashboardPage() {
                       type="button"
                       onClick={() => setSelectedUserEmail(u.email.toLowerCase())}
                       className={cn(
-                        'flex w-full items-center gap-2.5 border-b border-ink-700 px-4 py-2.5 text-left',
+                        'flex w-full items-center gap-2 border-b border-ink-700 px-3 py-2 text-left',
                         active ? 'bg-brand-500/10' : 'hover:bg-ink-700',
                       )}
                     >
@@ -1177,8 +1201,7 @@ export function DashboardPage() {
                             : null)
                         }
                         seed={u.email || u.name}
-                        size="md"
-                        className={cn(active && 'ring-2 ring-ink-900 ring-offset-1')}
+                        size="sm"
                       />
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-xs font-semibold text-ink-50">
@@ -1187,8 +1210,8 @@ export function DashboardPage() {
                             <span className="ml-1 font-medium text-ink-400">(you)</span>
                           ) : null}
                         </p>
-                        <p className="truncate text-[11px] text-ink-300">
-                          {u.openCount} open · {u.taskCount} total · {u.role}
+                        <p className="truncate text-[10px] text-ink-400">
+                          {u.openCount} open · {u.taskCount} total
                         </p>
                       </div>
                     </button>
@@ -1198,7 +1221,7 @@ export function DashboardPage() {
             )}
           </ul>
 
-          <div className="border-t border-ink-600 p-3">
+          <div className="border-t border-ink-600 p-2">
             <Link to="/board" className="block">
               <Button size="xs" className="w-full">
                 Open board

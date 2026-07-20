@@ -67,13 +67,10 @@ export function MemberBoardPicker({ members, selectedIds, onToggle, className }:
   }, [open]);
 
   return (
-    <div className={cn('flex items-center gap-3', className)}>
-      <div className="hidden sm:block">
-        <p className="text-[11px] font-bold text-ink-100">Member boards</p>
-        <p className="text-[10px] text-ink-400">
-          {selectedIds.length} selected · click + to pick more
-        </p>
-      </div>
+    <div className={cn('flex items-center gap-1.5', className)}>
+      <p className="hidden text-[10px] font-medium text-ink-400 lg:block">
+        {selectedIds.length} selected
+      </p>
 
       <div className="flex items-center" role="group" aria-label="Member boards">
         {visible.map((m, i) => {
@@ -91,10 +88,10 @@ export function MemberBoardPicker({ members, selectedIds, onToggle, className }:
               onClick={() => onToggle(m.id)}
               style={{ zIndex: i + 1 }}
               className={cn(
-                'relative h-8 w-8 shrink-0 rounded-full p-0 transition',
-                'ring-2 ring-ink-900',
+                'relative h-7 w-7 shrink-0 rounded-full p-0 transition',
+                'ring-2 ring-ink-800',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500',
-                i > 0 && '-ml-2',
+                i > 0 && '-ml-1.5',
                 active
                   ? 'opacity-100'
                   : 'scale-90 opacity-40 grayscale hover:scale-100 hover:opacity-100 hover:grayscale-0',
@@ -106,10 +103,10 @@ export function MemberBoardPicker({ members, selectedIds, onToggle, className }:
                 seed={m.email || m.name}
                 size="md"
                 bare
-                className="!h-8 !w-8 !text-[9px]"
+                className="!h-7 !w-7 !text-[9px]"
               />
               {active ? (
-                <span className="absolute -right-0.5 -bottom-0.5 h-2.5 w-2.5 rounded-full border-2 border-ink-900 bg-brand-500" />
+                <span className="absolute -right-0.5 -bottom-0.5 h-2 w-2 rounded-full border-2 border-ink-800 bg-brand-500" />
               ) : null}
             </button>
           );
@@ -124,8 +121,8 @@ export function MemberBoardPicker({ members, selectedIds, onToggle, className }:
             onClick={() => setOpen((v) => !v)}
             style={{ zIndex: visible.length + 1 }}
             className={cn(
-              'relative -ml-2 flex h-8 w-8 shrink-0 items-center justify-center rounded-full',
-              'border border-ink-500 bg-ink-700 text-[10px] font-bold text-ink-100 ring-2 ring-ink-900',
+              'relative -ml-1.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full',
+              'border border-ink-500 bg-ink-700 text-[10px] font-bold text-ink-100 ring-2 ring-ink-800',
               'transition hover:border-brand-500 hover:bg-brand-500/15 hover:text-brand-600 dark:hover:text-brand-300',
               open && 'border-brand-500 bg-brand-500/20 text-brand-600 dark:text-brand-300',
             )}

@@ -74,7 +74,7 @@ export function DashboardTaskCard({
         onOpen();
       }}
       className={cn(
-        'group cursor-grab select-none rounded-lg border border-ink-600/80 bg-ink-800 p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition',
+        'group cursor-grab select-none rounded-md border border-ink-600/80 bg-ink-800 p-2 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition',
         'hover:border-ink-500 hover:shadow-[0_4px_12px_rgba(15,23,42,0.07)] active:cursor-grabbing',
         dragging && 'scale-[0.98] opacity-45 shadow-none ring-2 ring-brand-500/30',
       )}
@@ -82,7 +82,7 @@ export function DashboardTaskCard({
       <div className="flex items-center justify-between gap-2">
         <span
           className={cn(
-            'inline-flex rounded px-1.5 py-0.5 text-[10px] font-bold tracking-wide uppercase ring-1 ring-inset',
+            'inline-flex rounded px-1.5 py-px text-[9px] font-bold tracking-wide uppercase ring-1 ring-inset',
             typeChip[task.type] ?? 'bg-ink-900 text-ink-200 ring-ink-100',
           )}
         >
@@ -91,17 +91,17 @@ export function DashboardTaskCard({
         <span className="text-[10px] font-semibold text-ink-400">{task.key}</span>
       </div>
 
-      <p className="mt-2 text-[13px] leading-snug font-semibold text-ink-50 group-hover:text-ink-50">
+      <p className="mt-1.5 line-clamp-2 text-xs leading-snug font-semibold text-ink-50">
         {task.title}
       </p>
 
       {task.description ? (
-        <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-ink-300">
+        <p className="mt-0.5 line-clamp-1 text-[11px] leading-snug text-ink-300">
           {task.description}
         </p>
       ) : null}
 
-      <div className="mt-3 flex items-center justify-between gap-2 border-t border-ink-700 pt-2.5">
+      <div className="mt-2 flex items-center justify-between gap-2 border-t border-ink-700/80 pt-1.5">
         <div className="flex min-w-0 items-center gap-1.5">
           <UserAvatar
             name={task.assigneeName || 'Unassigned'}
@@ -109,11 +109,11 @@ export function DashboardTaskCard({
             seed={task.assigneeName || task.id}
             size="xs"
           />
-          <span className="truncate text-[11px] font-medium text-ink-200">{task.assigneeName}</span>
+          <span className="truncate text-[10px] font-medium text-ink-200">{task.assigneeName}</span>
         </div>
         <span
           className={cn(
-            'shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold capitalize',
+            'shrink-0 rounded px-1 py-px text-[9px] font-bold capitalize',
             priorityChip[task.priority] ?? 'bg-ink-900 text-ink-300',
           )}
         >

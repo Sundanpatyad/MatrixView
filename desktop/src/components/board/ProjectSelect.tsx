@@ -16,6 +16,10 @@ type Props = {
   onChange: (id: string) => void;
   className?: string;
   placeholder?: string;
+  /** Slim trigger for board chrome — text + chevron only */
+  compact?: boolean;
+  /** Hide the project avatar inside the trigger */
+  hideAvatar?: boolean;
 };
 
 export function ProjectSelect({
@@ -24,6 +28,8 @@ export function ProjectSelect({
   onChange,
   className,
   placeholder = 'Select project',
+  compact = false,
+  hideAvatar = false,
 }: Props) {
   const id = useId();
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -89,30 +95,47 @@ export function ProjectSelect({
         disabled={projects.length === 0}
         onClick={() => setOpen((v) => !v)}
         className={cn(
-          'inline-flex w-full min-w-0 max-w-none items-center justify-between gap-3 rounded-xl border border-ink-600 bg-ink-900 px-3 py-2 text-left transition sm:min-w-[200px] sm:max-w-xs sm:w-auto',
+          'inline-flex min-w-0 items-center justify-between text-left transition',
           'hover:border-ink-500 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/15',
           'disabled:cursor-not-allowed disabled:opacity-45',
           open && 'border-brand-500 ring-2 ring-brand-500/15',
+          compact
+            ? 'w-auto max-w-full gap-1 rounded-md border-0 bg-transparent px-0 py-0.5 focus:ring-0'
+            : 'w-full max-w-none gap-3 rounded-xl border border-ink-600 bg-ink-900 px-3 py-2 sm:min-w-[200px] sm:max-w-xs sm:w-auto',
           className,
         )}
       >
-        <span className="flex min-w-0 items-center gap-2.5">
+        <span className={cn('flex min-w-0 items-center', compact ? 'gap-1.5' : 'gap-2.5')}>
           {selected ? (
             <>
-              <ProjectAvatar
-                name={selected.name}
-                avatarUrl={selected.avatarUrl}
-                size="sm"
-                className="!rounded-lg"
-              />
+              {!hideAvatar && !compact ? (
+                <ProjectAvatar
+                  name={selected.name}
+                  avatarUrl={selected.avatarUrl}
+                  size="sm"
+                  className="!rounded-lg"
+                />
+              ) : null}
               <span className="min-w-0">
-                <span className="block truncate text-sm font-semibold text-ink-50">
+                <span
+                  className={cn(
+                    'block truncate font-semibold text-ink-50',
+                    compact ? 'text-sm' : 'text-sm',
+                  )}
+                >
                   {selected.name}
                 </span>
-                <span className="mt-0.5 block truncate text-[10px] font-bold tracking-wide text-ink-400 uppercase">
+                {!compact ? (
+                  <span className="mt-0.5 block truncate text-[10px] font-bold tracking-wide text-ink-400 uppercase">
+                    {selected.key}
+                  </span>
+                ) : null}
+              </span>
+              {compact ? (
+                <span className="shrink-0 rounded border border-ink-600 px-1 py-px text-[9px] font-bold tracking-wide text-ink-400 uppercase">
                   {selected.key}
                 </span>
-              </span>
+              ) : null}
             </>
           ) : (
             <span className="text-sm font-medium text-ink-400">{placeholder}</span>
@@ -120,8 +143,14 @@ export function ProjectSelect({
         </span>
         <span
           className={cn(
-            'flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-ink-800 text-[10px] text-ink-300 transition',
-            open && 'rotate-180 bg-brand-500/15 text-brand-600 dark:text-brand-300',
+            'flex shrink-0 items-center justify-center text-[10px] text-ink-300 transition',
+            compact
+              ? 'h-5 w-5 rounded text-ink-400'
+              : 'h-6 w-6 rounded-md bg-ink-800',
+            open &&
+              (compact
+                ? 'rotate-180 text-brand-500'
+                : 'rotate-180 bg-brand-500/15 text-brand-600 dark:text-brand-300'),
           )}
           aria-hidden
         >

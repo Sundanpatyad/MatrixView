@@ -402,7 +402,7 @@ export function BoardWorkspacePage() {
     <div className="relative flex h-full min-h-0 overflow-hidden">
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Toolbar */}
-        <div className="flex flex-wrap items-center gap-1.5 border-b border-ink-600 bg-ink-800 px-3 py-2 sm:px-4">
+        <div className="flex shrink-0 flex-wrap items-center gap-1.5 border-b border-ink-600 bg-ink-800 px-3 py-1.5 sm:px-4">
           <div className="flex items-center gap-1 rounded-lg border border-ink-600 bg-ink-900/80 p-0.5">
             {!checkedIn ? (
               <Button size="xs" onClick={() => void checkIn()}>
@@ -506,7 +506,6 @@ export function BoardWorkspacePage() {
               variant="secondary"
               disabled={!project}
               onClick={() => setMembersPanelOpen(true)}
-              className="lg:hidden"
               title="Project & members"
             >
               <IconUsers className="h-3.5 w-3.5" />
@@ -526,15 +525,15 @@ export function BoardWorkspacePage() {
           </div>
         </div>
 
-        {/* Project overview + filters */}
-        <div className="border-b border-ink-600 bg-ink-800 px-3 py-3 sm:px-4">
-          {project ? (
-            <div className="flex flex-col gap-3 border-b border-ink-600/80 pb-3 lg:flex-row lg:items-center lg:justify-between">
-              <div className="flex min-w-0 items-start gap-3">
+        {/* Compact chrome — fixed; board below fills remaining viewport */}
+        <div className="shrink-0 border-b border-ink-600 bg-ink-800 px-3 py-1.5 sm:px-4">
+            {/* Single compact row: avatar + switcher + viewing + members */}
+            <div className="mb-1.5 flex items-center gap-2">
+              {project ? (
                 <ProjectAvatar
                   name={project.name}
                   avatarUrl={project.avatarUrl}
-                  size="md"
+                  size="sm"
                   editable={canEditColumns}
                   busy={avatarBusy}
                   onUpload={async (file) => {
@@ -554,30 +553,24 @@ export function BoardWorkspacePage() {
                     }
                   }}
                 />
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h1 className="truncate text-base font-bold text-ink-50">{project.name}</h1>
-                    <span className="rounded-md border border-brand-500/25 bg-brand-500/10 px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-brand-600 uppercase dark:text-brand-300">
-                      {project.key}
-                    </span>
-                  </div>
-                  <p className="mt-0.5 max-w-2xl truncate text-xs text-ink-300">
-                    {project.description || 'Organize, assign, and track work across the team.'}
+              ) : null}
+              <div className="min-w-0 flex-1">
+                <ProjectSelect
+                  projects={projects}
+                  value={projectId}
+                  onChange={selectProject}
+                  placeholder="Select project"
+                  compact
+                  hideAvatar
+                  className="max-w-full"
+                />
+                {boardLabel ? (
+                  <p className="truncate text-[10px] text-ink-400">
+                    Viewing <span className="text-ink-200">{boardLabel}</span>
                   </p>
-                  {canEditColumns ? (
-                    <p className="mt-1 hidden text-[10px] font-medium text-ink-400 sm:block">
-                      Click the image to add, change, or remove
-                    </p>
-                  ) : null}
-                  {boardLabel ? (
-                    <p className="mt-1 text-[11px] font-medium text-ink-400">
-                      Viewing <span className="text-ink-200">{boardLabel}</span>
-                    </p>
-                  ) : null}
-                </div>
+                ) : null}
               </div>
-
-              <div className="hidden shrink-0 items-center gap-3 rounded-xl border border-ink-600 bg-ink-900/70 px-3 py-2 md:flex">
+              <div className="hidden shrink-0 sm:block">
                 <MemberBoardPicker
                   members={members}
                   selectedIds={boardMemberIds}
@@ -585,19 +578,11 @@ export function BoardWorkspacePage() {
                 />
               </div>
             </div>
-          ) : null}
 
-          <div className="flex flex-col gap-2 pt-3">
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_auto]">
-              <ProjectSelect
-                projects={projects}
-                value={projectId}
-                onChange={selectProject}
-                placeholder="Select project"
-                className="w-full min-w-0 max-w-none"
-              />
+            {/* Filters — one horizontal strip (scrolls on narrow screens) */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {hasTeams ? (
-                <div className="min-w-0 sm:max-w-[200px]">
+                <div className="w-[120px] shrink-0">
                   <Select
                     size="xs"
                     value={teamFilter}
@@ -611,16 +596,13 @@ export function BoardWorkspacePage() {
                   />
                 </div>
               ) : null}
-            </div>
-
-            <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
-              <label className="relative col-span-2 min-w-0 flex-1 sm:min-w-44 sm:max-w-xs">
+              <label className="relative min-w-[140px] flex-1 sm:max-w-[180px]">
                 <svg
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
                   strokeWidth="2"
-                  className="pointer-events-none absolute top-1/2 left-3 h-3.5 w-3.5 -translate-y-1/2 text-ink-400"
+                  className="pointer-events-none absolute top-1/2 left-2 h-3.5 w-3.5 -translate-y-1/2 text-ink-400"
                   aria-hidden
                 >
                   <circle cx="11" cy="11" r="7" />
@@ -629,14 +611,14 @@ export function BoardWorkspacePage() {
                 <input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search tasks…"
-                  className="h-9 w-full rounded-lg border border-ink-600 bg-ink-900 pr-3 pl-9 text-xs text-ink-50 outline-none transition placeholder:text-ink-400 hover:border-ink-500 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/15"
+                  placeholder="Search…"
+                  className="h-7 w-full rounded-md border border-ink-600 bg-ink-900 pr-2 pl-7 text-xs text-ink-50 outline-none placeholder:text-ink-400 focus:border-brand-500"
                 />
               </label>
-              <div className="min-w-0 sm:w-[120px]">
+              <div className="w-[88px] shrink-0">
                 <Select
-                  size="sm"
-                  className="rounded-lg bg-ink-900"
+                  size="xs"
+                  className="rounded-md bg-ink-900"
                   value={typeFilter}
                   onChange={(v) => setTypeFilter(v as TaskType | 'all')}
                   options={[
@@ -646,10 +628,10 @@ export function BoardWorkspacePage() {
                   aria-label="Filter by type"
                 />
               </div>
-              <div className="min-w-0 sm:w-[120px]">
+              <div className="w-[88px] shrink-0">
                 <Select
-                  size="sm"
-                  className="rounded-lg bg-ink-900"
+                  size="xs"
+                  className="rounded-md bg-ink-900"
                   value={priorityFilter}
                   onChange={(v) => setPriorityFilter(v as TaskPriority | 'all')}
                   options={[
@@ -659,10 +641,10 @@ export function BoardWorkspacePage() {
                   aria-label="Filter by priority"
                 />
               </div>
-              <div className="col-span-2 min-w-0 sm:col-span-1 sm:w-[120px]">
+              <div className="w-[88px] shrink-0">
                 <Select
-                  size="sm"
-                  className="rounded-lg bg-ink-900"
+                  size="xs"
+                  className="rounded-md bg-ink-900"
                   value={statusFilter}
                   onChange={setStatusFilter}
                   options={[
@@ -673,44 +655,55 @@ export function BoardWorkspacePage() {
                 />
               </div>
             </div>
-          </div>
         </div>
 
-        {/* Board — horizontal scroll of fixed-width columns */}
-        <div className="min-h-0 flex-1 overflow-auto p-2 sm:p-3">
-          {!project ? (
-            <div className="flex h-full flex-col items-center justify-center rounded-xl border border-dashed border-ink-500 bg-ink-800 px-6 py-12 text-center">
-              <p className="text-sm font-semibold text-ink-50">Create a project to begin</p>
-              <Button className="mt-4" size="sm" onClick={() => setShowCreateProject(true)}>
-                New project
-              </Button>
-            </div>
-          ) : (
-            <div className="flex h-full min-h-[380px] gap-3">
-              {columns.map((col, idx) => {
-                const count = (byStatus[col.id] ?? []).length;
-                const accents = [
-                  'bg-ink-400',
-                  'bg-[#f0b232]',
-                  'bg-[#00a8fc]',
-                  'bg-[#23a559]',
-                  'bg-brand-500',
-                ];
-                const renaming = editingColumnId === col.id;
-                return (
-                  <section
-                    key={col.id}
-                    onDragOver={(e) => allowDrop(e, col.id)}
-                    onDragEnter={(e) => allowDrop(e, col.id)}
-                    onDragLeave={(e) => leaveColumn(e, col.id)}
-                    onDrop={(e) => void handleDrop(e, col.id)}
-                    className={cn(
-                      'flex h-full min-h-0 w-[min(85vw,280px)] shrink-0 flex-col rounded-xl border border-ink-600/90 bg-ink-900 transition sm:w-[260px]',
-                      dropTarget === col.id &&
-                        'border-brand-600 bg-brand-50/40 ring-2 ring-brand-600/20',
-                    )}
-                  >
-                    <div className="flex shrink-0 items-center justify-between gap-1 px-3 pt-3 pb-2">
+        {/* Board fills remaining viewport — each column scrolls cards when needed */}
+        <div className="min-h-0 flex-1 overflow-hidden p-1.5 sm:p-2">
+            {!project ? (
+              <div className="flex h-full flex-col items-center justify-center rounded-xl border border-dashed border-ink-500 bg-ink-800 px-6 py-12 text-center">
+                <p className="text-sm font-semibold text-ink-50">Create a project to begin</p>
+                <Button className="mt-4" size="sm" onClick={() => setShowCreateProject(true)}>
+                  New project
+                </Button>
+              </div>
+            ) : (
+              <div
+                className={cn(
+                  'flex h-full min-h-0 gap-2 overflow-x-auto overflow-y-hidden sm:gap-2.5',
+                  columns.length <= 6 && 'md:overflow-x-hidden',
+                )}
+              >
+                {columns.map((col, idx) => {
+                  const count = (byStatus[col.id] ?? []).length;
+                  const accents = [
+                    'bg-ink-400',
+                    'bg-[#f0b232]',
+                    'bg-[#00a8fc]',
+                    'bg-[#23a559]',
+                    'bg-brand-500',
+                  ];
+                  const renaming = editingColumnId === col.id;
+                  const fillWidth = columns.length <= 6;
+                  return (
+                    <section
+                      key={col.id}
+                      onDragOver={(e) => allowDrop(e, col.id)}
+                      onDragEnter={(e) => allowDrop(e, col.id)}
+                      onDragLeave={(e) => leaveColumn(e, col.id)}
+                      onDrop={(e) => void handleDrop(e, col.id)}
+                      className={cn(
+                        'flex h-full min-h-0 flex-col rounded-lg border border-ink-600/90 bg-ink-900 transition',
+                        // Mobile: swipe one column at a time
+                        'w-[min(82vw,250px)] shrink-0',
+                        // Desktop: ≤6 share full width equally; >6 show 6 then scroll
+                        fillWidth
+                          ? 'md:w-auto md:min-w-0 md:flex-1 md:shrink'
+                          : 'md:w-[calc((100%-5*0.625rem)/6)] md:min-w-[calc((100%-5*0.625rem)/6)] md:shrink-0',
+                        dropTarget === col.id &&
+                          'border-brand-600 bg-brand-50/40 ring-2 ring-brand-600/20',
+                      )}
+                    >
+                    <div className="flex shrink-0 items-center justify-between gap-1 px-2 pt-2 pb-1">
                       <div className="flex min-w-0 flex-1 items-center gap-2">
                         <span
                           className={cn(
@@ -785,7 +778,7 @@ export function BoardWorkspacePage() {
                       </div>
                     </div>
                     <div
-                      className="flex min-h-[120px] flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2"
+                      className="min-h-0 flex-1 space-y-1.5 overflow-y-auto overscroll-contain px-1.5 pb-1.5"
                       onDragOver={(e) => allowDrop(e, col.id)}
                       onDrop={(e) => void handleDrop(e, col.id)}
                     >
@@ -806,7 +799,7 @@ export function BoardWorkspacePage() {
                         />
                       ))}
                       {count === 0 ? (
-                        <div className="flex flex-1 items-center justify-center rounded-lg border border-dashed border-ink-600 bg-ink-800/50 px-3 py-8">
+                        <div className="flex min-h-[6rem] flex-1 items-center justify-center rounded-lg border border-dashed border-ink-600 bg-ink-800/50 px-3 py-4">
                           <p className="text-center text-[11px] font-medium text-ink-400">
                             Drop tasks here
                           </p>
@@ -825,19 +818,17 @@ export function BoardWorkspacePage() {
         <button
           type="button"
           aria-label="Close members panel"
-          className="absolute inset-0 z-30 bg-black/50 lg:hidden"
+          className="absolute inset-0 z-30 bg-black/50"
           onClick={() => setMembersPanelOpen(false)}
         />
       ) : null}
 
       <aside
         className={cn(
-          'flex w-[min(18rem,92vw)] shrink-0 flex-col border-l border-ink-600 bg-ink-800',
-          'absolute inset-y-0 right-0 z-40 shadow-xl transition-transform duration-200 ease-out',
-          'lg:static lg:z-auto lg:w-60 lg:translate-x-0 lg:shadow-none lg:pointer-events-auto',
+          'absolute inset-y-0 right-0 z-40 flex w-[min(18rem,92vw)] flex-col border-l border-ink-600 bg-ink-800 shadow-xl transition-transform duration-200 ease-out sm:w-60',
           membersPanelOpen
-            ? 'translate-x-0'
-            : 'pointer-events-none translate-x-full max-lg:translate-x-full',
+            ? 'translate-x-0 pointer-events-auto'
+            : 'pointer-events-none translate-x-full',
         )}
       >
         <div className="border-b border-ink-600 px-3 py-3">
@@ -858,7 +849,7 @@ export function BoardWorkspacePage() {
                 type="button"
                 aria-label="Close"
                 onClick={() => setMembersPanelOpen(false)}
-                className="flex h-7 w-7 items-center justify-center rounded-md text-ink-400 hover:bg-ink-700 hover:text-ink-100 lg:hidden"
+                className="flex h-7 w-7 items-center justify-center rounded-md text-ink-400 hover:bg-ink-700 hover:text-ink-100"
               >
                 <IconX className="h-4 w-4" />
               </button>

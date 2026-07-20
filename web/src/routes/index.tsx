@@ -23,8 +23,100 @@ import {
   Code2,
 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { motion, useReducedMotion } from "motion/react";
+import {
+  motion,
+  AnimatePresence,
+  animate,
+  useReducedMotion,
+  useMotionValue,
+  useTransform,
+  useSpring,
+} from "motion/react";
 import { ThemeToggle } from "../components/ThemeToggle";
+
+/** Ticks up once a second from a seed value; purely presentational, resets on remount. */
+function useLiveTimer(seedSeconds: number) {
+  const [seconds, setSeconds] = useState(seedSeconds);
+  useEffect(() => {
+    const id = setInterval(() => setSeconds((s) => s + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  return [h, m, s].map((n) => String(n).padStart(2, "0")).join(":");
+}
+
+/** Counts a "<20s" / "78%" / "42"-style label up from zero once it enters the viewport. */
+function CountUp({ value, className }: { value: string; className?: string }) {
+  const reduce = useReducedMotion();
+  const match = value.match(/^(\D*)(\d+)(.*)$/);
+  const started = useRef(false);
+  const [display, setDisplay] = useState(value);
+
+  if (!match) {
+    return <span className={className}>{value}</span>;
+  }
+  const [, prefix, digits, suffix] = match;
+  const target = parseInt(digits, 10);
+
+  return (
+    <motion.span
+      className={className}
+      viewport={{ once: true, amount: 0.6 }}
+      onViewportEnter={() => {
+        if (started.current) return;
+        started.current = true;
+        if (reduce) {
+          setDisplay(value);
+          return;
+        }
+        animate(0, target, {
+          duration: 1.1,
+          ease: [0.16, 1, 0.3, 1],
+          onUpdate: (v) => setDisplay(`${prefix}${Math.round(v)}${suffix}`),
+        });
+      }}
+    >
+      {display}
+    </motion.span>
+  );
+}
+
+/** Mouse-tracked 3D tilt for the hero product shot; inert on touch and under reduced motion. */
+function TiltCard({ children }: { children: ReactNode }) {
+  const reduce = useReducedMotion();
+  const x = useMotionValue(0);
+  const y = useMotionValue(0);
+  const rotateX = useSpring(useTransform(y, [-0.5, 0.5], [8, -8]), {
+    stiffness: 150,
+    damping: 22,
+  });
+  const rotateY = useSpring(useTransform(x, [-0.5, 0.5], [-8, 8]), {
+    stiffness: 150,
+    damping: 22,
+  });
+
+  if (reduce) return <>{children}</>;
+
+  return (
+    <motion.div
+      style={{ rotateX, rotateY, transformPerspective: 1400 }}
+      onMouseMove={(e) => {
+        const rect = e.currentTarget.getBoundingClientRect();
+        x.set((e.clientX - rect.left) / rect.width - 0.5);
+        y.set((e.clientY - rect.top) / rect.height - 0.5);
+      }}
+      onMouseLeave={() => {
+        x.set(0);
+        y.set(0);
+      }}
+      className="will-change-transform"
+    >
+      {children}
+    </motion.div>
+  );
+}
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -263,6 +355,7 @@ function Nav() {
 /* ============ Desktop App Mockup (hero) ============ */
 
 function DesktopMockup() {
+  const timer = useLiveTimer(24138);
   return (
     <div className="relative">
       {/* window chrome */}
@@ -280,7 +373,7 @@ function DesktopMockup() {
           <div className="hidden items-center gap-2 sm:flex">
             <StatusPill state="in" />
             <div className="tabular rounded-md border border-ink-600 bg-ink-800 px-2.5 py-1 text-[13px] font-semibold text-ink-100">
-              06:42:18
+              {timer}
             </div>
             <button className="rounded-md border border-status-break/30 bg-status-break/15 px-2.5 py-1 text-[12px] font-semibold text-status-break">
               Break
@@ -325,7 +418,7 @@ function DesktopMockup() {
                 Session
               </div>
               <div className="tabular mt-1 text-[18px] font-bold text-ink-50">
-                06:42:18
+                {timer}
               </div>
               <div className="mt-2 flex items-center gap-1.5 text-[11px] text-ink-300">
                 <span className="pulse-dot h-1.5 w-1.5 rounded-full bg-status-in" />
@@ -352,7 +445,7 @@ function DesktopMockup() {
                     {k}
                   </div>
                   <div className="tabular mt-1 text-2xl font-semibold text-ink-50">
-                    {v}
+                    <CountUp value={v} />
                   </div>
                 </div>
               ))}
@@ -456,7 +549,7 @@ function DesktopMockup() {
           Checked in · Focus mode
         </div>
         <div className="tabular mt-1 text-lg font-bold text-ink-50">
-          06:42:18
+          {timer}
         </div>
       </div>
 
@@ -523,10 +616,11 @@ function Hero() {
       <div className="grid-overlay absolute inset-0 -z-10 opacity-60" />
       <div className="mx-auto max-w-7xl px-4 pb-20 pt-16 sm:px-6 lg:px-8 lg:pt-24">
         <div className="grid gap-14 lg:grid-cols-12 lg:gap-10">
-          <div className="lg:col-span-5">
+          <div className="lg:col-span-6">
             <EyebrowChip>Desktop Agent · Enterprise Work OS</EyebrowChip>
-            <h1 className="mt-5 font-display text-4xl font-semibold leading-[1.08] tracking-tight text-ink-50 sm:text-5xl lg:text-6xl">
-              Capture work at the desk.{" "}
+            <h1 className="mt-5 font-display text-3xl font-semibold leading-[1.15] tracking-tight text-ink-50 sm:text-4xl">
+              Capture work at the desk.
+              <br />
               <span className="text-brand-400">Decide from the dashboard.</span>
             </h1>
             <p className="mt-6 max-w-xl text-lg leading-relaxed text-ink-200">
@@ -541,7 +635,7 @@ function Hero() {
             </div>
           </div>
 
-          <div className="lg:col-span-7">
+          <div className="lg:col-span-6">
             <DesktopMockup />
           </div>
         </div>
@@ -617,6 +711,7 @@ type BentoTile = {
 };
 
 function FeatureGrid() {
+  const attendanceTimer = useLiveTimer(24138);
   const tiles: BentoTile[] = [
     {
       span: "lg:col-span-2",
@@ -631,7 +726,7 @@ function FeatureGrid() {
               Live session
             </div>
             <div className="tabular mt-1 text-3xl font-semibold text-ink-50">
-              06:42:18
+              {attendanceTimer}
             </div>
           </div>
           <span className="grid h-12 w-12 place-items-center rounded-full bg-brand-500 text-white shadow-lg ring-4 ring-brand-500/20">
@@ -667,20 +762,7 @@ function FeatureGrid() {
       icon: MessageSquare,
       title: "Chat without switching apps.",
       body: "DMs, group chats, and read receipts, built into the workday.",
-      content: (
-        <div className="mt-5 space-y-2">
-          <div className="max-w-[85%] rounded-2xl rounded-tl-sm bg-ink-600 px-3 py-2 text-[12px] text-ink-100">
-            Pushed the new radius tokens, review when you can.
-          </div>
-          <div className="ml-auto max-w-[85%] rounded-2xl rounded-tr-sm bg-brand-500 px-3 py-2 text-[12px] text-white">
-            Merging now.
-          </div>
-          <div className="flex items-center gap-2 rounded-full border border-ink-600 bg-ink-900/30 px-3 py-1.5 text-[12px] text-ink-400">
-            <span className="flex-1">Message #design-guild</span>
-            <Send className="h-3.5 w-3.5 text-brand-400" />
-          </div>
-        </div>
-      ),
+      content: <AnimatedChat />,
     },
     {
       span: "lg:col-span-2",
@@ -723,7 +805,9 @@ function FeatureGrid() {
               <div className="text-[10px] font-semibold uppercase tracking-wider text-ink-400">
                 {k}
               </div>
-              <div className="tabular mt-1 text-xl font-semibold text-ink-50">{v}</div>
+              <div className="tabular mt-1 text-xl font-semibold text-ink-50">
+                <CountUp value={v} />
+              </div>
             </div>
           ))}
         </div>
