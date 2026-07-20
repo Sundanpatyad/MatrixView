@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "allow-activity-tracking"
+description = "Allow reading the foreground application for activity tracking"
+commands.allow = ["get_foreground_app", "tracking_available"]
