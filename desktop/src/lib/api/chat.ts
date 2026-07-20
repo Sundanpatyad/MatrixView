@@ -44,15 +44,32 @@ export type ChatReplyPreview = {
   deleted: boolean;
 };
 
+export type ChatCallOutcome =
+  | 'answered'
+  | 'missed'
+  | 'rejected'
+  | 'cancelled'
+  | 'failed';
+
+export type ChatCallMeta = {
+  callId: string;
+  outcome: ChatCallOutcome;
+  mediaKind?: 'audio' | 'video';
+  durationSeconds: number;
+  initiatedBy: string;
+};
+
 export type ChatMessage = {
   id: string;
   conversationId: string;
   senderId: string;
   senderName: string;
   senderAvatarUrl?: string | null;
+  type?: 'text' | 'call';
   body: string;
   replyTo: ChatReplyPreview | null;
   attachments: ChatAttachment[];
+  call?: ChatCallMeta | null;
   status?: MessageDeliveryStatus;
   /** Present while uploading / offline-queued / failed locally */
   localState?: MessageLocalState | null;
@@ -143,9 +160,13 @@ export function removeGroupMember(
 
 export function listMessages(
   conversationId: string,
-  opts?: { after?: string },
-): Promise<{ messages: ChatMessage[] }> {
-  const q = opts?.after ? `?after=${encodeURIComponent(opts.after)}` : '';
+  opts?: { after?: string; before?: string; limit?: number },
+): Promise<{ messages: ChatMessage[]; hasMore?: boolean }> {
+  const params = new URLSearchParams();
+  if (opts?.after) params.set('after', opts.after);
+  if (opts?.before) params.set('before', opts.before);
+  if (opts?.limit != null) params.set('limit', String(opts.limit));
+  const q = params.toString() ? `?${params.toString()}` : '';
   return apiFetch(`/api/chat/conversations/${conversationId}/messages${q}`, {
     auth: true,
   });

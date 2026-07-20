@@ -116,7 +116,7 @@ function AttachmentList({
 
 export function TaskDetailModal({ task, projectName, columns, onClose }: Props) {
   const { user } = useAuth();
-  const { getProject, updateTask, addComment, addTaskAttachments, removeTaskAttachment, getTask } =
+  const { getProject, getProjectTeams, updateTask, addComment, addTaskAttachments, removeTaskAttachment, getTask } =
     useWorkspace();
   const liveTask = getTask(task.id) ?? task;
   const [comment, setComment] = useState('');
@@ -127,6 +127,7 @@ export function TaskDetailModal({ task, projectName, columns, onClose }: Props) 
   const commentFileRef = useRef<HTMLInputElement>(null);
 
   const project = getProject(liveTask.projectId);
+  const teams = getProjectTeams(liveTask.projectId);
   const members = project?.members ?? [];
   const typeMeta = TASK_TYPES.find((t) => t.id === liveTask.type);
 
@@ -456,6 +457,23 @@ export function TaskDetailModal({ task, projectName, columns, onClose }: Props) 
                 />
               </div>
             </div>
+
+            {teams.length > 0 ? (
+              <div>
+                <p className={labelClass}>Team</p>
+                <div className="mt-1">
+                  <Select
+                    value={liveTask.teamId ?? ''}
+                    onChange={(v) => patch({ teamId: v || null })}
+                    options={[
+                      { value: '', label: 'Project-wide' },
+                      ...teams.map((t) => ({ value: t.id, label: t.name })),
+                    ]}
+                    aria-label="Team"
+                  />
+                </div>
+              </div>
+            ) : null}
 
             <div>
               <p className={labelClass}>Assignee</p>

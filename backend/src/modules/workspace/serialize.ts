@@ -85,6 +85,7 @@ export function serializeTask(doc: TaskDoc) {
     startDate: doc.startDate ?? '',
     endDate: doc.endDate ?? '',
     dueDate: doc.dueDate ?? '',
+    teamId: doc.teamId ? String(doc.teamId) : null,
     comments: (doc.comments ?? []).map((c) => ({
       id: c.id,
       authorId: c.authorId ?? '',
@@ -95,6 +96,24 @@ export function serializeTask(doc: TaskDoc) {
       attachments: (c.attachments ?? []).map(mapAttachment),
     })),
     attachments: (doc.attachments ?? []).map(mapAttachment),
+    createdAt: iso(doc.createdAt),
+    updatedAt: iso(doc.updatedAt),
+  };
+}
+
+export function serializeTeam(doc: {
+  _id: unknown;
+  projectId: unknown;
+  name: string;
+  memberIds?: string[] | null;
+  createdAt?: Date | string;
+  updatedAt?: Date | string;
+}) {
+  return {
+    id: String(doc._id),
+    projectId: String(doc.projectId),
+    name: doc.name,
+    memberIds: [...(doc.memberIds ?? [])],
     createdAt: iso(doc.createdAt),
     updatedAt: iso(doc.updatedAt),
   };

@@ -30,6 +30,102 @@ export type MessageStatusUpdate = {
   }>;
 };
 
+export type CallIncomingPayload = {
+  callId: string;
+  conversationId: string;
+  fromUserId: string;
+  fromName: string;
+  mediaKind?: 'audio' | 'video';
+  isGroup?: boolean;
+  conversationName?: string;
+};
+
+export type CallAcceptedPayload = {
+  callId: string;
+  conversationId: string;
+  fromUserId: string;
+};
+
+export type CallSdpPayload = {
+  callId: string;
+  conversationId: string;
+  fromUserId: string;
+  fromName?: string;
+  sdp: RTCSessionDescriptionInit;
+};
+
+export type CallIcePayload = {
+  callId: string;
+  conversationId: string;
+  fromUserId: string;
+  candidate: RTCIceCandidateInit | null;
+};
+
+export type CallEndedPayload = {
+  callId: string;
+  conversationId: string;
+  fromUserId: string;
+  reason?: string;
+};
+
+export type CallPeerJoinedPayload = {
+  callId: string;
+  conversationId: string;
+  userId: string;
+  name: string;
+};
+
+export type CallPeerLeftPayload = {
+  callId: string;
+  conversationId: string;
+  userId: string;
+  reason?: string;
+};
+
+export type CallRoomPayload = {
+  conversationId: string;
+  active: boolean;
+  room: {
+    callId: string;
+    conversationId: string;
+    mediaKind: 'audio' | 'video';
+    initiatedBy: string;
+    participantCount: number;
+    participants: Array<{ userId: string; name: string }>;
+    members?: Array<{ userId: string; name: string | null; joined: boolean }>;
+    raisedHands?: string[];
+    spotlightUserId?: string | null;
+  } | null;
+};
+
+export type CallScreenPayload = {
+  callId: string;
+  conversationId: string;
+  fromUserId: string;
+  active: boolean;
+};
+
+export type CallHandPayload = {
+  callId: string;
+  conversationId: string;
+  fromUserId: string;
+  raised: boolean;
+};
+
+export type CallReactionPayload = {
+  callId: string;
+  conversationId: string;
+  fromUserId: string;
+  emoji: string;
+};
+
+export type CallSpotlightPayload = {
+  callId: string;
+  conversationId: string;
+  fromUserId: string;
+  targetUserId: string | null;
+};
+
 type Handlers = {
   onPresenceSnapshot?: (users: PresenceUser[]) => void;
   onPresenceUpdate?: (user: PresenceUser) => void;
@@ -40,16 +136,67 @@ type Handlers = {
   onTyping?: (update: TypingUpdate) => void;
   onConversationUpsert?: (conversation: ChatConversation) => void;
   onConversationRemoved?: (conversationId: string) => void;
+  onCallIncoming?: (payload: CallIncomingPayload) => void;
+  onCallAccepted?: (payload: CallAcceptedPayload) => void;
+  onCallOffer?: (payload: CallSdpPayload) => void;
+  onCallAnswer?: (payload: CallSdpPayload) => void;
+  onCallIce?: (payload: CallIcePayload) => void;
+  onCallEnded?: (payload: CallEndedPayload) => void;
+  onCallPeerJoined?: (payload: CallPeerJoinedPayload) => void;
+  onCallPeerLeft?: (payload: CallPeerLeftPayload) => void;
+  onCallRoom?: (payload: CallRoomPayload) => void;
+  onCallScreen?: (payload: CallScreenPayload) => void;
+  onCallHand?: (payload: CallHandPayload) => void;
+  onCallReaction?: (payload: CallReactionPayload) => void;
+  onCallSpotlight?: (payload: CallSpotlightPayload) => void;
   onConnect?: () => void;
   onDisconnect?: () => void;
 };
 
 let socket: Socket | null = null;
 let handlers: Handlers = {};
+let connectInFlight: Promise<Socket | null> | null = null;
+
+function delay(ms: number) {
+  return new Promise<void>((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
+function waitForConnect(s: Socket, timeoutMs: number): Promise<boolean> {
+  if (s.connected) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (ok: boolean) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timer);
+      s.off('connect', onConnect);
+      s.off('connect_error', onError);
+      resolve(ok);
+    };
+    const onConnect = () => finish(true);
+    const onError = () => {
+      /* keep waiting until timeout — socket.io will retry */
+    };
+    const timer = window.setTimeout(() => finish(s.connected), timeoutMs);
+    s.once('connect', onConnect);
+    s.on('connect_error', onError);
+  });
+}
+
+async function refreshSocketAuth() {
+  const next = peekAccessToken() || (await refreshApiAccessToken());
+  if (next && socket) socket.auth = { token: next };
+  return next;
+}
 
 function bindSocket(s: Socket) {
   s.on('connect', () => handlers.onConnect?.());
   s.on('disconnect', () => handlers.onDisconnect?.());
+  s.on('connect_error', () => {
+    void refreshSocketAuth();
+  });
 
   s.on('presence:snapshot', (payload: { users: PresenceUser[] }) => {
     handlers.onPresenceSnapshot?.(payload.users ?? []);
@@ -78,50 +225,165 @@ function bindSocket(s: Socket) {
   s.on('conversation:removed', (payload: { conversationId: string }) => {
     if (payload?.conversationId) handlers.onConversationRemoved?.(payload.conversationId);
   });
+  s.on('call:incoming', (payload: CallIncomingPayload) => {
+    if (payload?.callId) handlers.onCallIncoming?.(payload);
+  });
+  s.on('call:accepted', (payload: CallAcceptedPayload) => {
+    if (payload?.callId) handlers.onCallAccepted?.(payload);
+  });
+  s.on('call:offer', (payload: CallSdpPayload) => {
+    if (payload?.callId && payload.sdp) handlers.onCallOffer?.(payload);
+  });
+  s.on('call:answer', (payload: CallSdpPayload) => {
+    if (payload?.callId && payload.sdp) handlers.onCallAnswer?.(payload);
+  });
+  s.on('call:ice', (payload: CallIcePayload) => {
+    if (payload?.callId) handlers.onCallIce?.(payload);
+  });
+  s.on('call:ended', (payload: CallEndedPayload) => {
+    if (payload?.callId) handlers.onCallEnded?.(payload);
+  });
+  s.on('call:peer-joined', (payload: CallPeerJoinedPayload) => {
+    if (payload?.callId && payload.userId) handlers.onCallPeerJoined?.(payload);
+  });
+  s.on('call:peer-left', (payload: CallPeerLeftPayload) => {
+    if (payload?.callId && payload.userId) handlers.onCallPeerLeft?.(payload);
+  });
+  s.on('call:room', (payload: CallRoomPayload) => {
+    if (payload?.conversationId) handlers.onCallRoom?.(payload);
+  });
+  s.on('call:screen', (payload: CallScreenPayload) => {
+    if (payload?.callId) handlers.onCallScreen?.(payload);
+  });
+  s.on('call:hand', (payload: CallHandPayload) => {
+    if (payload?.callId) handlers.onCallHand?.(payload);
+  });
+  s.on('call:reaction', (payload: CallReactionPayload) => {
+    if (payload?.callId && payload.emoji) handlers.onCallReaction?.(payload);
+  });
+  s.on('call:spotlight', (payload: CallSpotlightPayload) => {
+    if (payload?.callId) handlers.onCallSpotlight?.(payload);
+  });
 }
 
+/** Replace all handlers (prefer patchChatSocketHandlers for partial updates). */
 export function setChatSocketHandlers(next: Handlers) {
   handlers = next;
 }
 
+/** Merge handlers so CallProvider + ChatPage can coexist. */
+export function patchChatSocketHandlers(partial: Partial<Handlers>) {
+  handlers = { ...handlers, ...partial };
+}
+
+/** Remove specific handler keys without touching the rest. */
+export function clearChatSocketHandlerKeys(keys: Array<keyof Handlers>) {
+  const next = { ...handlers };
+  for (const key of keys) {
+    delete next[key];
+  }
+  handlers = next;
+}
+
 export async function connectChatSocket() {
-  const token = peekAccessToken() || (await refreshApiAccessToken());
-  if (!token) return null;
-
   if (socket?.connected) return socket;
+  if (connectInFlight) return connectInFlight;
 
-  if (socket) {
-    socket.auth = { token };
-    socket.connect();
+  connectInFlight = (async () => {
+    const token = peekAccessToken() || (await refreshApiAccessToken());
+    if (!token) return null;
+
+    if (socket?.connected) return socket;
+
+    if (socket) {
+      socket.auth = { token };
+      if (!socket.connected) socket.connect();
+      await waitForConnect(socket, 8_000);
+      return socket.connected ? socket : socket;
+    }
+
+    socket = io(API_BASE || undefined, {
+      path: '/socket.io',
+      transports: ['websocket', 'polling'],
+      auth: { token },
+      autoConnect: true,
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 10_000,
+      timeout: 10_000,
+    });
+
+    bindSocket(socket);
+
+    socket.io.on('reconnect_attempt', () => {
+      void refreshSocketAuth();
+    });
+
+    await waitForConnect(socket, 8_000);
     return socket;
+  })().finally(() => {
+    connectInFlight = null;
+  });
+
+  return connectInFlight;
+}
+
+/**
+ * Force a reconnect with exponential backoff.
+ * Use when the UI shows disconnected / Call buttons are disabled.
+ */
+export async function ensureChatSocketConnected(opts?: {
+  attempts?: number;
+  force?: boolean;
+}): Promise<Socket | null> {
+  const attempts = Math.max(1, opts?.attempts ?? 5);
+  const force = opts?.force ?? false;
+
+  if (force && socket) {
+    const old = socket;
+    socket = null;
+    connectInFlight = null;
+    try {
+      old.io.reconnection(false);
+      old.removeAllListeners();
+      old.disconnect();
+    } catch {
+      /* ignore */
+    }
   }
 
-  socket = io(API_BASE || undefined, {
-    path: '/socket.io',
-    transports: ['websocket', 'polling'],
-    auth: { token },
-    autoConnect: true,
-    reconnection: true,
-    reconnectionAttempts: Infinity,
-    reconnectionDelay: 1000,
-  });
+  for (let i = 0; i < attempts; i++) {
+    const s = await connectChatSocket();
+    if (s?.connected) return s;
 
-  bindSocket(socket);
+    if (socket && !socket.connected) {
+      await refreshSocketAuth();
+      socket.connect();
+      const ok = await waitForConnect(socket, 6_000);
+      if (ok) return socket;
+    }
 
-  socket.io.on('reconnect_attempt', async () => {
-    const next = peekAccessToken() || (await refreshApiAccessToken());
-    if (next && socket) socket.auth = { token: next };
-  });
+    await delay(Math.min(1000 * 2 ** i, 8_000));
+  }
 
-  return socket;
+  return getChatSocket()?.connected ? socket : null;
 }
 
 export function disconnectChatSocket() {
+  connectInFlight = null;
   if (!socket) return;
-  socket.removeAllListeners();
-  socket.disconnect();
+  const old = socket;
   socket = null;
-  handlers = {};
+  try {
+    old.io.reconnection(false);
+  } catch {
+    /* ignore */
+  }
+  old.removeAllListeners();
+  old.disconnect();
+  // Keep shared handlers so CallProvider + ChatPage can rebind without losing each other
+  // on transient disconnects.
 }
 
 export function getChatSocket() {
@@ -146,4 +408,171 @@ export function emitTypingStop(conversationId: string) {
 
 export function emitMessagesRead(conversationId: string) {
   socket?.emit('messages:read', { conversationId });
+}
+
+export function emitCallInvite(input: {
+  conversationId: string;
+  callId: string;
+  mediaKind?: 'audio' | 'video';
+}): Promise<{
+  ok: boolean;
+  error?: string;
+  peerId?: string;
+  isGroup?: boolean;
+  peers?: Array<{ userId: string; name: string }>;
+}> {
+  return new Promise((resolve) => {
+    if (!socket) {
+      resolve({ ok: false, error: 'Not connected' });
+      return;
+    }
+    socket.emit(
+      'call:invite',
+      input,
+      (res: {
+        ok: boolean;
+        error?: string;
+        peerId?: string;
+        isGroup?: boolean;
+        peers?: Array<{ userId: string; name: string }>;
+      }) => {
+        resolve(res ?? { ok: false, error: 'No response' });
+      },
+    );
+  });
+}
+
+export function emitCallJoin(input: {
+  callId: string;
+  conversationId: string;
+}): Promise<{
+  ok: boolean;
+  error?: string;
+  peers?: Array<{ userId: string; name: string }>;
+  mediaKind?: 'audio' | 'video';
+}> {
+  return new Promise((resolve) => {
+    if (!socket) {
+      resolve({ ok: false, error: 'Not connected' });
+      return;
+    }
+    socket.emit(
+      'call:join',
+      input,
+      (res: {
+        ok: boolean;
+        error?: string;
+        peers?: Array<{ userId: string; name: string }>;
+        mediaKind?: 'audio' | 'video';
+      }) => {
+        resolve(res ?? { ok: false, error: 'No response' });
+      },
+    );
+  });
+}
+
+export function emitCallAccept(input: {
+  callId: string;
+  conversationId: string;
+}): Promise<{
+  ok: boolean;
+  error?: string;
+  isGroup?: boolean;
+  peers?: Array<{ userId: string; name: string }>;
+  mediaKind?: 'audio' | 'video';
+}> {
+  return new Promise((resolve) => {
+    if (!socket) {
+      resolve({ ok: false, error: 'Not connected' });
+      return;
+    }
+    socket.emit(
+      'call:accept',
+      input,
+      (res: {
+        ok: boolean;
+        error?: string;
+        isGroup?: boolean;
+        peers?: Array<{ userId: string; name: string }>;
+        mediaKind?: 'audio' | 'video';
+      }) => {
+        resolve(res ?? { ok: false });
+      },
+    );
+  });
+}
+
+export function emitCallReject(input: { callId: string; conversationId: string }) {
+  socket?.emit('call:reject', input);
+}
+
+export function emitCallHangup(input: {
+  callId: string;
+  conversationId: string;
+  reason?: string;
+}) {
+  socket?.emit('call:hangup', input);
+}
+
+export function emitCallOffer(input: {
+  callId: string;
+  conversationId: string;
+  toUserId: string;
+  sdp: RTCSessionDescriptionInit;
+}) {
+  socket?.emit('call:offer', input);
+}
+
+export function emitCallAnswer(input: {
+  callId: string;
+  conversationId: string;
+  toUserId: string;
+  sdp: RTCSessionDescriptionInit;
+}) {
+  socket?.emit('call:answer', input);
+}
+
+export function emitCallIce(input: {
+  callId: string;
+  conversationId: string;
+  toUserId: string;
+  candidate: RTCIceCandidateInit | null;
+}) {
+  socket?.emit('call:ice', input);
+}
+
+export function emitCallScreen(input: {
+  callId: string;
+  conversationId: string;
+  active: boolean;
+  toUserId?: string;
+}) {
+  socket?.emit('call:screen', input);
+}
+
+export function emitCallHand(input: {
+  callId: string;
+  conversationId: string;
+  raised: boolean;
+  toUserId?: string;
+}) {
+  socket?.emit('call:hand', input);
+}
+
+export function emitCallReaction(input: {
+  callId: string;
+  conversationId: string;
+  emoji: string;
+  toUserId?: string;
+}) {
+  socket?.emit('call:reaction', input);
+}
+
+export function emitCallSpotlight(input: {
+  callId: string;
+  conversationId: string;
+  targetUserId: string | null;
+  toUserId?: string;
+}) {
+  socket?.emit('call:spotlight', input);
 }

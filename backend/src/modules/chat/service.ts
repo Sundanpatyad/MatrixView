@@ -227,6 +227,7 @@ export async function serializeMessage(doc: InstanceType<typeof Message>) {
     senderId: String(doc.senderId),
     senderName: sender?.name ?? 'Unknown',
     senderAvatarUrl: sender?.avatarUrl ?? null,
+    type: (doc.type as 'text' | 'call' | undefined) ?? 'text',
     body: doc.deletedAt ? '' : doc.body ?? '',
     replyTo,
     attachments: doc.deletedAt
@@ -239,6 +240,21 @@ export async function serializeMessage(doc: InstanceType<typeof Message>) {
           url: a.url,
           kind: a.kind ?? 'other',
         })),
+    call:
+      doc.type === 'call' && doc.call
+        ? {
+            callId: doc.call.callId,
+            outcome: doc.call.outcome as
+              | 'answered'
+              | 'missed'
+              | 'rejected'
+              | 'cancelled'
+              | 'failed',
+            mediaKind: (doc.call.mediaKind as 'audio' | 'video' | undefined) ?? 'audio',
+            durationSeconds: doc.call.durationSeconds ?? 0,
+            initiatedBy: String(doc.call.initiatedBy),
+          }
+        : null,
     status: computeDeliveryStatus(String(doc.senderId), memberIds, doc.receipts ?? []),
     receipts,
     editedAt: doc.editedAt ? doc.editedAt.toISOString() : null,
@@ -506,19 +522,54 @@ export async function removeGroupMember(
 export async function listMessages(
   actor: Actor,
   conversationId: string,
-  opts?: { after?: string },
+  opts?: { after?: string; before?: string; limit?: number },
 ) {
   await requireMember(conversationId, actor);
   const filter: Record<string, unknown> = { conversationId: oid(conversationId) };
+  const rawLimit = opts?.limit ?? (opts?.after ? 500 : 40);
+  const limit = Math.min(Math.max(rawLimit, 1), 500);
+
+  // Incremental sync: only messages newer than `after`
   if (opts?.after) {
     const afterDate = new Date(opts.after);
     if (!Number.isNaN(+afterDate)) {
       filter.createdAt = { $gt: afterDate };
     }
+    const messages = await Message.find(filter).sort({ createdAt: 1 }).limit(limit);
+    return {
+      messages: await Promise.all(messages.map((m) => serializeMessage(m))),
+      hasMore: false,
+    };
   }
-  const messages = await Message.find(filter).sort({ createdAt: 1 }).limit(500);
+
+  // Older page: messages strictly before `before` (scroll-up history)
+  if (opts?.before) {
+    const beforeDate = new Date(opts.before);
+    if (!Number.isNaN(+beforeDate)) {
+      filter.createdAt = { $lt: beforeDate };
+    }
+    const batch = await Message.find(filter)
+      .sort({ createdAt: -1 })
+      .limit(limit + 1);
+    const hasMore = batch.length > limit;
+    const slice = hasMore ? batch.slice(0, limit) : batch;
+    slice.reverse();
+    return {
+      messages: await Promise.all(slice.map((m) => serializeMessage(m))),
+      hasMore,
+    };
+  }
+
+  // Initial page: latest N messages (oldest → newest in the page)
+  const batch = await Message.find(filter)
+    .sort({ createdAt: -1 })
+    .limit(limit + 1);
+  const hasMore = batch.length > limit;
+  const slice = hasMore ? batch.slice(0, limit) : batch;
+  slice.reverse();
   return {
-    messages: await Promise.all(messages.map((m) => serializeMessage(m))),
+    messages: await Promise.all(slice.map((m) => serializeMessage(m))),
+    hasMore,
   };
 }
 
@@ -593,6 +644,9 @@ export async function forwardMessage(
   if (!source || source.deletedAt) {
     throw new AuthError('Message not found', 404, 'NOT_FOUND');
   }
+  if (source.type === 'call') {
+    throw new AuthError('Call history cannot be forwarded', 400);
+  }
   await requireMember(String(source.conversationId), actor);
   const target = await requireMember(targetConversationId, actor);
 
@@ -652,10 +706,129 @@ export async function forwardMessage(
   return { message: serialized, conversation: convSerialized };
 }
 
+export type CallOutcome = 'answered' | 'missed' | 'rejected' | 'cancelled' | 'failed';
+
+function formatCallDuration(seconds: number) {
+  const s = Math.max(0, Math.floor(seconds));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const r = s % 60;
+  if (h > 0) {
+    return `${h}:${String(m).padStart(2, '0')}:${String(r).padStart(2, '0')}`;
+  }
+  return `${m}:${String(r).padStart(2, '0')}`;
+}
+
+function callHistoryBody(
+  outcome: CallOutcome,
+  durationSeconds: number,
+  mediaKind: 'audio' | 'video' = 'audio',
+  isGroup = false,
+) {
+  const noun = isGroup
+    ? mediaKind === 'video'
+      ? 'Group video call'
+      : 'Group voice call'
+    : mediaKind === 'video'
+      ? 'Video call'
+      : 'Voice call';
+  const lower = isGroup
+    ? mediaKind === 'video'
+      ? 'group video call'
+      : 'group voice call'
+    : mediaKind === 'video'
+      ? 'video call'
+      : 'voice call';
+  switch (outcome) {
+    case 'answered':
+      return `${noun} · ${formatCallDuration(durationSeconds)}`;
+    case 'rejected':
+      return `Declined ${lower}`;
+    case 'cancelled':
+      return `Cancelled ${lower}`;
+    case 'missed':
+      return `Missed ${lower}`;
+    case 'failed':
+    default:
+      return `${noun} failed`;
+  }
+}
+
+/** Persist a call event into the chat thread (idempotent by callId). */
+export async function recordCallHistory(input: {
+  conversationId: string;
+  callId: string;
+  initiatedBy: string;
+  outcome: CallOutcome;
+  durationSeconds?: number;
+  mediaKind?: 'audio' | 'video';
+  isGroup?: boolean;
+}) {
+  const existing = await Message.findOne({
+    type: 'call',
+    'call.callId': input.callId,
+  });
+  if (existing) {
+    return serializeMessage(existing);
+  }
+
+  const conversation = await Conversation.findById(oid(input.conversationId));
+  if (!conversation) return null;
+  if (conversation.type !== 'dm' && conversation.type !== 'group') return null;
+
+  const mediaKind = input.mediaKind === 'video' ? 'video' : 'audio';
+  const isGroup = input.isGroup ?? conversation.type === 'group';
+  const durationSeconds = Math.max(0, Math.floor(input.durationSeconds ?? 0));
+  const body = callHistoryBody(input.outcome, durationSeconds, mediaKind, isGroup);
+
+  let message;
+  try {
+    message = await Message.create({
+      orgId: conversation.orgId,
+      conversationId: conversation._id,
+      senderId: oid(input.initiatedBy),
+      type: 'call',
+      body,
+      call: {
+        callId: input.callId,
+        outcome: input.outcome,
+        mediaKind,
+        durationSeconds,
+        initiatedBy: oid(input.initiatedBy),
+      },
+      attachments: [],
+      receipts: [],
+    });
+  } catch (err) {
+    // Race: another finalize wrote the same callId first
+    const raced = await Message.findOne({ type: 'call', 'call.callId': input.callId });
+    if (raced) return serializeMessage(raced);
+    throw err;
+  }
+
+  conversation.lastMessageAt = new Date();
+  conversation.lastMessagePreview = body.slice(0, 160);
+  await conversation.save();
+
+  const serialized = await serializeMessage(message);
+  const convSerialized = await serializeConversation(conversation, input.initiatedBy);
+
+  emitToConversation(String(conversation._id), 'message:new', { message: serialized });
+  for (const memberId of conversation.memberIds.map(String)) {
+    emitToUser(memberId, 'message:new', { message: serialized });
+    emitToUser(memberId, 'conversation:upsert', { conversation: convSerialized });
+  }
+
+  return serialized;
+}
+
 export async function editMessage(actor: Actor, messageId: string, body: string) {
   const message = await Message.findById(oid(messageId));
   if (!message || message.deletedAt) {
     throw new AuthError('Message not found', 404, 'NOT_FOUND');
+  }
+  if (message.type === 'call') {
+    throw new AuthError('Call history cannot be edited', 400);
   }
   if (String(message.senderId) !== actor.sub) {
     throw new AuthError('You can only edit your own messages', 403, 'FORBIDDEN');
@@ -682,6 +855,9 @@ export async function deleteMessage(actor: Actor, messageId: string) {
   const message = await Message.findById(oid(messageId));
   if (!message || message.deletedAt) {
     throw new AuthError('Message not found', 404, 'NOT_FOUND');
+  }
+  if (message.type === 'call') {
+    throw new AuthError('Call history cannot be deleted', 400);
   }
   if (String(message.senderId) !== actor.sub) {
     throw new AuthError('You can only delete your own messages', 403, 'FORBIDDEN');

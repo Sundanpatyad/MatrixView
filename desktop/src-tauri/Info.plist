@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSCameraUsageDescription</key>
+	<string>DockX needs camera access for video calls in chat.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>DockX needs microphone access for voice notes and calls in chat.</string>
+	<key>NSDesktopCaptureUsageDescription</key>
+	<string>DockX needs screen recording access so you can share your screen or a browser tab during video calls.</string>
+</dict>
+</plist>

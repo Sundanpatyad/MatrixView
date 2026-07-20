@@ -4,6 +4,7 @@ import type {
   BoardTask,
   Project,
   ProjectRole,
+  ProjectTeam,
   TaskPriority,
   TaskType,
   TimelineItem,
@@ -13,6 +14,7 @@ export type WorkspacePayload = {
   projects: Project[];
   tasks: BoardTask[];
   timeline: TimelineItem[];
+  teams: ProjectTeam[];
 };
 
 export function fetchWorkspace(): Promise<WorkspacePayload> {
@@ -157,6 +159,7 @@ export function createTaskRequest(
     assigneeName: string;
     assigneeId?: string;
     dueDate: string;
+    teamId?: string | null;
   },
 ): Promise<{ task: BoardTask }> {
   return apiFetch(`/api/projects/${projectId}/tasks`, {
@@ -185,6 +188,7 @@ export function updateTaskRequest(
     startDate,
     endDate,
     dueDate,
+    teamId,
   } = patch;
   return apiFetch(`/api/tasks/${taskId}`, {
     method: 'PATCH',
@@ -204,6 +208,7 @@ export function updateTaskRequest(
       startDate,
       endDate,
       dueDate,
+      teamId,
     }),
   });
 }
@@ -313,6 +318,35 @@ export function assignTimelineRequest(
     method: 'POST',
     auth: true,
     body: JSON.stringify(assignee),
+  });
+}
+
+export function createTeamRequest(
+  projectId: string,
+  input: { name: string; memberIds?: string[] },
+): Promise<{ team: ProjectTeam }> {
+  return apiFetch(`/api/projects/${projectId}/teams`, {
+    method: 'POST',
+    auth: true,
+    body: JSON.stringify(input),
+  });
+}
+
+export function updateTeamRequest(
+  teamId: string,
+  input: { name?: string; memberIds?: string[] },
+): Promise<{ team: ProjectTeam }> {
+  return apiFetch(`/api/teams/${teamId}`, {
+    method: 'PATCH',
+    auth: true,
+    body: JSON.stringify(input),
+  });
+}
+
+export function deleteTeamRequest(teamId: string): Promise<{ ok: boolean; teamId: string }> {
+  return apiFetch(`/api/teams/${teamId}`, {
+    method: 'DELETE',
+    auth: true,
   });
 }
 

@@ -90,7 +90,7 @@ export async function syncLatestMessagesFromApi(
     const after = await getLatestSyncedCreatedAt(userId, conversationId);
     const { messages: newer } = await listMessagesApi(
       conversationId,
-      after ? { after } : undefined,
+      after ? { after } : { limit: 40 },
     );
     if (newer.length > 0 && isOfflineDbAvailable()) {
       await cacheMessages(userId, newer);
@@ -99,6 +99,52 @@ export async function syncLatestMessagesFromApi(
       return sortMessagesByTime(await listCachedMessages(userId, conversationId));
     }
     return sortMessagesByTime(newer);
+  } catch {
+    return null;
+  }
+}
+
+/** Initial/latest page + whether older history exists. */
+export async function fetchLatestMessagesPage(
+  userId: string,
+  conversationId: string,
+  limit = 40,
+): Promise<{ messages: ChatMessage[]; hasMore: boolean } | null> {
+  if (!navigator.onLine) return null;
+  try {
+    const { messages, hasMore } = await listMessagesApi(conversationId, { limit });
+    if (messages.length > 0 && isOfflineDbAvailable()) {
+      await cacheMessages(userId, messages);
+    }
+    return {
+      messages: sortMessagesByTime(messages),
+      hasMore: Boolean(hasMore),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Older history page (scroll-up). */
+export async function fetchOlderMessagesPage(
+  userId: string,
+  conversationId: string,
+  before: string,
+  limit = 40,
+): Promise<{ messages: ChatMessage[]; hasMore: boolean } | null> {
+  if (!navigator.onLine) return null;
+  try {
+    const { messages, hasMore } = await listMessagesApi(conversationId, {
+      before,
+      limit,
+    });
+    if (messages.length > 0 && isOfflineDbAvailable()) {
+      await cacheMessages(userId, messages);
+    }
+    return {
+      messages: sortMessagesByTime(messages),
+      hasMore: Boolean(hasMore),
+    };
   } catch {
     return null;
   }

@@ -140,12 +140,24 @@ router.delete('/chat/conversations/:id/members/:userId', async (req, res, next) 
 router.get('/chat/conversations/:id/messages', async (req, res, next) => {
   try {
     const afterRaw = req.query.after;
+    const beforeRaw = req.query.before;
+    const limitRaw = req.query.limit;
     const after =
       typeof afterRaw === 'string' && afterRaw.trim() ? afterRaw.trim() : undefined;
+    const before =
+      typeof beforeRaw === 'string' && beforeRaw.trim() ? beforeRaw.trim() : undefined;
+    const limit =
+      typeof limitRaw === 'string' && limitRaw.trim()
+        ? Number.parseInt(limitRaw, 10)
+        : undefined;
     const data = await chat.listMessages(
       actorFrom(req as AuthedRequest),
       param(req.params.id),
-      { after },
+      {
+        after,
+        before,
+        limit: Number.isFinite(limit) ? limit : undefined,
+      },
     );
     res.json(data);
   } catch (err) {

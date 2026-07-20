@@ -392,8 +392,8 @@ export function AdminActivityPanel() {
             {formatDateLabel(filterDate)} · each panel scrolls on its own
           </p>
         </div>
-        <div className="flex flex-wrap items-end gap-2">
-          <div className="w-[200px]">
+        <div className="flex w-full flex-wrap items-end gap-2 sm:w-auto">
+          <div className="min-w-0 w-full flex-1 basis-full sm:basis-auto sm:w-[200px] sm:flex-none">
             <p className="mb-1 text-[10px] font-bold tracking-wide text-ink-400 uppercase">
               Person
             </p>
@@ -405,7 +405,7 @@ export function AdminActivityPanel() {
               aria-label="Select person"
             />
           </div>
-          <div className="w-[170px]">
+          <div className="w-full min-w-0 sm:w-[170px]">
             <p className="mb-1 text-[10px] font-bold tracking-wide text-ink-400 uppercase">
               Date
             </p>

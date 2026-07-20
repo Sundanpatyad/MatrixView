@@ -17,17 +17,25 @@ type Props = {
   projectId: string;
   onClose: () => void;
   defaultAssignee?: { id: string; name: string };
+  defaultTeamId?: string | null;
 };
 
-export function CreateTaskModal({ projectId, onClose, defaultAssignee }: Props) {
+export function CreateTaskModal({
+  projectId,
+  onClose,
+  defaultAssignee,
+  defaultTeamId = null,
+}: Props) {
   const { user } = useAuth();
-  const { createTask } = useWorkspace();
+  const { createTask, getProjectTeams } = useWorkspace();
+  const teams = getProjectTeams(projectId);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [type, setType] = useState<TaskType>('task');
   const [priority, setPriority] = useState<TaskPriority>('medium');
   const [estimateHours, setEstimateHours] = useState(2);
   const [dueDate, setDueDate] = useState('');
+  const [teamId, setTeamId] = useState<string>(defaultTeamId ?? '');
   const assigneeName = defaultAssignee?.name ?? user?.name ?? 'You';
   const assigneeId = defaultAssignee?.id;
 
@@ -44,6 +52,7 @@ export function CreateTaskModal({ projectId, onClose, defaultAssignee }: Props) 
       assigneeName,
       assigneeId,
       dueDate,
+      teamId: teams.length > 0 ? teamId || null : null,
     });
     onClose();
   }
@@ -140,6 +149,21 @@ export function CreateTaskModal({ projectId, onClose, defaultAssignee }: Props) 
               <DatePicker size="md" value={dueDate} onChange={setDueDate} />
             </div>
           </div>
+
+          {teams.length > 0 ? (
+            <div>
+              <label className="mb-1 block text-xs font-bold text-ink-200 uppercase">Team</label>
+              <Select
+                size="md"
+                value={teamId}
+                onChange={setTeamId}
+                options={[
+                  { value: '', label: 'Project-wide (no team)' },
+                  ...teams.map((t) => ({ value: t.id, label: t.name })),
+                ]}
+              />
+            </div>
+          ) : null}
 
           <div>
             <label className="mb-1 block text-xs font-bold text-ink-200 uppercase">

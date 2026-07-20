@@ -57,6 +57,8 @@ const taskSchema = new Schema(
     startDate: { type: String, default: '' },
     endDate: { type: String, default: '' },
     dueDate: { type: String, default: '' },
+    /** null = project-global task (default when project has no teams) */
+    teamId: { type: Schema.Types.ObjectId, ref: 'Team', default: null, index: true },
     comments: { type: [commentSchema], default: [] },
     attachments: { type: [attachmentSchema], default: [] },
   },
@@ -65,6 +67,7 @@ const taskSchema = new Schema(
 
 taskSchema.index({ orgId: 1, projectId: 1 });
 taskSchema.index({ projectId: 1, key: 1 }, { unique: true });
+taskSchema.index({ projectId: 1, teamId: 1 });
 
 export type TaskDoc = HydratedDocument<
   InferSchemaType<typeof taskSchema> & {

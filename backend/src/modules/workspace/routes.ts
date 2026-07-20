@@ -155,6 +155,56 @@ router.delete('/projects/:projectId/members/:memberId', async (req, res, next) =
   }
 });
 
+router.post('/projects/:projectId/teams', async (req, res, next) => {
+  try {
+    const body = z
+      .object({
+        name: z.string().min(1).max(80),
+        memberIds: z.array(z.string().max(64)).max(200).optional(),
+      })
+      .parse(req.body);
+    const team = await workspace.createTeam(
+      await actorFrom(req as AuthedRequest),
+      param(req.params.projectId),
+      body,
+    );
+    res.status(201).json({ team });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.patch('/teams/:teamId', async (req, res, next) => {
+  try {
+    const body = z
+      .object({
+        name: z.string().min(1).max(80).optional(),
+        memberIds: z.array(z.string().max(64)).max(200).optional(),
+      })
+      .parse(req.body);
+    const team = await workspace.updateTeam(
+      await actorFrom(req as AuthedRequest),
+      param(req.params.teamId),
+      body,
+    );
+    res.json({ team });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete('/teams/:teamId', async (req, res, next) => {
+  try {
+    const data = await workspace.deleteTeam(
+      await actorFrom(req as AuthedRequest),
+      param(req.params.teamId),
+    );
+    res.json(data);
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.post('/projects/:projectId/columns', async (req, res, next) => {
   try {
     const body = z.object({ label: z.string().min(1).max(80) }).parse(req.body);
@@ -236,6 +286,7 @@ router.post('/projects/:projectId/tasks', async (req, res, next) => {
         assigneeName: z.string().max(120).optional(),
         assigneeId: z.string().max(64).optional(),
         dueDate: z.string().max(40).optional(),
+        teamId: z.string().max(64).nullable().optional(),
       })
       .parse(req.body);
     const task = await workspace.createTask(
@@ -267,6 +318,7 @@ router.patch('/tasks/:taskId', async (req, res, next) => {
         startDate: z.string().max(40).optional(),
         endDate: z.string().max(40).optional(),
         dueDate: z.string().max(40).optional(),
+        teamId: z.string().max(64).nullable().optional(),
       })
       .parse(req.body);
     const task = await workspace.updateTask(

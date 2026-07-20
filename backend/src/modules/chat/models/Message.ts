@@ -28,6 +28,25 @@ const receiptSchema = new Schema(
   { _id: false },
 );
 
+const callSchema = new Schema(
+  {
+    callId: { type: String, required: true },
+    outcome: {
+      type: String,
+      enum: ['answered', 'missed', 'rejected', 'cancelled', 'failed'],
+      required: true,
+    },
+    mediaKind: {
+      type: String,
+      enum: ['audio', 'video'],
+      default: 'audio',
+    },
+    durationSeconds: { type: Number, default: 0 },
+    initiatedBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+  },
+  { _id: false },
+);
+
 const messageSchema = new Schema(
   {
     orgId: { type: Schema.Types.ObjectId, ref: 'Organization', required: true, index: true },
@@ -38,10 +57,12 @@ const messageSchema = new Schema(
       index: true,
     },
     senderId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    type: { type: String, enum: ['text', 'call'], default: 'text' },
     body: { type: String, default: '' },
     replyToId: { type: Schema.Types.ObjectId, ref: 'Message', default: null },
     attachments: { type: [attachmentSchema], default: [] },
     receipts: { type: [receiptSchema], default: [] },
+    call: { type: callSchema, default: null },
     editedAt: { type: Date, default: null },
     deletedAt: { type: Date, default: null },
   },
@@ -49,6 +70,10 @@ const messageSchema = new Schema(
 );
 
 messageSchema.index({ conversationId: 1, createdAt: -1 });
+messageSchema.index(
+  { 'call.callId': 1 },
+  { unique: true, partialFilterExpression: { type: 'call', 'call.callId': { $type: 'string' } } },
+);
 
 export type MessageDoc = HydratedDocument<
   InferSchemaType<typeof messageSchema> & {

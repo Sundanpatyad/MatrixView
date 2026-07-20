@@ -64,6 +64,16 @@ export type Project = {
   members: ProjectMember[];
 };
 
+/** Sub-group inside a project — tasks can be scoped to a team when teams exist. */
+export type ProjectTeam = {
+  id: string;
+  projectId: string;
+  name: string;
+  memberIds: string[];
+  createdAt: string;
+  updatedAt: string;
+};
+
 /** Admin backlog — create now, assign to a teammate later */
 export type TimelineItem = {
   id: string;
@@ -105,6 +115,8 @@ export type BoardTask = {
   startDate: string;
   endDate: string;
   dueDate: string;
+  /** null = project-global (default when project has no teams) */
+  teamId: string | null;
   comments: TaskComment[];
   attachments: TaskAttachment[];
   createdAt: string;
@@ -168,6 +180,7 @@ export function ensureTaskFields(task: BoardTask): BoardTask {
     startDate: task.startDate ?? '',
     endDate: task.endDate ?? '',
     dueDate: task.dueDate ?? '',
+    teamId: task.teamId ?? null,
     attachments: task.attachments ?? [],
     comments: (task.comments ?? []).map((c) => ({
       ...c,

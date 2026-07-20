@@ -17,11 +17,14 @@ import {
   createProjectRequest,
   createTaskRequest,
   createTimelineRequest,
+  createTeamRequest,
   deleteProjectRequest,
+  deleteTeamRequest,
   deleteTimelineRequest,
   fetchWorkspace,
   removeProjectAvatarRequest,
   updateTimelineRequest,
+  updateTeamRequest,
   removeColumnRequest,
   removeMemberRequest,
   removeTaskAttachmentRequest,
@@ -39,6 +42,7 @@ import {
   type Project,
   type ProjectMember,
   type ProjectRole,
+  type ProjectTeam,
   type TaskPriority,
   type TaskStatus,
   type TaskType,
@@ -49,6 +53,7 @@ type WorkspaceState = {
   projects: Project[];
   tasks: BoardTask[];
   timeline: TimelineItem[];
+  teams: ProjectTeam[];
 };
 
 type CreateProjectInput = {
@@ -67,6 +72,7 @@ type CreateTaskInput = {
   assigneeName: string;
   assigneeId?: string;
   dueDate: string;
+  teamId?: string | null;
 };
 
 type CreateTimelineInput = {
@@ -99,6 +105,7 @@ type WorkspaceContextValue = {
   projects: Project[];
   tasks: BoardTask[];
   timeline: TimelineItem[];
+  teams: ProjectTeam[];
   isLoading: boolean;
   /** Currently focused project on dashboard / filters (`all` = every membership). */
   activeProjectId: ActiveProjectId;
@@ -147,6 +154,16 @@ type WorkspaceContextValue = {
     assignee: { id: string; name: string },
   ) => Promise<BoardTask | null>;
   deleteTimelineItem: (itemId: string) => Promise<void>;
+  createTeam: (
+    projectId: string,
+    input: { name: string; memberIds?: string[] },
+  ) => Promise<ProjectTeam>;
+  updateTeam: (
+    teamId: string,
+    input: { name?: string; memberIds?: string[] },
+  ) => Promise<ProjectTeam>;
+  deleteTeam: (teamId: string) => Promise<void>;
+  getProjectTeams: (projectId: string) => ProjectTeam[];
   isProjectAdmin: (projectId: string) => boolean;
 };
 
@@ -184,6 +201,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     projects: [],
     tasks: [],
     timeline: [],
+    teams: [],
   });
   const [isLoading, setIsLoading] = useState(false);
   const [activeProjectId, setActiveProjectIdState] = useState<ActiveProjectId>(readStoredActiveProject);
@@ -199,7 +217,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
   const refresh = useCallback(async () => {
     if (!isAuthenticated) {
-      setState({ projects: [], tasks: [], timeline: [] });
+      setState({ projects: [], tasks: [], timeline: [], teams: [] });
       return;
     }
     setIsLoading(true);
@@ -212,6 +230,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           ...item,
           attachments: item.attachments ?? [],
         })),
+        teams: data.teams ?? [],
       });
     } finally {
       setIsLoading(false);
@@ -248,6 +267,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       projects: prev.projects.filter((p) => p.id !== projectId),
       tasks: prev.tasks.filter((t) => t.projectId !== projectId),
       timeline: prev.timeline.filter((t) => t.projectId !== projectId),
+      teams: prev.teams.filter((t) => t.projectId !== projectId),
     }));
     setActiveProjectIdState((cur) => {
       const next: ActiveProjectId = cur === projectId ? 'all' : cur;
@@ -507,11 +527,51 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     }));
   }, []);
 
+  const createTeam = useCallback(
+    async (projectId: string, input: { name: string; memberIds?: string[] }) => {
+      const { team } = await createTeamRequest(projectId, input);
+      setState((prev) => ({
+        ...prev,
+        teams: [...prev.teams.filter((t) => t.id !== team.id), team].sort((a, b) =>
+          a.name.localeCompare(b.name),
+        ),
+      }));
+      return team;
+    },
+    [],
+  );
+
+  const updateTeam = useCallback(
+    async (teamId: string, input: { name?: string; memberIds?: string[] }) => {
+      const { team } = await updateTeamRequest(teamId, input);
+      setState((prev) => ({
+        ...prev,
+        teams: prev.teams
+          .map((t) => (t.id === teamId ? team : t))
+          .sort((a, b) => a.name.localeCompare(b.name)),
+      }));
+      return team;
+    },
+    [],
+  );
+
+  const deleteTeam = useCallback(async (teamId: string) => {
+    await deleteTeamRequest(teamId);
+    setState((prev) => ({
+      ...prev,
+      teams: prev.teams.filter((t) => t.id !== teamId),
+      tasks: prev.tasks.map((t) =>
+        t.teamId === teamId ? ensureTaskFields({ ...t, teamId: null }) : t,
+      ),
+    }));
+  }, []);
+
   const value = useMemo<WorkspaceContextValue>(
     () => ({
       projects: state.projects.map(ensureProjectColumns),
       tasks: state.tasks.map(ensureTaskFields),
       timeline: state.timeline,
+      teams: state.teams,
       isLoading,
       activeProjectId,
       setActiveProjectId,
@@ -547,6 +607,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       updateTimelineItem,
       assignTimelineItem,
       deleteTimelineItem,
+      createTeam,
+      updateTeam,
+      deleteTeam,
+      getProjectTeams: (projectId) => state.teams.filter((t) => t.projectId === projectId),
       isProjectAdmin,
     }),
     [
@@ -576,6 +640,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       updateTimelineItem,
       assignTimelineItem,
       deleteTimelineItem,
+      createTeam,
+      updateTeam,
+      deleteTeam,
       isProjectAdmin,
     ],
   );

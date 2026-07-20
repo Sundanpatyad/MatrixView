@@ -12,6 +12,7 @@ import {
   TASK_TYPES,
   attachmentHref,
   formatFileSize,
+  type BoardTask,
   type TaskAttachment,
   type TaskPriority,
   type TaskType,
@@ -28,6 +29,36 @@ function formatDate(iso: string) {
     return iso;
   }
 }
+
+function isBoardUnassigned(task: BoardTask) {
+  const id = (task.assigneeId ?? '').trim();
+  const name = (task.assigneeName ?? '').trim().toLowerCase();
+  return !id || !name || name === 'unassigned';
+}
+
+type WorkFilter = 'backlog' | 'assigned' | 'all';
+
+/** Unified row: backlog TimelineItems + all board Tasks for the project. */
+type WorkRow = {
+  key: string;
+  source: 'backlog' | 'board';
+  projectId: string;
+  title: string;
+  description: string;
+  type: TaskType;
+  priority: TaskPriority;
+  dueDate: string;
+  attachments: TaskAttachment[];
+  createdByName: string;
+  createdAt: string;
+  /** Board column label or "Backlog" */
+  statusLabel: string;
+  inBacklog: boolean;
+  assigneeId: string | null;
+  assigneeName: string | null;
+  timelineItem?: TimelineItem;
+  task?: BoardTask;
+};
 
 const label = 'text-[10px] font-bold tracking-wide text-ink-300 uppercase';
 
@@ -55,10 +86,7 @@ function AttachmentChips({
             <img
               src={attachmentHref(att)}
               alt=""
-              className={cn(
-                'shrink-0 object-cover',
-                compact ? 'h-6 w-6' : 'h-8 w-8',
-              )}
+              className={cn('shrink-0 object-cover', compact ? 'h-6 w-6' : 'h-8 w-8')}
             />
           ) : (
             <span
@@ -107,11 +135,13 @@ function AttachmentChips({
 export function TimelinePanel() {
   const {
     projects,
+    tasks,
     timeline,
     getProject,
     createTimelineItem,
     assignTimelineItem,
     deleteTimelineItem,
+    updateTask,
     isProjectAdmin,
     activeProjectId: dashProjectId,
   } = useWorkspace();
@@ -125,13 +155,12 @@ export function TimelinePanel() {
   const [dueDate, setDueDate] = useState('');
   const [files, setFiles] = useState<File[]>([]);
   const [fileError, setFileError] = useState('');
-  const [filter, setFilter] = useState<'pending' | 'assigned' | 'all'>('pending');
+  const [filter, setFilter] = useState<WorkFilter>('all');
   const [editingItem, setEditingItem] = useState<TimelineItem | null>(null);
   const [itemToDelete, setItemToDelete] = useState<TimelineItem | null>(null);
   const [deletingItem, setDeletingItem] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // Follow dashboard project switcher when that project is one you admin
   useEffect(() => {
     if (dashProjectId !== 'all' && isProjectAdmin(dashProjectId)) {
       setProjectId(dashProjectId);
@@ -145,22 +174,75 @@ export function TimelinePanel() {
   const project = activeProjectId ? getProject(activeProjectId) : undefined;
   const members = project?.members ?? [];
 
-  const scopedTimeline = useMemo(() => {
-    if (dashProjectId === 'all') return timeline;
-    return timeline.filter((i) => i.projectId === dashProjectId);
-  }, [timeline, dashProjectId]);
+  const scopeProjectIds = useMemo(() => {
+    if (dashProjectId === 'all') return new Set(adminProjects.map((p) => p.id));
+    return new Set([dashProjectId].filter(Boolean));
+  }, [adminProjects, dashProjectId]);
+
+  const rows = useMemo(() => {
+    const list: WorkRow[] = [];
+
+    // Backlog: timeline items not yet promoted to the board
+    for (const item of timeline) {
+      if (!scopeProjectIds.has(item.projectId)) continue;
+      if (item.taskId) continue;
+      list.push({
+        key: `backlog-${item.id}`,
+        source: 'backlog',
+        projectId: item.projectId,
+        title: item.title,
+        description: item.description,
+        type: item.type,
+        priority: item.priority,
+        dueDate: item.dueDate,
+        attachments: item.attachments ?? [],
+        createdByName: item.createdByName,
+        createdAt: item.createdAt,
+        statusLabel: 'Backlog',
+        inBacklog: true,
+        assigneeId: null,
+        assigneeName: null,
+        timelineItem: item,
+      });
+    }
+
+    // All board tasks for scoped projects (assigned + unassigned)
+    for (const task of tasks) {
+      if (!scopeProjectIds.has(task.projectId)) continue;
+      const proj = getProject(task.projectId);
+      const col = proj?.columns.find((c) => c.id === task.status);
+      const unassigned = isBoardUnassigned(task);
+      list.push({
+        key: `board-${task.id}`,
+        source: 'board',
+        projectId: task.projectId,
+        title: task.title,
+        description: task.description,
+        type: task.type,
+        priority: task.priority,
+        dueDate: task.dueDate,
+        attachments: task.attachments ?? [],
+        createdByName: task.createdByName || task.reporterName || '—',
+        createdAt: task.createdAt,
+        statusLabel: col?.label ?? task.status,
+        inBacklog: unassigned,
+        assigneeId: unassigned ? null : task.assigneeId,
+        assigneeName: unassigned ? null : task.assigneeName,
+        task,
+      });
+    }
+
+    return list.sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
+  }, [timeline, tasks, scopeProjectIds, getProject]);
 
   const items = useMemo(() => {
-    let list = [...scopedTimeline].sort(
-      (a, b) => +new Date(b.createdAt) - +new Date(a.createdAt),
-    );
-    if (filter === 'pending') list = list.filter((i) => !i.taskId);
-    if (filter === 'assigned') list = list.filter((i) => !!i.taskId);
-    return list;
-  }, [scopedTimeline, filter]);
+    if (filter === 'backlog') return rows.filter((r) => r.inBacklog);
+    if (filter === 'assigned') return rows.filter((r) => !r.inBacklog);
+    return rows;
+  }, [rows, filter]);
 
-  const pendingCount = scopedTimeline.filter((i) => !i.taskId).length;
-  const assignedCount = timeline.filter((i) => !!i.taskId).length;
+  const backlogCount = rows.filter((r) => r.inBacklog).length;
+  const assignedCount = rows.filter((r) => !r.inBacklog).length;
 
   function onFiles(e: ChangeEvent<HTMLInputElement>) {
     const picked = e.target.files;
@@ -196,17 +278,37 @@ export function TimelinePanel() {
     setPriority('medium');
     setFiles([]);
     setFileError('');
-    setFilter('pending');
+    setFilter('backlog');
+  }
+
+  async function onAssign(row: WorkRow, memberId: string) {
+    const itemMembers = getProject(row.projectId)?.members ?? [];
+    const member = itemMembers.find((m) => m.id === memberId);
+    if (!member) return;
+
+    if (row.source === 'backlog' && row.timelineItem) {
+      await assignTimelineItem(row.timelineItem.id, {
+        id: member.id,
+        name: member.name,
+      });
+      return;
+    }
+    if (row.task) {
+      await updateTask(row.task.id, {
+        assigneeId: member.id,
+        assigneeName: member.name,
+      });
+    }
   }
 
   if (adminProjects.length === 0) {
     return (
       <div className="flex h-full items-center justify-center bg-ink-900 p-8">
         <div className="max-w-sm border border-ink-600 bg-ink-800 px-6 py-8 text-center">
-          <p className="text-sm font-semibold text-ink-50">Admin timeline</p>
+          <p className="text-sm font-semibold text-ink-50">Project timeline</p>
           <p className="mt-2 text-xs leading-relaxed text-ink-300">
-            You need to be a project Admin to create timeline tasks. Create a project on the
-            board (you become Admin) or ask an admin to promote you.
+            You need to be a project Admin to manage the backlog and assign work. Create a
+            project on the board (you become Admin) or ask an admin to promote you.
           </p>
         </div>
       </div>
@@ -215,15 +317,12 @@ export function TimelinePanel() {
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-ink-900 lg:flex-row">
-      {/* Create form */}
-      <section className="w-full shrink-0 overflow-y-auto border-b border-ink-600 bg-ink-800 lg:w-[340px] lg:border-r lg:border-b-0">
+      <section className="max-h-[42vh] w-full shrink-0 overflow-y-auto border-b border-ink-600 bg-ink-800 lg:max-h-none lg:w-[340px] lg:border-r lg:border-b-0">
         <div className="border-b border-ink-700 px-5 py-4">
-          <p className="text-[10px] font-bold tracking-wide text-ink-300 uppercase">
-            New item
-          </p>
-          <h2 className="mt-0.5 text-base font-semibold text-ink-50">Create timeline task</h2>
+          <p className="text-[10px] font-bold tracking-wide text-ink-300 uppercase">Backlog</p>
+          <h2 className="mt-0.5 text-base font-semibold text-ink-50">Create backlog task</h2>
           <p className="mt-1 text-[11px] leading-relaxed text-ink-300">
-            Park work with files now. Assign to the team when you are ready.
+            Add work now without an assignee. Assign to a teammate whenever you are ready.
           </p>
         </div>
 
@@ -353,34 +452,40 @@ export function TimelinePanel() {
           </div>
 
           <Button type="submit" size="sm" className="w-full" disabled={!title.trim()}>
-            Add to timeline
+            Add to backlog
           </Button>
         </form>
       </section>
 
-      {/* Timeline list — full width */}
       <section className="flex min-h-0 min-w-0 flex-1 flex-col bg-ink-800">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-ink-600 px-4 py-2.5 md:px-5">
           <div>
-            <h2 className="text-sm font-semibold text-ink-50">Timeline</h2>
+            <h2 className="text-sm font-semibold text-ink-50">Project work</h2>
             <p className="text-[11px] text-ink-300">
-              {pendingCount} pending · {assignedCount} assigned · {items.length} shown
+              {backlogCount} backlog · {assignedCount} assigned · {items.length} shown
+              {dashProjectId !== 'all' && project ? ` · ${project.name}` : ''}
             </p>
           </div>
           <div className="flex gap-0.5 border border-ink-600 bg-ink-900 p-0.5">
-            {(['pending', 'assigned', 'all'] as const).map((f) => (
+            {(
+              [
+                { id: 'backlog', label: 'Backlog' },
+                { id: 'assigned', label: 'Assigned' },
+                { id: 'all', label: 'All' },
+              ] as const
+            ).map((f) => (
               <button
-                key={f}
+                key={f.id}
                 type="button"
-                onClick={() => setFilter(f)}
+                onClick={() => setFilter(f.id)}
                 className={cn(
-                  'px-3 py-1 text-[11px] font-semibold capitalize',
-                  filter === f
+                  'px-3 py-1 text-[11px] font-semibold',
+                  filter === f.id
                     ? 'bg-brand-500 text-white'
                     : 'text-ink-300 hover:bg-ink-700 hover:text-ink-50',
                 )}
               >
-                {f}
+                {f.label}
               </button>
             ))}
           </div>
@@ -391,11 +496,15 @@ export function TimelinePanel() {
             <div className="flex h-full min-h-[240px] flex-col items-center justify-center px-6 py-16 text-center">
               <p className="text-sm font-semibold text-ink-100">No items in this view</p>
               <p className="mt-1 max-w-sm text-xs text-ink-300">
-                Create a timeline task on the left. Attach files if needed, then assign later.
+                {filter === 'backlog'
+                  ? 'Create a backlog task on the left, then assign it to a teammate when ready.'
+                  : filter === 'assigned'
+                    ? 'No assigned tasks yet. Open Backlog or All, then pick an assignee.'
+                    : 'Create a backlog task or add work from the board for this project.'}
               </p>
             </div>
           ) : (
-            <table className="w-full min-w-[880px] text-left">
+            <table className="w-full min-w-[640px] text-left md:min-w-[920px]">
               <thead className="sticky top-0 z-[1] border-b border-ink-600 bg-ink-900 text-[10px] font-bold tracking-wide text-ink-300 uppercase">
                 <tr>
                   <th className="px-4 py-2.5 font-bold md:px-5">Task</th>
@@ -409,11 +518,10 @@ export function TimelinePanel() {
                 </tr>
               </thead>
               <tbody>
-                {items.map((item) => {
-                  const proj = getProject(item.projectId);
-                  const canManageAssign = isProjectAdmin(item.projectId);
-                  const itemMembers = getProject(item.projectId)?.members ?? [];
-                  const files = item.attachments ?? [];
+                {items.map((row) => {
+                  const proj = getProject(row.projectId);
+                  const canManageAssign = isProjectAdmin(row.projectId);
+                  const itemMembers = proj?.members ?? [];
                   const memberOptions = itemMembers.map((m) => ({
                     value: m.id,
                     label: m.name,
@@ -421,28 +529,36 @@ export function TimelinePanel() {
                   const currentAssigneeId =
                     itemMembers.find(
                       (m) =>
-                        m.id === item.assigneeId ||
-                        m.name.toLowerCase() === (item.assigneeName ?? '').toLowerCase(),
+                        m.id === row.assigneeId ||
+                        m.name.toLowerCase() === (row.assigneeName ?? '').toLowerCase(),
                     )?.id ?? '';
                   return (
                     <tr
-                      key={item.id}
+                      key={row.key}
                       className="border-b border-ink-700 transition hover:bg-ink-800/70"
                     >
                       <td className="px-4 py-3 md:px-5">
                         <div className="flex items-start gap-2.5">
                           <span className="mt-0.5 bg-ink-700 px-1.5 py-0.5 text-[9px] font-bold tracking-wide text-ink-200 uppercase">
-                            {item.type}
+                            {row.type}
                           </span>
                           <div className="min-w-0">
-                            <p className="text-sm font-semibold text-ink-50">{item.title}</p>
-                            {item.description ? (
+                            <p className="text-sm font-semibold text-ink-50">
+                              {row.task?.key ? (
+                                <span className="mr-1.5 text-[11px] font-bold text-ink-400">
+                                  {row.task.key}
+                                </span>
+                              ) : null}
+                              {row.title}
+                            </p>
+                            {row.description ? (
                               <p className="mt-0.5 line-clamp-1 text-[11px] text-ink-300">
-                                {item.description}
+                                {row.description}
                               </p>
                             ) : null}
                             <p className="mt-1 text-[10px] text-ink-400">
-                              {item.createdByName} · {formatDate(item.createdAt)}
+                              {row.createdByName} · {formatDate(row.createdAt)}
+                              {row.source === 'board' ? ' · Board' : ' · Backlog'}
                             </p>
                           </div>
                         </div>
@@ -454,20 +570,18 @@ export function TimelinePanel() {
                         <span
                           className={cn(
                             'inline-block px-1.5 py-0.5 text-[10px] font-bold uppercase',
-                            item.taskId
-                              ? 'bg-[#23a559]/15 text-[#18783f] dark:text-[#57f287]'
-                              : 'bg-[#f0b232]/15 text-[#9a6700] dark:text-[#fee75c]',
+                            row.inBacklog
+                              ? 'bg-[#f0b232]/15 text-[#9a6700] dark:text-[#fee75c]'
+                              : 'bg-[#23a559]/15 text-[#18783f] dark:text-[#57f287]',
                           )}
                         >
-                          {item.taskId ? 'Assigned' : 'Pending'}
+                          {row.statusLabel}
                         </span>
                       </td>
-                      <td className="px-3 py-3 text-xs capitalize text-ink-200">
-                        {item.priority}
-                      </td>
+                      <td className="px-3 py-3 text-xs capitalize text-ink-200">{row.priority}</td>
                       <td className="px-3 py-3 text-xs text-ink-200">
-                        {item.dueDate
-                          ? new Date(item.dueDate).toLocaleDateString(undefined, {
+                        {row.dueDate
+                          ? new Date(row.dueDate).toLocaleDateString(undefined, {
                               month: 'short',
                               day: 'numeric',
                               year: 'numeric',
@@ -479,46 +593,41 @@ export function TimelinePanel() {
                           <div className="w-[160px]">
                             <Select
                               size="xs"
-                              value={item.taskId ? currentAssigneeId : ''}
-                              placeholder={item.taskId ? 'Reassign…' : 'Assign to…'}
+                              value={currentAssigneeId}
+                              placeholder={row.inBacklog ? 'Assign to…' : 'Reassign…'}
                               onChange={(memberId) => {
                                 if (!memberId || memberId === currentAssigneeId) return;
-                                const member = itemMembers.find((m) => m.id === memberId);
-                                if (!member) return;
-                                void assignTimelineItem(item.id, {
-                                  id: member.id,
-                                  name: member.name,
-                                });
+                                void onAssign(row, memberId);
                               }}
                               options={
-                                item.taskId
-                                  ? memberOptions
-                                  : [
+                                row.inBacklog
+                                  ? [
                                       { value: '', label: 'Assign to…', disabled: true },
                                       ...memberOptions,
                                     ]
+                                  : memberOptions
                               }
                               aria-label={
-                                item.taskId
-                                  ? `Reassign ${item.title}`
-                                  : `Assign ${item.title}`
+                                row.inBacklog
+                                  ? `Assign ${row.title}`
+                                  : `Reassign ${row.title}`
                               }
                             />
                           </div>
-                        ) : item.assigneeName ? (
+                        ) : row.assigneeName ? (
                           <div className="flex items-center gap-1.5">
                             <UserAvatar
-                              name={item.assigneeName}
+                              name={row.assigneeName}
                               src={avatarFromMembers(
-                                getProject(item.projectId)?.members ?? [],
-                                item.assigneeId,
-                                item.assigneeName,
+                                itemMembers,
+                                row.assigneeId,
+                                row.assigneeName,
                               )}
-                              seed={item.assigneeName}
+                              seed={row.assigneeName}
                               size="sm"
                             />
                             <span className="text-xs font-semibold text-ink-100">
-                              {item.assigneeName}
+                              {row.assigneeName}
                             </span>
                           </div>
                         ) : (
@@ -526,35 +635,33 @@ export function TimelinePanel() {
                         )}
                       </td>
                       <td className="px-3 py-3">
-                        {files.length > 0 ? (
-                          <AttachmentChips items={files} compact />
+                        {row.attachments.length > 0 ? (
+                          <AttachmentChips items={row.attachments} compact />
                         ) : (
                           <span className="text-xs text-ink-300">—</span>
                         )}
                       </td>
                       <td className="px-4 py-3 md:px-5">
                         <div className="flex items-center justify-end gap-2">
-                          {canManageAssign ? (
-                            <button
-                              type="button"
-                              onClick={() => setEditingItem(item)}
-                              className="text-[11px] font-semibold text-ink-200 hover:text-ink-50"
-                            >
-                              Edit
-                            </button>
-                          ) : null}
-                          {!item.taskId && canManageAssign ? (
-                            <button
-                              type="button"
-                              onClick={() => setItemToDelete(item)}
-                              className="text-[11px] font-semibold text-ink-400 hover:text-[#ed4245]"
-                            >
-                              Remove
-                            </button>
-                          ) : canManageAssign && memberOptions.length <= 1 ? (
-                            <span className="text-[10px] text-ink-400">
-                              Invite teammates to reassign
-                            </span>
+                          {row.source === 'backlog' && row.timelineItem && canManageAssign ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => setEditingItem(row.timelineItem!)}
+                                className="text-[11px] font-semibold text-ink-200 hover:text-ink-50"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setItemToDelete(row.timelineItem!)}
+                                className="text-[11px] font-semibold text-ink-400 hover:text-[#ed4245]"
+                              >
+                                Remove
+                              </button>
+                            </>
+                          ) : row.source === 'board' ? (
+                            <span className="text-[10px] text-ink-400">On board</span>
                           ) : null}
                         </div>
                       </td>
@@ -568,7 +675,7 @@ export function TimelinePanel() {
 
         {members.length > 0 && activeProjectId ? (
           <p className="border-t border-ink-600 px-4 py-2 text-[11px] text-ink-400 md:px-5">
-            {project?.name} · {members.length} members ready to assign
+            {project?.name} · {members.length} members ready to assign · Backlog + board tasks
           </p>
         ) : null}
       </section>
@@ -581,9 +688,7 @@ export function TimelinePanel() {
         open={Boolean(itemToDelete)}
         title="Remove backlog item?"
         message={
-          itemToDelete
-            ? `Remove “${itemToDelete.title}”? This can’t be undone.`
-            : ''
+          itemToDelete ? `Remove “${itemToDelete.title}”? This can’t be undone.` : ''
         }
         confirmLabel="Remove"
         danger

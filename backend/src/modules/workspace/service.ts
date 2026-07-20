@@ -11,12 +11,14 @@ import { COLUMN_ACCENTS, DEFAULT_BOARD_COLUMNS } from './constants.js';
 import { Project, type ProjectDoc } from './models/Project.js';
 import { ProjectInvite } from './models/ProjectInvite.js';
 import { Task, type TaskDoc } from './models/Task.js';
+import { Team } from './models/Team.js';
 import { TimelineItem } from './models/TimelineItem.js';
 import {
   presentProject,
   presentTask,
   presentProjects,
   presentTasks,
+  serializeTeam,
   serializeTimeline,
 } from './serialize.js';
 import {
@@ -83,11 +85,16 @@ export async function getWorkspace(actor: Actor) {
       : await TimelineItem.find({ projectId: { $in: visibleIds } }).sort({
           createdAt: -1,
         });
+  const teams =
+    visibleIds.length === 0
+      ? []
+      : await Team.find({ projectId: { $in: visibleIds } }).sort({ name: 1 });
 
   return {
     projects: await presentProjects(visible),
     tasks: await presentTasks(tasks),
     timeline: timeline.map(serializeTimeline),
+    teams: teams.map(serializeTeam),
   };
 }
 
@@ -612,6 +619,7 @@ export async function createTask(
     assigneeName?: string;
     assigneeId?: string;
     dueDate?: string;
+    teamId?: string | null;
   },
 ) {
   const project = await getAccessibleProject(projectId, actor);
@@ -628,6 +636,16 @@ export async function createTask(
       m.id === input.assigneeId ||
       m.name.trim().toLowerCase() === assigneeName.toLowerCase(),
   );
+
+  let teamOid: Types.ObjectId | null = null;
+  if (input.teamId) {
+    if (!Types.ObjectId.isValid(input.teamId)) {
+      throw new AuthError('Team not found', 404, 'NOT_FOUND');
+    }
+    const team = await Team.findOne({ _id: input.teamId, projectId: project._id });
+    if (!team) throw new AuthError('Team not found', 404, 'NOT_FOUND');
+    teamOid = team._id;
+  }
 
   const estimate = Number(input.estimateHours) || 0;
   const task = await Task.create({
@@ -651,6 +669,7 @@ export async function createTask(
     startDate: '',
     endDate: '',
     dueDate: input.dueDate ?? '',
+    teamId: teamOid,
     comments: [],
     attachments: [],
   });
@@ -693,6 +712,20 @@ export async function updateTask(
     if (patch[key] !== undefined) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (task as any)[key] = patch[key];
+    }
+  }
+
+  if (patch.teamId !== undefined) {
+    const raw = patch.teamId;
+    if (raw === null || raw === '') {
+      task.teamId = null;
+    } else if (typeof raw === 'string') {
+      if (!Types.ObjectId.isValid(raw)) {
+        throw new AuthError('Team not found', 404, 'NOT_FOUND');
+      }
+      const team = await Team.findOne({ _id: raw, projectId: task.projectId });
+      if (!team) throw new AuthError('Team not found', 404, 'NOT_FOUND');
+      task.teamId = team._id;
     }
   }
 
@@ -1074,3 +1107,86 @@ export async function deleteTimelineItem(actor: Actor, itemId: string) {
   await deleteStoredMediaMany(refs);
   return { ok: true };
 }
+
+export async function createTeam(
+  actor: Actor,
+  projectId: string,
+  input: { name: string; memberIds?: string[] },
+) {
+  const project = await getAccessibleProject(projectId, actor);
+  requireAdmin(project, actor.email);
+
+  const name = input.name.trim();
+  if (!name) throw new AuthError('Team name is required', 400);
+
+  const memberIds = (input.memberIds ?? []).filter((id) =>
+    project.members.some((m) => m.id === id),
+  );
+
+  try {
+    const team = await Team.create({
+      orgId: project.orgId,
+      projectId: project._id,
+      name,
+      memberIds,
+    });
+    return serializeTeam(team);
+  } catch (err) {
+    if ((err as { code?: number }).code === 11000) {
+      throw new AuthError('A team with that name already exists', 409, 'NAME_TAKEN');
+    }
+    throw err;
+  }
+}
+
+export async function updateTeam(
+  actor: Actor,
+  teamId: string,
+  input: { name?: string; memberIds?: string[] },
+) {
+  if (!Types.ObjectId.isValid(teamId)) {
+    throw new AuthError('Team not found', 404, 'NOT_FOUND');
+  }
+  const team = await Team.findById(teamId);
+  if (!team) throw new AuthError('Team not found', 404, 'NOT_FOUND');
+
+  const project = await getAccessibleProject(String(team.projectId), actor);
+  requireAdmin(project, actor.email);
+
+  if (input.name !== undefined) {
+    const name = input.name.trim();
+    if (!name) throw new AuthError('Team name is required', 400);
+    team.name = name;
+  }
+  if (input.memberIds !== undefined) {
+    team.memberIds = input.memberIds.filter((id) =>
+      project.members.some((m) => m.id === id),
+    );
+  }
+
+  try {
+    await team.save();
+  } catch (err) {
+    if ((err as { code?: number }).code === 11000) {
+      throw new AuthError('A team with that name already exists', 409, 'NAME_TAKEN');
+    }
+    throw err;
+  }
+  return serializeTeam(team);
+}
+
+export async function deleteTeam(actor: Actor, teamId: string) {
+  if (!Types.ObjectId.isValid(teamId)) {
+    throw new AuthError('Team not found', 404, 'NOT_FOUND');
+  }
+  const team = await Team.findById(teamId);
+  if (!team) throw new AuthError('Team not found', 404, 'NOT_FOUND');
+
+  const project = await getAccessibleProject(String(team.projectId), actor);
+  requireAdmin(project, actor.email);
+
+  await Task.updateMany({ teamId: team._id }, { $set: { teamId: null } });
+  await team.deleteOne();
+  return { ok: true, teamId };
+}
+

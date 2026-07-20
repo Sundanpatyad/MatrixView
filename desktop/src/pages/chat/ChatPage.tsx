@@ -9,18 +9,24 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import {
+  IconChevronLeft,
+  IconEdit,
   IconFile,
   IconForward,
   IconGallery,
   IconImage,
   IconMic,
   IconPaperclip,
+  IconPhone,
+  IconPhoneOff,
   IconPlus,
   IconReply,
   IconSearch,
   IconSend,
   IconStop,
+  IconTrash,
   IconUsers,
+  IconVideo,
   IconX,
 } from '@/components/ui/Icons';
 import { Button } from '@/components/ui/Button';
@@ -49,15 +55,16 @@ import {
 import { ApiError } from '@/lib/api/client';
 import {
   connectChatSocket,
-  disconnectChatSocket,
+  clearChatSocketHandlerKeys,
   emitMessagesRead,
   emitTypingStart,
   emitTypingStop,
   joinConversation,
   leaveConversation,
-  setChatSocketHandlers,
+  patchChatSocketHandlers,
   type PresenceUser,
 } from '@/lib/socket/chatSocket';
+import { useCall } from '@/lib/calls/CallContext';
 import {
   buildOptimisticMessage,
   chatSendQueue,
@@ -66,6 +73,7 @@ import {
 import {
   appendMessageSorted,
   loadConversations,
+  mergeMessagesById,
   openConversationsFromLocal,
   openMessagesFromLocal,
   replaceMessageById,
@@ -73,6 +81,8 @@ import {
   sortMessagesByTime,
   syncConversationsFromApi,
   syncLatestMessagesFromApi,
+  fetchLatestMessagesPage,
+  fetchOlderMessagesPage,
 } from '@/lib/offline/chatApi';
 import {
   markOptimisticFailed,
@@ -163,6 +173,38 @@ function formatDay(iso: string) {
   }
 }
 
+function formatCallDuration(seconds: number) {
+  const s = Math.max(0, Math.floor(seconds));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const r = s % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(r).padStart(2, '0')}`;
+  return `${m}:${String(r).padStart(2, '0')}`;
+}
+
+function callHistoryLabel(msg: ChatMessage, meId: string) {
+  const call = msg.call;
+  if (!call) return msg.body || 'Voice call';
+  if (msg.body) return msg.body;
+  const iStarted = call.initiatedBy === meId;
+  const isVideo = call.mediaKind === 'video';
+  const noun = isVideo ? 'Video call' : 'Voice call';
+  const lower = isVideo ? 'video call' : 'voice call';
+  switch (call.outcome) {
+    case 'answered':
+      return `${noun} · ${formatCallDuration(call.durationSeconds)}`;
+    case 'rejected':
+      return iStarted ? `Declined ${lower}` : 'You declined';
+    case 'cancelled':
+      return iStarted ? 'Cancelled call' : `Missed ${lower}`;
+    case 'missed':
+      return iStarted ? 'No answer' : `Missed ${lower}`;
+    case 'failed':
+    default:
+      return `${noun} failed`;
+  }
+}
+
 function errMsg(err: unknown) {
   if (err instanceof ApiError) return err.message;
   if (err instanceof Error) return err.message;
@@ -181,29 +223,311 @@ function MessageTicks({
   if (!mine) return null;
   if (localState === 'sending') {
     return (
-      <span className="ml-0.5 inline-flex text-white/55" title="Sending" aria-label="Sending">
-        <span className="inline-block h-2.5 w-2.5 animate-pulse rounded-full border border-white/70 border-t-transparent" />
+      <span className="inline-flex text-white/50" title="Sending" aria-label="Sending">
+        <span className="inline-block h-2.5 w-2.5 animate-pulse rounded-full border border-current border-t-transparent" />
       </span>
     );
   }
   if (localState === 'failed') {
     return (
-      <span className="ml-0.5 font-semibold text-rose-200" title="Failed to send" aria-label="Failed">
+      <span className="font-semibold text-rose-200" title="Failed to send" aria-label="Failed">
         !
       </span>
     );
   }
-  const tone =
-    status === 'read'
-      ? 'text-[#57f287]'
-      : status === 'delivered'
-        ? 'text-white/80'
-        : 'text-white/55';
+  const read = status === 'read';
+  const double = status === 'delivered' || status === 'read';
   return (
-    <span className={cn('ml-0.5 inline-flex font-semibold tracking-tight', tone)} aria-label={status ?? 'sent'}>
-      {status === 'delivered' || status === 'read' ? '✓✓' : '✓'}
+    <span
+      className={cn('inline-flex', read ? 'text-[#57f287]' : 'text-white/65')}
+      title={status ?? 'sent'}
+      aria-label={status ?? 'sent'}
+    >
+      <svg viewBox="0 0 16 11" className="h-3 w-4" fill="none" aria-hidden>
+        {double ? (
+          <>
+            <path
+              d="M1.5 6.2 4.2 8.8 9.8 2.2"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+            <path
+              d="M5.2 6.2 7.9 8.8 14.5 2.2"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </>
+        ) : (
+          <path
+            d="M2.2 6.2 5 8.8 12.5 2.2"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        )}
+      </svg>
     </span>
   );
+}
+
+function MediaPreviewModal({
+  att,
+  onClose,
+}: {
+  att: ChatAttachment;
+  onClose: () => void;
+}) {
+  const src = resolveMediaUrl(att.url);
+  const pdf = isPdfAttachment(att);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  return createPortal(
+    <div className="fixed inset-0 z-[11000] flex items-center justify-center p-3 sm:p-6">
+      <button
+        type="button"
+        className="absolute inset-0 bg-black/75 backdrop-blur-sm"
+        aria-label="Close preview"
+        onClick={onClose}
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={att.name}
+        className="relative z-10 flex max-h-[min(92vh,900px)] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-ink-600 bg-ink-900 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between gap-3 border-b border-ink-600 px-4 py-3">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-ink-50">{att.name}</p>
+            <p className="text-[11px] text-ink-400">
+              {att.kind === 'image'
+                ? 'Image'
+                : att.kind === 'video'
+                  ? 'Video'
+                  : pdf
+                    ? 'PDF'
+                    : 'File'}
+              {att.size ? ` · ${formatBytes(att.size)}` : ''}
+            </p>
+          </div>
+          <div className="flex shrink-0 items-center gap-1">
+            <a
+              href={src}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-lg px-2.5 py-1.5 text-xs font-medium text-brand-600 hover:bg-ink-800 dark:text-brand-300"
+            >
+              Open
+            </a>
+            <button
+              type="button"
+              title="Close"
+              onClick={onClose}
+              className="rounded-lg p-1.5 text-ink-300 hover:bg-ink-800 hover:text-ink-50"
+            >
+              <IconX className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+        <div className="flex min-h-0 flex-1 items-center justify-center bg-ink-950/80 p-3 sm:p-4">
+          {att.kind === 'image' ? (
+            <img
+              src={src}
+              alt={att.name}
+              className="max-h-[min(78vh,820px)] max-w-full rounded-lg object-contain"
+            />
+          ) : att.kind === 'video' ? (
+            <video
+              src={src}
+              controls
+              autoPlay
+              playsInline
+              className="max-h-[min(78vh,820px)] max-w-full rounded-lg bg-black"
+            >
+              <track kind="captions" />
+            </video>
+          ) : pdf ? (
+            <iframe title={att.name} src={src} className="h-[min(78vh,820px)] w-full rounded-lg bg-white" />
+          ) : (
+            <a
+              href={src}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-xl bg-brand-500 px-4 py-2 text-sm font-medium text-white"
+            >
+              Download file
+            </a>
+          )}
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+function VoiceNotePlayer({ att, mine }: { att: ChatAttachment; mine?: boolean }) {
+  const src = resolveMediaUrl(att.url);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setError(null);
+  }, [src]);
+
+  return (
+    <div
+      className={cn(
+        'min-w-[160px] max-w-[220px] rounded-xl px-2.5 py-2',
+        mine ? 'bg-black/15' : 'border border-ink-600 bg-ink-900/80',
+      )}
+    >
+      <div
+        className={cn(
+          'mb-1 flex items-center gap-1.5 text-[11px] font-medium',
+          mine ? 'text-white/90' : 'text-ink-200',
+        )}
+      >
+        <IconMic className={cn('h-3.5 w-3.5', mine ? 'text-white/80' : 'text-brand-500')} />
+        <span className="truncate">{att.name || 'Voice note'}</span>
+      </div>
+      {error ? (
+        <div className="space-y-1">
+          <p className={cn('text-[11px]', mine ? 'text-rose-100' : 'text-rose-600')}>{error}</p>
+          <a
+            href={src}
+            target="_blank"
+            rel="noreferrer"
+            className={cn(
+              'text-[11px] font-semibold underline',
+              mine ? 'text-white' : 'text-brand-600',
+            )}
+          >
+            Open audio file
+          </a>
+        </div>
+      ) : (
+        <audio
+          key={src}
+          controls
+          preload="metadata"
+          className="h-8 w-full"
+          src={src}
+          onError={() =>
+            setError('Couldn’t play this voice note. Try opening the file instead.')
+          }
+        >
+          <track kind="captions" />
+        </audio>
+      )}
+    </div>
+  );
+}
+
+function AttachmentBlock({
+  att,
+  mine,
+  onPreview,
+}: {
+  att: ChatAttachment;
+  mine?: boolean;
+  onPreview: (att: ChatAttachment) => void;
+}) {
+  const src = resolveMediaUrl(att.url);
+  if (att.kind === 'image') {
+    return (
+      <button
+        type="button"
+        onClick={() => onPreview(att)}
+        className="group/media relative block w-[min(100%,16rem)] overflow-hidden rounded-xl bg-black/20 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+        title="Preview image"
+      >
+        <img
+          src={src}
+          alt={att.name}
+          loading="lazy"
+          className="max-h-56 w-full object-cover transition duration-200 group-hover/media:brightness-95"
+        />
+      </button>
+    );
+  }
+  if (att.kind === 'video') {
+    return (
+      <button
+        type="button"
+        onClick={() => onPreview(att)}
+        className="group/media relative block w-[min(100%,16rem)] overflow-hidden rounded-xl bg-ink-950 text-left ring-1 ring-black/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 dark:ring-white/10"
+        title="Preview video"
+      >
+        <video
+          src={src}
+          muted
+          playsInline
+          preload="metadata"
+          className="max-h-56 w-full bg-black object-cover"
+        >
+          <track kind="captions" />
+        </video>
+        <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/35 transition group-hover/media:bg-black/45">
+          <span className="flex h-11 w-11 items-center justify-center rounded-full bg-black/60 text-white shadow-lg ring-1 ring-white/20">
+            <IconVideo className="h-5 w-5" />
+          </span>
+        </span>
+      </button>
+    );
+  }
+  if (att.kind === 'audio') {
+    return <VoiceNotePlayer att={att} mine={mine} />;
+  }
+  if (att.kind === 'document' || att.kind === 'other') {
+    const pdf = isPdfAttachment(att);
+    return (
+      <button
+        type="button"
+        onClick={() => (pdf ? onPreview(att) : window.open(src, '_blank', 'noopener,noreferrer'))}
+        className={cn(
+          'flex w-[min(100%,15rem)] items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-xs transition',
+          mine
+            ? 'bg-black/15 text-white hover:bg-black/25'
+            : 'border border-ink-600 bg-ink-900/70 text-ink-100 hover:bg-ink-900',
+        )}
+        title={pdf ? 'Preview PDF' : 'Open file'}
+      >
+        <span
+          className={cn(
+            'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[10px] font-bold uppercase tracking-wide',
+            pdf
+              ? mine
+                ? 'bg-white/15 text-white'
+                : 'bg-[#ed4245]/10 text-[#c03537] dark:text-[#ed4245]'
+              : mine
+                ? 'bg-white/15 text-white'
+                : 'bg-ink-700 text-ink-200',
+          )}
+        >
+          {pdf ? 'PDF' : <IconFile className="h-4 w-4" />}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate font-medium">{att.name}</span>
+          <span className={cn('mt-0.5 block text-[11px]', mine ? 'text-white/65' : 'text-ink-300')}>
+            {pdf ? 'Tap to preview' : 'Document'}
+            {att.size ? ` · ${formatBytes(att.size)}` : ''}
+          </span>
+        </span>
+      </button>
+    );
+  }
+  return null;
 }
 
 function PresenceDot({
@@ -281,99 +605,62 @@ function isPdfAttachment(att: ChatAttachment) {
   );
 }
 
-function VoiceNotePlayer({ att }: { att: ChatAttachment }) {
-  const src = resolveMediaUrl(att.url);
-  const [error, setError] = useState<string | null>(null);
+function ComposerAttachmentPreview({
+  file,
+  onRemove,
+}: {
+  file: File;
+  onRemove: () => void;
+}) {
+  const [url, setUrl] = useState<string | null>(null);
+  const isImage = file.type.startsWith('image/');
+  const isVideo = file.type.startsWith('video/');
 
   useEffect(() => {
-    setError(null);
-  }, [src]);
+    if (!isImage && !isVideo) {
+      setUrl(null);
+      return;
+    }
+    const objectUrl = URL.createObjectURL(file);
+    setUrl(objectUrl);
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [file, isImage, isVideo]);
 
   return (
-    <div className="min-w-[220px] max-w-xs border border-ink-600/80 bg-ink-800/80 px-2.5 py-2">
-      <div className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-ink-200">
-        <IconMic className="h-3.5 w-3.5 text-brand-600" />
-        <span className="truncate">{att.name || 'Voice note'}</span>
-      </div>
-      {error ? (
-        <div className="space-y-1.5">
-          <p className="text-[11px] text-rose-700">{error}</p>
-          <a
-            href={src}
-            target="_blank"
-            rel="noreferrer"
-            className="text-[11px] font-semibold text-brand-700 underline"
-          >
-            Open audio file
-          </a>
-        </div>
+    <div className="group relative h-[4.5rem] w-[4.5rem] shrink-0 overflow-hidden rounded-xl border border-ink-600 bg-ink-900 shadow-sm">
+      {isImage && url ? (
+        <img src={url} alt={file.name} className="h-full w-full object-cover" />
+      ) : isVideo && url ? (
+        <>
+          <video src={url} muted playsInline className="h-full w-full object-cover" />
+          <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/35">
+            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-black/55 text-white">
+              <IconVideo className="h-3.5 w-3.5" />
+            </span>
+          </span>
+        </>
       ) : (
-        <audio
-          key={src}
-          controls
-          preload="metadata"
-          className="w-full"
-          src={src}
-          onError={() =>
-            setError('Couldn’t play this voice note. Try opening the file instead.')
-          }
-        >
-          <track kind="captions" />
-        </audio>
+        <div className="flex h-full flex-col items-center justify-center gap-1 px-1.5 text-center">
+          <IconFile className="h-4 w-4 text-ink-300" />
+          <span className="w-full truncate text-[9px] font-semibold uppercase tracking-wide text-ink-300">
+            {fileKindLabel(file)}
+          </span>
+        </div>
       )}
+      <button
+        type="button"
+        title={`Remove ${file.name}`}
+        aria-label={`Remove ${file.name}`}
+        onClick={onRemove}
+        className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-ink-950/80 text-ink-50 opacity-90 shadow transition hover:bg-[#ed4245] hover:opacity-100"
+      >
+        <IconX className="h-3 w-3" />
+      </button>
+      <span className="pointer-events-none absolute inset-x-0 bottom-0 truncate bg-gradient-to-t from-black/70 to-transparent px-1.5 pb-1 pt-3 text-[9px] font-medium text-white">
+        {file.name}
+      </span>
     </div>
   );
-}
-
-function AttachmentBlock({ att }: { att: ChatAttachment }) {
-  const src = resolveMediaUrl(att.url);
-  if (att.kind === 'image') {
-    return (
-      <a href={src} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-md">
-        <img src={src} alt={att.name} className="max-h-56 max-w-full object-cover" />
-      </a>
-    );
-  }
-  if (att.kind === 'video') {
-    return (
-      <video controls className="max-h-56 max-w-full rounded-md" src={src}>
-        <track kind="captions" />
-      </video>
-    );
-  }
-  if (att.kind === 'audio') {
-    return <VoiceNotePlayer att={att} />;
-  }
-  if (att.kind === 'document' || att.kind === 'other') {
-    const pdf = isPdfAttachment(att);
-    return (
-      <a
-        href={src}
-        target="_blank"
-        rel="noreferrer"
-        className="flex min-w-[200px] max-w-xs items-center gap-2.5 rounded-md border border-ink-600/80 bg-ink-800/80 px-2.5 py-2.5 text-xs text-ink-100 hover:bg-ink-800"
-      >
-        <span
-          className={cn(
-            'flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-[10px] font-bold uppercase tracking-wide',
-            pdf
-              ? 'bg-[#ed4245]/10 text-[#c03537] dark:text-[#ed4245]'
-              : 'bg-ink-700 text-ink-200',
-          )}
-        >
-          {pdf ? 'PDF' : <IconFile className="h-4 w-4" />}
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate font-medium">{att.name}</span>
-          <span className="mt-0.5 block text-[11px] text-ink-300">
-            {pdf ? 'PDF document' : 'Document'}
-            {att.size ? ` · ${formatBytes(att.size)}` : ''}
-          </span>
-        </span>
-      </a>
-    );
-  }
-  return null;
 }
 
 type AttachPickerKind = 'photo' | 'gallery' | 'document' | 'audio';
@@ -927,25 +1214,40 @@ export function ChatPage() {
   const { user } = useAuth();
   const { online } = useOffline();
   const meId = user?.id ?? '';
+  const {
+    call,
+    activeRooms,
+    socketReady,
+    socketRetrying,
+    reconnectSocket,
+    focusConversationId,
+    clearFocusConversationId,
+    startCall,
+    joinGroupCall,
+  } = useCall();
   const [conversations, setConversations] = useState<ChatConversation[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [draft, setDraft] = useState('');
   const [files, setFiles] = useState<File[]>([]);
+  const [mediaPreview, setMediaPreview] = useState<ChatAttachment | null>(null);
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
   const [editing, setEditing] = useState<ChatMessage | null>(null);
   /** Skeleton only when there is no local cache yet (first open). */
   const [showListSkeleton, setShowListSkeleton] = useState(true);
   const [showThreadSkeleton, setShowThreadSkeleton] = useState(false);
   const [sending, setSending] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [hasMoreOlder, setHasMoreOlder] = useState(false);
   const [error, setError] = useState('');
   const [orgUsers, setOrgUsers] = useState<ChatMember[]>([]);
   const [presence, setPresence] = useState<Record<string, PresenceUser>>({});
   const [typingUsers, setTypingUsers] = useState<Record<string, string>>({});
-  const [socketReady, setSocketReady] = useState(false);
   const [modal, setModal] = useState<'dm' | 'group' | 'manage' | null>(null);
   const [menuMsgId, setMenuMsgId] = useState<string | null>(null);
+  const [actionMsgId, setActionMsgId] = useState<string | null>(null);
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
   const [deleteMsg, setDeleteMsg] = useState<ChatMessage | null>(null);
   const [deletingMsg, setDeletingMsg] = useState(false);
   const [forwardMsg, setForwardMsg] = useState<ChatMessage | null>(null);
@@ -969,12 +1271,23 @@ export function ChatPage() {
   const prevActiveIdForScrollRef = useRef<string | null>(null);
   /** Keep pin-to-bottom unless the user scrolls up to read history. */
   const stickToBottomRef = useRef(true);
+  const loadingOlderRef = useRef(false);
+  const hasMoreOlderRef = useRef(false);
+  const messagesRef = useRef<ChatMessage[]>([]);
   const typingTimerRef = useRef<number | null>(null);
   const isTypingRef = useRef(false);
   /** In-memory thread cache for instant chat switches (backed by SQLite). */
   const threadCacheRef = useRef<Map<string, ChatMessage[]>>(new Map());
 
   activeIdRef.current = activeId;
+  messagesRef.current = messages;
+  hasMoreOlderRef.current = hasMoreOlder;
+
+  useEffect(() => {
+    if (!focusConversationId) return;
+    setActiveId(focusConversationId);
+    clearFocusConversationId();
+  }, [focusConversationId, clearFocusConversationId]);
 
   function scrollThreadToBottom() {
     const el = threadScrollRef.current;
@@ -982,11 +1295,54 @@ export function ChatPage() {
     el.scrollTop = el.scrollHeight;
   }
 
+  const loadOlderMessages = useCallback(async () => {
+    if (!activeId || !meId || !online) return;
+    if (loadingOlderRef.current || !hasMoreOlderRef.current) return;
+    const oldest = messagesRef.current[0];
+    if (!oldest?.createdAt) return;
+
+    loadingOlderRef.current = true;
+    setLoadingOlder(true);
+    const el = threadScrollRef.current;
+    const prevHeight = el?.scrollHeight ?? 0;
+    const prevTop = el?.scrollTop ?? 0;
+
+    try {
+      const page = await fetchOlderMessagesPage(meId, activeId, oldest.createdAt, 40);
+      if (!page) {
+        hasMoreOlderRef.current = false;
+        setHasMoreOlder(false);
+        return;
+      }
+      hasMoreOlderRef.current = page.hasMore;
+      setHasMoreOlder(page.hasMore);
+      if (page.messages.length === 0) return;
+
+      setMessages((prev) => {
+        const merged = mergeMessagesById(prev, page.messages);
+        threadCacheRef.current.set(activeId, merged);
+        return merged;
+      });
+
+      requestAnimationFrame(() => {
+        const node = threadScrollRef.current;
+        if (!node) return;
+        node.scrollTop = node.scrollHeight - prevHeight + prevTop;
+      });
+    } finally {
+      loadingOlderRef.current = false;
+      setLoadingOlder(false);
+    }
+  }, [activeId, meId, online]);
+
   function onThreadScroll() {
     const el = threadScrollRef.current;
     if (!el) return;
     const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
     stickToBottomRef.current = distance < 80;
+    if (el.scrollTop < 80) {
+      void loadOlderMessages();
+    }
   }
 
   const active = useMemo(
@@ -1032,7 +1388,10 @@ export function ChatPage() {
       setActiveId((prev) => {
         if (preferId && list.some((c) => c.id === preferId)) return preferId;
         if (prev && list.some((c) => c.id === prev)) return prev;
-        return list[0]?.id ?? null;
+        const wide =
+          typeof window !== 'undefined' &&
+          window.matchMedia('(min-width: 768px)').matches;
+        return wide ? (list[0]?.id ?? null) : null;
       });
     },
     [meId],
@@ -1059,7 +1418,13 @@ export function ChatPage() {
       if (cancelled) return;
       if (local.conversations.length > 0) {
         setConversations(local.conversations);
-        setActiveId((prev) => prev ?? local.conversations[0]?.id ?? null);
+        setActiveId((prev) => {
+          if (prev) return prev;
+          const wide =
+            typeof window !== 'undefined' &&
+            window.matchMedia('(min-width: 768px)').matches;
+          return wide ? (local.conversations[0]?.id ?? null) : null;
+        });
         setShowListSkeleton(false);
       } else {
         setShowListSkeleton(true);
@@ -1087,7 +1452,11 @@ export function ChatPage() {
         setConversations(remote);
         setActiveId((prev) => {
           if (prev && remote.some((c) => c.id === prev)) return prev;
-          return prev ?? remote[0]?.id ?? null;
+          if (prev) return prev;
+          const wide =
+            typeof window !== 'undefined' &&
+            window.matchMedia('(min-width: 768px)').matches;
+          return wide ? (remote[0]?.id ?? null) : null;
         });
       }
       setShowListSkeleton(false);
@@ -1101,9 +1470,7 @@ export function ChatPage() {
   useEffect(() => {
     if (!user) return;
 
-    setChatSocketHandlers({
-      onConnect: () => setSocketReady(true),
-      onDisconnect: () => setSocketReady(false),
+    patchChatSocketHandlers({
       onPresenceSnapshot: (users) => {
         setPresence((prev) => {
           const next = { ...prev };
@@ -1213,9 +1580,19 @@ export function ChatPage() {
     });
 
     if (online) void connectChatSocket();
+
     return () => {
-      disconnectChatSocket();
-      setSocketReady(false);
+      clearChatSocketHandlerKeys([
+        'onPresenceSnapshot',
+        'onPresenceUpdate',
+        'onMessageNew',
+        'onMessageEdited',
+        'onMessageDeleted',
+        'onMessageStatus',
+        'onTyping',
+        'onConversationUpsert',
+        'onConversationRemoved',
+      ]);
     };
   }, [user, meId, upsertConversationQuiet, online]);
 
@@ -1238,10 +1615,13 @@ export function ChatPage() {
 
     setReplyTo(null);
     setEditing(null);
-    setMenuMsgId(null);
+    closeMessageMenus();
     setTypingUsers({});
     setError('');
     setFiles([]);
+    setHasMoreOlder(false);
+    hasMoreOlderRef.current = false;
+    loadingOlderRef.current = false;
 
       // Instant paint from memory if we already opened this chat
     const mem = threadCacheRef.current.get(activeId);
@@ -1266,13 +1646,28 @@ export function ChatPage() {
 
       if (online) joinConversation(activeId);
 
-      // 2) Background: only newer messages; merge keeps timestamp order (no shuffle)
+      // 2) Background: newer messages + whether older history may exist
       if (online) {
-        const merged = await syncLatestMessagesFromApi(meId, activeId);
-        if (!cancelled && merged) {
-          const sorted = sortMessagesByTime(merged);
-          threadCacheRef.current.set(activeId, sorted);
-          setMessages(sorted);
+        if (!local.hasCache || localSorted.length === 0) {
+          const page = await fetchLatestMessagesPage(meId, activeId, 40);
+          if (!cancelled && page) {
+            threadCacheRef.current.set(activeId, page.messages);
+            setMessages(page.messages);
+            hasMoreOlderRef.current = page.hasMore;
+            setHasMoreOlder(page.hasMore);
+          }
+        } else {
+          const merged = await syncLatestMessagesFromApi(meId, activeId);
+          if (!cancelled && merged) {
+            const sorted = sortMessagesByTime(merged);
+            threadCacheRef.current.set(activeId, sorted);
+            setMessages(sorted);
+          }
+          // Assume more history until a scroll-up page says otherwise
+          if (!cancelled) {
+            hasMoreOlderRef.current = true;
+            setHasMoreOlder(true);
+          }
         }
       }
       if (!cancelled) setShowThreadSkeleton(false);
@@ -1287,6 +1682,14 @@ export function ChatPage() {
       }
     };
   }, [activeId, meId, online]);
+
+  // Subscribe to every group conversation so all members receive live call:room updates
+  useEffect(() => {
+    if (!online || !socketReady) return;
+    for (const c of conversations) {
+      if (c.type === 'group') joinConversation(c.id);
+    }
+  }, [conversations, online, socketReady]);
 
   // Position at latest messages before paint — no visible smooth-scroll jump.
   useLayoutEffect(() => {
@@ -1575,13 +1978,19 @@ export function ChatPage() {
     });
   }
 
-  function requestDelete(msg: ChatMessage) {
+  function closeMessageMenus() {
     setMenuMsgId(null);
+    setActionMsgId(null);
+    setMenuPos(null);
+  }
+
+  function requestDelete(msg: ChatMessage) {
+    closeMessageMenus();
     setDeleteMsg(msg);
   }
 
   function requestForward(msg: ChatMessage) {
-    setMenuMsgId(null);
+    closeMessageMenus();
     setForwardMsg(msg);
   }
 
@@ -1623,7 +2032,7 @@ export function ChatPage() {
   }
 
   function startEdit(msg: ChatMessage) {
-    setMenuMsgId(null);
+    closeMessageMenus();
     setEditing(msg);
     setReplyTo(null);
     setDraft(msg.body);
@@ -1631,15 +2040,61 @@ export function ChatPage() {
   }
 
   function startReply(msg: ChatMessage) {
-    setMenuMsgId(null);
+    closeMessageMenus();
     setReplyTo(msg);
     setEditing(null);
   }
 
+  function openMessageActions(msgId: string) {
+    setActionMsgId(msgId);
+    setMenuMsgId(null);
+    setMenuPos(null);
+  }
+
+  function toggleMoreMenu(msg: ChatMessage, anchor: HTMLElement) {
+    if (menuMsgId === msg.id) {
+      setMenuMsgId(null);
+      setMenuPos(null);
+      return;
+    }
+    const rect = anchor.getBoundingClientRect();
+    const menuWidth = 148;
+    const left = Math.min(
+      Math.max(8, rect.right - menuWidth),
+      window.innerWidth - menuWidth - 8,
+    );
+    setActionMsgId(msg.id);
+    setMenuMsgId(msg.id);
+    setMenuPos({ top: Math.min(rect.bottom + 6, window.innerHeight - 160), left });
+  }
+
+  const actionMessage = useMemo(
+    () => (actionMsgId ? messages.find((m) => m.id === actionMsgId) ?? null : null),
+    [actionMsgId, messages],
+  );
+  const menuMessage = useMemo(
+    () => (menuMsgId ? messages.find((m) => m.id === menuMsgId) ?? null : null),
+    [menuMsgId, messages],
+  );
+
+  useEffect(() => {
+    if (!actionMsgId && !menuMsgId) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeMessageMenus();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [actionMsgId, menuMsgId]);
+
   return (
-    <div className="flex h-[calc(100vh-3.5rem)] min-h-[480px] overflow-hidden border border-ink-600 bg-ink-800">
-      {/* Sidebar */}
-      <aside className="flex w-[300px] shrink-0 flex-col border-r border-ink-600 bg-ink-800/40">
+    <div className="flex h-full min-h-0 overflow-hidden border-0 border-ink-600 bg-ink-800 md:border">
+      {/* Sidebar — full width on mobile until a chat is opened */}
+      <aside
+        className={cn(
+          'flex w-full shrink-0 flex-col border-r border-ink-600 bg-ink-800/40 md:w-[300px]',
+          activeId ? 'hidden md:flex' : 'flex',
+        )}
+      >
         <div className="border-b border-ink-600 p-3">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
@@ -1647,10 +2102,25 @@ export function ChatPage() {
               <span
                 className={cn(
                   'h-1.5 w-1.5 rounded-full',
-                  socketReady ? 'bg-[#23a559]' : 'bg-ink-300',
+                  socketReady ? 'bg-[#23a559]' : socketRetrying ? 'bg-[#f0b232]' : 'bg-ink-300',
                 )}
-                title={socketReady ? 'Live' : 'Connecting…'}
+                title={
+                  socketReady ? 'Live' : socketRetrying ? 'Reconnecting…' : 'Disconnected'
+                }
               />
+              {!socketReady ? (
+                <button
+                  type="button"
+                  className="text-[11px] font-medium text-[#00a8fc] hover:underline disabled:opacity-60"
+                  disabled={socketRetrying || !online}
+                  title={online ? 'Retry live connection' : 'You are offline'}
+                  onClick={() => {
+                    void reconnectSocket();
+                  }}
+                >
+                  {socketRetrying ? 'Retrying…' : 'Retry'}
+                </button>
+              ) : null}
             </div>
             <div className="flex gap-1">
               <Button type="button" variant="ghost" size="xs" onClick={() => setModal('dm')} title="New chat">
@@ -1694,6 +2164,7 @@ export function ChatPage() {
               const peerId =
                 c.type === 'dm' ? c.memberIds.find((id) => id !== meId) : undefined;
               const peer = peerId ? presence[peerId] : undefined;
+              const liveCall = c.type === 'group' ? activeRooms[c.id] : undefined;
               return (
                 <button
                   key={c.id}
@@ -1714,14 +2185,20 @@ export function ChatPage() {
                     <span className="flex items-center justify-between gap-2">
                       <span className="truncate text-sm font-semibold text-ink-50">{c.name}</span>
                       <span className="shrink-0 text-[10px] text-ink-400">
-                        {formatTime(c.lastMessageAt)}
+                        {liveCall ? (
+                          <span className="font-semibold text-brand-400">In call</span>
+                        ) : (
+                          formatTime(c.lastMessageAt)
+                        )}
                       </span>
                     </span>
                     <span className="mt-0.5 block truncate text-xs text-ink-300">
-                      {c.type === 'dm' && peer?.checkedIn
-                        ? 'Checked in'
-                        : c.lastMessagePreview ||
-                          (c.type === 'group' ? 'Group chat' : 'Direct message')}
+                      {liveCall
+                        ? `${liveCall.participantCount} in call · tap to join`
+                        : c.type === 'dm' && peer?.checkedIn
+                          ? 'Checked in'
+                          : c.lastMessagePreview ||
+                            (c.type === 'group' ? 'Group chat' : 'Direct message')}
                     </span>
                   </span>
                 </button>
@@ -1731,17 +2208,31 @@ export function ChatPage() {
         </div>
       </aside>
 
-      {/* Thread */}
-      <section className="flex min-w-0 flex-1 flex-col bg-ink-900">
+      {/* Thread — full screen on mobile when a chat is selected */}
+      <section
+        className={cn(
+          'min-w-0 flex-1 flex-col bg-ink-900',
+          activeId ? 'flex' : 'hidden md:flex',
+        )}
+      >
         {!active ? (
-          <div className="flex flex-1 flex-col items-center justify-center gap-2 text-ink-300">
+          <div className="flex flex-1 flex-col items-center justify-center gap-2 px-4 text-ink-300">
             <IconUsers className="h-10 w-10 opacity-40" />
-            <p className="text-sm font-medium">Select a chat or start a new one</p>
+            <p className="text-center text-sm font-medium">Select a chat or start a new one</p>
           </div>
         ) : (
           <>
-            <header className="flex items-center justify-between gap-3 border-b border-ink-600 bg-ink-800/90 px-4 py-3 backdrop-blur">
-              <div className="flex min-w-0 items-center gap-3">
+            <header className="flex items-center justify-between gap-2 border-b border-ink-600 bg-ink-800/90 px-2 py-2.5 backdrop-blur sm:gap-3 sm:px-4 sm:py-3">
+              <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+                <button
+                  type="button"
+                  aria-label="Back to chats"
+                  title="Back to chats"
+                  onClick={() => setActiveId(null)}
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-ink-300 hover:bg-ink-700 hover:text-ink-50 md:hidden"
+                >
+                  <IconChevronLeft className="h-5 w-5" />
+                </button>
                 <span className="relative shrink-0">
                   <ConversationAvatar conversation={active} meId={meId} size="lg" />
                   {active.type === 'dm' && peerPresence && 'checkedIn' in peerPresence ? (
@@ -1777,18 +2268,181 @@ export function ChatPage() {
                   </p>
                 </div>
               </div>
-              {active.type === 'group' ? (
-                <Button type="button" variant="secondary" size="sm" onClick={() => setModal('manage')}>
-                  Manage
-                </Button>
-              ) : null}
+              <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
+                {active.type === 'dm' || active.type === 'group' ? (
+                  <>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      title={active.type === 'group' ? 'Group audio call' : 'Audio call'}
+                      disabled={
+                        !socketReady ||
+                        call.phase !== 'idle' ||
+                        (active.type === 'dm' &&
+                          !(peerPresence && 'online' in peerPresence && peerPresence.online))
+                      }
+                      onClick={() => {
+                        if (active.type === 'group') {
+                          void startCall({
+                            conversationId: active.id,
+                            conversationName: active.name,
+                            mediaKind: 'audio',
+                            isGroup: true,
+                          }).catch((err) => {
+                            setError(err instanceof Error ? err.message : 'Could not start call');
+                          });
+                          return;
+                        }
+                        const peerId = active.memberIds.find((id) => id !== meId);
+                        if (!peerId) return;
+                        void startCall({
+                          conversationId: active.id,
+                          peerUserId: peerId,
+                          peerName: active.name,
+                          mediaKind: 'audio',
+                        }).catch((err) => {
+                          setError(err instanceof Error ? err.message : 'Could not start call');
+                        });
+                      }}
+                    >
+                      <IconPhone className="h-3.5 w-3.5" />
+                      <span className="hidden sm:inline">Call</span>
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      title={active.type === 'group' ? 'Group video call' : 'Video call'}
+                      disabled={
+                        !socketReady ||
+                        call.phase !== 'idle' ||
+                        (active.type === 'dm' &&
+                          !(peerPresence && 'online' in peerPresence && peerPresence.online))
+                      }
+                      onClick={() => {
+                        if (active.type === 'group') {
+                          void startCall({
+                            conversationId: active.id,
+                            conversationName: active.name,
+                            mediaKind: 'video',
+                            isGroup: true,
+                          }).catch((err) => {
+                            setError(
+                              err instanceof Error ? err.message : 'Could not start video call',
+                            );
+                          });
+                          return;
+                        }
+                        const peerId = active.memberIds.find((id) => id !== meId);
+                        if (!peerId) return;
+                        void startCall({
+                          conversationId: active.id,
+                          peerUserId: peerId,
+                          peerName: active.name,
+                          mediaKind: 'video',
+                        }).catch((err) => {
+                          setError(
+                            err instanceof Error ? err.message : 'Could not start video call',
+                          );
+                        });
+                      }}
+                    >
+                      <IconVideo className="h-3.5 w-3.5" />
+                      <span className="hidden sm:inline">Video</span>
+                    </Button>
+                  </>
+                ) : null}
+                {active.type === 'group' ? (
+                  <Button type="button" variant="secondary" size="sm" onClick={() => setModal('manage')}>
+                    <span className="sm:hidden">···</span>
+                    <span className="hidden sm:inline">Manage</span>
+                  </Button>
+                ) : null}
+              </div>
             </header>
+
+            {active.type === 'group' &&
+            activeRooms[active.id] &&
+            !(call.phase !== 'idle' && call.conversationId === active.id) ? (
+              <div className="flex flex-col gap-2 border-b border-ink-700 bg-ink-900/80 px-4 py-2 sm:flex-row sm:items-center sm:gap-3">
+                <div className="flex min-w-0 flex-1 items-center gap-3">
+                  <IconPhone className="h-4 w-4 shrink-0 text-brand-500" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-ink-50">
+                      {activeRooms[active.id]!.mediaKind === 'video' ? 'Video' : 'Voice'} call in
+                      progress
+                    </p>
+                    <p className="truncate text-[11px] text-ink-300">
+                      {activeRooms[active.id]!.participantCount} joined
+                      {active.members.length > activeRooms[active.id]!.participantCount
+                        ? ` · ${active.members.length - activeRooms[active.id]!.participantCount} not in call`
+                        : ''}
+                      {' · '}
+                      {(activeRooms[active.id]!.members.length
+                        ? activeRooms[active.id]!.members
+                        : active.members.map((m) => ({
+                            userId: m.id,
+                            name: m.name,
+                            joined: activeRooms[active.id]!.participants.some(
+                              (p) => p.userId === m.id,
+                            ),
+                          }))
+                      )
+                        .map((m) => {
+                          const name =
+                            m.name ||
+                            active.members.find((x) => x.id === m.userId)?.name ||
+                            'Member';
+                          return m.joined ? name : `${name} (not joined)`;
+                        })
+                        .join(', ')}
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="shrink-0"
+                  disabled={!socketReady || call.phase !== 'idle'}
+                  onClick={() => {
+                    const room = activeRooms[active.id];
+                    if (!room) return;
+                    void joinGroupCall({
+                      conversationId: active.id,
+                      callId: room.callId,
+                      mediaKind: room.mediaKind,
+                      conversationName: active.name,
+                    }).catch((err) => {
+                      setError(err instanceof Error ? err.message : 'Could not join call');
+                    });
+                  }}
+                >
+                  Join
+                </Button>
+              </div>
+            ) : null}
 
             <div
               ref={threadScrollRef}
               onScroll={onThreadScroll}
               className="flex-1 space-y-2 overflow-y-auto px-4 py-4"
             >
+              {loadingOlder ? (
+                <div className="flex justify-center py-1">
+                  <span className="text-[11px] font-medium text-ink-400">Loading earlier messages…</span>
+                </div>
+              ) : hasMoreOlder && messages.length > 0 ? (
+                <div className="flex justify-center py-1">
+                  <button
+                    type="button"
+                    className="text-[11px] font-medium text-brand-600 hover:underline dark:text-brand-300"
+                    onClick={() => void loadOlderMessages()}
+                  >
+                    Load earlier messages
+                  </button>
+                </div>
+              ) : null}
               {showThreadSkeleton ? (
                 <ChatThreadSkeleton />
               ) : messages.length === 0 ? (
@@ -1800,11 +2454,89 @@ export function ChatPage() {
                   const prev = messages[i - 1];
                   const showDay =
                     !prev || formatDay(prev.createdAt) !== formatDay(msg.createdAt);
+                  const isCall = msg.type === 'call' && msg.call;
+
+                  if (isCall) {
+                    const missed =
+                      msg.call!.outcome === 'missed' ||
+                      msg.call!.outcome === 'rejected' ||
+                      (msg.call!.outcome === 'cancelled' && msg.call!.initiatedBy !== meId);
+                    return (
+                      <div key={msg.id}>
+                        {showDay ? (
+                          <div className="my-3 flex justify-center">
+                            <span className="rounded-full bg-ink-800/80 px-3 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-300 shadow-sm">
+                              {formatDay(msg.createdAt)}
+                            </span>
+                          </div>
+                        ) : null}
+                        <div className="my-2 flex justify-center">
+                          <div
+                            className={cn(
+                              'inline-flex max-w-[90%] items-center gap-2 rounded-full border px-3 py-1.5 text-xs shadow-sm',
+                              missed
+                                ? 'border-[#ed4245]/30 bg-[#ed4245]/10 text-[#c03537] dark:text-[#ed4245]'
+                                : 'border-ink-600 bg-ink-800 text-ink-200',
+                            )}
+                          >
+                            {missed ? (
+                              <IconPhoneOff className="h-3.5 w-3.5 shrink-0" />
+                            ) : msg.call!.mediaKind === 'video' ? (
+                              <IconVideo className="h-3.5 w-3.5 shrink-0" />
+                            ) : (
+                              <IconPhone className="h-3.5 w-3.5 shrink-0" />
+                            )}
+                            <span className="font-medium">{callHistoryLabel(msg, meId)}</span>
+                            <span className="text-[10px] opacity-70">{formatTime(msg.createdAt)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  const hasVisualMedia =
+                    !deleted &&
+                    msg.attachments.some((a) => a.kind === 'image' || a.kind === 'video');
+                  const textOnly =
+                    !deleted &&
+                    !!(msg.body ?? '').trim() &&
+                    msg.attachments.length === 0 &&
+                    !msg.replyTo;
+                  const mediaOnly =
+                    hasVisualMedia &&
+                    !(msg.body ?? '').trim() &&
+                    !msg.replyTo &&
+                    msg.attachments.length > 0;
+
+                  const meta = (
+                    <span
+                      className={cn(
+                        'inline-flex shrink-0 items-center gap-1 text-[10px] leading-none',
+                        mine ? 'text-white/65' : 'text-ink-400',
+                        textOnly && 'ml-2 translate-y-0.5',
+                      )}
+                    >
+                      {msg.editedAt && !deleted ? <span>edited</span> : null}
+                      <span>{formatTime(msg.createdAt)}</span>
+                      {!deleted ? (
+                        <MessageTicks
+                          status={msg.status ?? 'sent'}
+                          localState={
+                            msg.localState === 'sending' || msg.localState === 'failed'
+                              ? msg.localState
+                              : null
+                          }
+                          mine={mine}
+                        />
+                      ) : null}
+                    </span>
+                  );
+
                   return (
                     <div key={msg.id}>
                       {showDay ? (
                         <div className="my-3 flex justify-center">
-                          <span className="rounded-full bg-ink-800/80 px-3 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-300 shadow-sm">
+                          <span className="rounded-full bg-ink-800/80 px-3 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-300 shadow-sm ring-1 ring-ink-600/60">
                             {formatDay(msg.createdAt)}
                           </span>
                         </div>
@@ -1827,17 +2559,46 @@ export function ChatPage() {
                             className="mb-0.5"
                           />
                         ) : null}
-                        <div
-                          className={cn(
-                            'relative max-w-[75%] rounded-2xl px-3 py-2 shadow-sm',
-                            mine
-                              ? 'rounded-br-md bg-brand-500 text-white'
-                              : 'rounded-bl-md bg-ink-800 text-ink-50',
-                            deleted && 'opacity-70',
-                          )}
-                        >
+                        <div className="relative w-max max-w-[min(88%,22rem)] sm:max-w-[min(78%,22rem)]">
+                          <div
+                            role="button"
+                            tabIndex={deleted ? -1 : 0}
+                            onClick={(e) => {
+                              if (deleted) return;
+                              if (
+                                window.matchMedia('(hover: hover) and (pointer: fine)').matches
+                              ) {
+                                return;
+                              }
+                              const t = e.target as HTMLElement;
+                              if (t.closest('a, button, audio, video, [data-chat-media]')) return;
+                              e.stopPropagation();
+                              setActionMsgId((id) => (id === msg.id ? null : msg.id));
+                              setMenuMsgId(null);
+                              setMenuPos(null);
+                            }}
+                            onContextMenu={(e) => {
+                              if (deleted) return;
+                              e.preventDefault();
+                              openMessageActions(msg.id);
+                            }}
+                            className={cn(
+                              'relative overflow-hidden rounded-2xl shadow-sm outline-none',
+                              mediaOnly ? 'p-1' : 'px-2.5 py-1.5',
+                              mine
+                                ? 'rounded-br-md bg-brand-500 text-white'
+                                : 'rounded-bl-md border border-ink-600/70 bg-ink-800 text-ink-50',
+                              deleted && 'opacity-70',
+                              actionMsgId === msg.id && 'ring-2 ring-brand-400/40',
+                            )}
+                          >
                           {!mine && active.type === 'group' ? (
-                            <p className="mb-0.5 text-[11px] font-semibold text-brand-700">
+                            <p
+                              className={cn(
+                                'mb-0.5 text-[11px] font-semibold text-brand-600 dark:text-brand-300',
+                                mediaOnly && 'px-1.5 pt-0.5',
+                              )}
+                            >
                               {msg.senderName}
                             </p>
                           ) : null}
@@ -1845,7 +2606,7 @@ export function ChatPage() {
                           {msg.replyTo ? (
                             <div
                               className={cn(
-                                'mb-1.5 rounded-md border-l-2 px-2 py-1 text-[11px]',
+                                'mb-1 rounded-lg border-l-2 px-2 py-1 text-[11px]',
                                 mine
                                   ? 'border-white/50 bg-black/15 text-white/90'
                                   : 'border-brand-500 bg-ink-900 text-ink-200',
@@ -1865,55 +2626,72 @@ export function ChatPage() {
                           ) : (
                             <>
                               {msg.attachments.length > 0 ? (
-                                <div className="mb-1.5 space-y-1.5">
+                                <div
+                                  className={cn(
+                                    (msg.body ?? '').trim() ? 'mb-1.5 space-y-1.5' : 'space-y-1.5',
+                                  )}
+                                >
                                   {msg.attachments.map((att) => (
-                                    <AttachmentBlock key={att.id} att={att} />
+                                    <AttachmentBlock
+                                      key={att.id}
+                                      att={att}
+                                      mine={mine}
+                                      onPreview={setMediaPreview}
+                                    />
                                   ))}
                                 </div>
                               ) : null}
-                              {msg.body ? (
-                                <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
+                              {textOnly ? (
+                                <div className="flex items-end">
+                                  <p className="whitespace-pre-wrap break-words text-sm leading-snug">
+                                    {msg.body}
+                                  </p>
+                                  {meta}
+                                </div>
+                              ) : msg.body ? (
+                                <p
+                                  className={cn(
+                                    'whitespace-pre-wrap break-words text-sm leading-snug',
+                                    mediaOnly && 'px-1.5 pt-1',
+                                  )}
+                                >
                                   {msg.body}
                                 </p>
                               ) : null}
                             </>
                           )}
 
-                          <div
-                            className={cn(
-                              'mt-1 flex items-center justify-end gap-1 text-[10px]',
-                              mine ? 'text-white/70' : 'text-ink-400',
-                            )}
-                          >
-                            {msg.editedAt && !deleted ? <span>edited</span> : null}
-                            <span>{formatTime(msg.createdAt)}</span>
-                            {!deleted ? (
-                              <MessageTicks
-                                status={msg.status ?? 'sent'}
-                                localState={
-                                  msg.localState === 'sending' || msg.localState === 'failed'
-                                    ? msg.localState
-                                    : null
-                                }
-                                mine={mine}
-                              />
-                            ) : null}
+                          {!textOnly || deleted ? (
+                            <div
+                              className={cn(
+                                'flex items-center justify-end',
+                                mediaOnly ? 'mt-1 px-1 pb-0.5' : 'mt-1',
+                              )}
+                            >
+                              {meta}
+                            </div>
+                          ) : null}
                           </div>
 
                           {!deleted ? (
                             <div
                               className={cn(
-                                'absolute -top-3 z-20 opacity-0 transition-opacity group-hover:opacity-100',
-                                menuMsgId === msg.id && 'opacity-100',
+                                'absolute -top-3 z-20 hidden md:block',
+                                'opacity-0 pointer-events-none transition-opacity group-hover:opacity-100 group-hover:pointer-events-auto',
+                                (actionMsgId === msg.id || menuMsgId === msg.id) &&
+                                  'opacity-100 pointer-events-auto',
                                 mine ? 'right-0' : 'left-0',
                               )}
                             >
-                              <div className="relative flex items-center gap-0.5 rounded-lg border border-ink-600 bg-ink-800 p-0.5 text-ink-200 shadow-md">
+                              <div className="flex items-center gap-0.5 rounded-lg border border-ink-600 bg-ink-800 p-0.5 text-ink-200 shadow-md">
                                 <button
                                   type="button"
                                   title="Reply"
                                   className="rounded-md p-1.5 hover:bg-ink-600"
-                                  onClick={() => startReply(msg)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    startReply(msg);
+                                  }}
                                 >
                                   <IconReply className="h-3.5 w-3.5" />
                                 </button>
@@ -1921,7 +2699,10 @@ export function ChatPage() {
                                   type="button"
                                   title="Forward"
                                   className="rounded-md p-1.5 hover:bg-ink-600"
-                                  onClick={() => requestForward(msg)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    requestForward(msg);
+                                  }}
                                 >
                                   <IconForward className="h-3.5 w-3.5" />
                                 </button>
@@ -1929,46 +2710,13 @@ export function ChatPage() {
                                   type="button"
                                   title="More"
                                   className="rounded-md px-1.5 py-1 text-[11px] font-bold hover:bg-ink-600"
-                                  onClick={() =>
-                                    setMenuMsgId((id) => (id === msg.id ? null : msg.id))
-                                  }
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleMoreMenu(msg, e.currentTarget);
+                                  }}
                                 >
                                   ···
                                 </button>
-                                {menuMsgId === msg.id ? (
-                                  <div
-                                    className={cn(
-                                      'absolute top-full z-30 mt-1 min-w-[7.5rem] overflow-hidden rounded-lg border border-ink-600 bg-ink-800 py-1 text-ink-100 shadow-lg',
-                                      mine ? 'right-0' : 'left-0',
-                                    )}
-                                  >
-                                    {mine ? (
-                                      <button
-                                        type="button"
-                                        className="block w-full px-3 py-1.5 text-left text-xs font-medium text-ink-100 hover:bg-ink-900"
-                                        onClick={() => startEdit(msg)}
-                                      >
-                                        Edit
-                                      </button>
-                                    ) : null}
-                                    <button
-                                      type="button"
-                                      className="block w-full px-3 py-1.5 text-left text-xs font-medium text-ink-100 hover:bg-ink-900"
-                                      onClick={() => requestForward(msg)}
-                                    >
-                                      Forward
-                                    </button>
-                                    {mine ? (
-                                      <button
-                                        type="button"
-                                        className="block w-full px-3 py-1.5 text-left text-xs font-medium text-[#ed4245] hover:bg-[#ed4245]/10"
-                                        onClick={() => requestDelete(msg)}
-                                      >
-                                        Delete
-                                      </button>
-                                    ) : null}
-                                  </div>
-                                ) : null}
                               </div>
                             </div>
                           ) : null}
@@ -2018,25 +2766,28 @@ export function ChatPage() {
             )}
 
             {files.length > 0 ? (
-              <div className="flex flex-wrap gap-2 border-t border-ink-600 bg-ink-800 px-4 py-2">
-                {files.map((f, i) => (
-                  <span
-                    key={`${f.name}-${i}`}
-                    className="inline-flex max-w-[220px] items-center gap-1.5 rounded-md border border-ink-600 bg-ink-900 px-2 py-1 text-xs text-ink-200"
+              <div className="border-t border-ink-600 bg-ink-900/60 px-3 py-2.5">
+                <div className="mb-1.5 flex items-center justify-between gap-2">
+                  <p className="text-[11px] font-medium text-ink-300">
+                    {files.length} attachment{files.length === 1 ? '' : 's'}
+                  </p>
+                  <button
+                    type="button"
+                    className="text-[11px] font-medium text-ink-400 transition hover:text-ink-100"
+                    onClick={() => setFiles([])}
                   >
-                    <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-ink-300">
-                      {fileKindLabel(f)}
-                    </span>
-                    <span className="min-w-0 truncate">{f.name}</span>
-                    <button
-                      type="button"
-                      onClick={() => setFiles((prev) => prev.filter((_, j) => j !== i))}
-                      className="text-ink-400 hover:text-ink-200"
-                    >
-                      <IconX className="h-3 w-3" />
-                    </button>
-                  </span>
-                ))}
+                    Clear all
+                  </button>
+                </div>
+                <div className="flex gap-2 overflow-x-auto pb-0.5">
+                  {files.map((f, i) => (
+                    <ComposerAttachmentPreview
+                      key={`${f.name}-${f.size}-${i}`}
+                      file={f}
+                      onRemove={() => setFiles((prev) => prev.filter((_, j) => j !== i))}
+                    />
+                  ))}
+                </div>
               </div>
             ) : null}
 
@@ -2078,7 +2829,7 @@ export function ChatPage() {
 
             <form
               onSubmit={onSend}
-              className="flex items-end gap-2 border-t border-ink-600 bg-ink-800 px-3 py-3"
+              className="flex items-end gap-1.5 border-t border-ink-600 bg-ink-800/90 px-2 py-2.5 sm:gap-2 sm:px-3 sm:py-3"
             >
               <input
                 ref={photoInputRef}
@@ -2190,7 +2941,7 @@ export function ChatPage() {
                 }}
                 rows={1}
                 placeholder={editing ? 'Edit message…' : 'Type a message…'}
-                className="max-h-28 min-h-[40px] flex-1 resize-none rounded-xl border border-ink-600 bg-ink-800/50 px-3 py-2.5 text-sm outline-none focus:border-brand-500 focus:bg-ink-800"
+                className="max-h-28 min-h-[40px] flex-1 resize-none rounded-xl border border-ink-600 bg-ink-900/40 px-3 py-2.5 text-sm text-ink-50 outline-none placeholder:text-ink-400 focus:border-brand-500 focus:bg-ink-800"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
@@ -2207,9 +2958,10 @@ export function ChatPage() {
                   (!editing && !draft.trim() && files.length === 0)
                 }
                 className="mb-0.5 shrink-0"
+                title={editing ? 'Save' : 'Send'}
               >
                 <IconSend className="h-4 w-4" />
-                {editing ? 'Save' : 'Send'}
+                <span className="hidden sm:inline">{editing ? 'Save' : 'Send'}</span>
               </Button>
             </form>
           </>
@@ -2300,6 +3052,123 @@ export function ChatPage() {
           ) : null}
         </ModalShell>
       ) : null}
+
+      {mediaPreview ? (
+        <MediaPreviewModal att={mediaPreview} onClose={() => setMediaPreview(null)} />
+      ) : null}
+
+      {/* Mobile message actions sheet */}
+      {actionMessage && !actionMessage.deletedAt
+        ? createPortal(
+            <div className="fixed inset-0 z-[10050] md:hidden">
+              <button
+                type="button"
+                aria-label="Close"
+                className="absolute inset-0 bg-black/50"
+                onClick={closeMessageMenus}
+              />
+              <div className="absolute inset-x-0 bottom-0 rounded-t-2xl border-t border-ink-600 bg-ink-800 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 shadow-2xl">
+                <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-ink-600" />
+                <p className="mb-2 truncate px-1 text-xs text-ink-400">
+                  {actionMessage.body?.trim()
+                    ? actionMessage.body.slice(0, 80)
+                    : actionMessage.attachments.length
+                      ? 'Attachment'
+                      : 'Message'}
+                </p>
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium text-ink-50 hover:bg-ink-700"
+                  onClick={() => startReply(actionMessage)}
+                >
+                  <IconReply className="h-4 w-4 text-ink-300" />
+                  Reply
+                </button>
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium text-ink-50 hover:bg-ink-700"
+                  onClick={() => requestForward(actionMessage)}
+                >
+                  <IconForward className="h-4 w-4 text-ink-300" />
+                  Forward
+                </button>
+                {actionMessage.senderId === meId ? (
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium text-ink-50 hover:bg-ink-700"
+                    onClick={() => startEdit(actionMessage)}
+                  >
+                    <IconEdit className="h-4 w-4 text-ink-300" />
+                    Edit
+                  </button>
+                ) : null}
+                {actionMessage.senderId === meId ? (
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium text-[#ed4245] hover:bg-[#ed4245]/10"
+                    onClick={() => requestDelete(actionMessage)}
+                  >
+                    <IconTrash className="h-4 w-4" />
+                    Delete
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  className="mt-1 flex w-full items-center justify-center rounded-xl px-3 py-3 text-sm font-semibold text-ink-300 hover:bg-ink-700"
+                  onClick={closeMessageMenus}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
+
+      {/* Desktop ··· menu (portal so it isn’t clipped) */}
+      {menuMessage && menuPos && !menuMessage.deletedAt
+        ? createPortal(
+            <div className="fixed inset-0 z-[10050] hidden md:block">
+              <button
+                type="button"
+                aria-label="Close menu"
+                className="absolute inset-0 cursor-default"
+                onClick={closeMessageMenus}
+              />
+              <div
+                className="absolute min-w-[9rem] overflow-hidden rounded-lg border border-ink-600 bg-ink-800 py-1 text-ink-100 shadow-lg"
+                style={{ top: menuPos.top, left: menuPos.left }}
+              >
+                {menuMessage.senderId === meId ? (
+                  <button
+                    type="button"
+                    className="block w-full px-3 py-2 text-left text-xs font-medium text-ink-100 hover:bg-ink-900"
+                    onClick={() => startEdit(menuMessage)}
+                  >
+                    Edit
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  className="block w-full px-3 py-2 text-left text-xs font-medium text-ink-100 hover:bg-ink-900"
+                  onClick={() => requestForward(menuMessage)}
+                >
+                  Forward
+                </button>
+                {menuMessage.senderId === meId ? (
+                  <button
+                    type="button"
+                    className="block w-full px-3 py-2 text-left text-xs font-medium text-[#ed4245] hover:bg-[#ed4245]/10"
+                    onClick={() => requestDelete(menuMessage)}
+                  >
+                    Delete
+                  </button>
+                ) : null}
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }

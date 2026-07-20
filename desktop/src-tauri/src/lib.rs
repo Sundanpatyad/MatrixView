@@ -1,5 +1,6 @@
 mod activity;
 mod db;
+mod screen_capture;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -21,7 +22,9 @@ pub fn run() {
     })
     .invoke_handler(tauri::generate_handler![
       activity::get_foreground_app,
-      activity::tracking_available
+      activity::tracking_available,
+      screen_capture::list_capture_targets,
+      screen_capture::capture_frame
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");

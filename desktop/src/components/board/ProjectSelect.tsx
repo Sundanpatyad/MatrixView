@@ -89,7 +89,7 @@ export function ProjectSelect({
         disabled={projects.length === 0}
         onClick={() => setOpen((v) => !v)}
         className={cn(
-          'inline-flex min-w-[200px] max-w-xs items-center justify-between gap-3 rounded-xl border border-ink-600 bg-ink-900 px-3 py-2 text-left transition',
+          'inline-flex w-full min-w-0 max-w-none items-center justify-between gap-3 rounded-xl border border-ink-600 bg-ink-900 px-3 py-2 text-left transition sm:min-w-[200px] sm:max-w-xs sm:w-auto',
           'hover:border-ink-500 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/15',
           'disabled:cursor-not-allowed disabled:opacity-45',
           open && 'border-brand-500 ring-2 ring-brand-500/15',

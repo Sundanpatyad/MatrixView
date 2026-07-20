@@ -257,6 +257,18 @@ export function DashboardPage() {
   );
   const firstName = user?.name.split(' ')[0] ?? 'there';
   const pendingTimeline = scopedTimeline.filter((t) => !t.taskId).length;
+  const scopedBoardUnassigned = useMemo(() => {
+    const list =
+      activeProjectId === 'all'
+        ? tasks
+        : tasks.filter((t) => t.projectId === activeProjectId);
+    return list.filter((t) => {
+      const id = (t.assigneeId ?? '').trim();
+      const name = (t.assigneeName ?? '').trim().toLowerCase();
+      return !id || !name || name === 'unassigned';
+    }).length;
+  }, [tasks, activeProjectId]);
+  const backlogBadge = pendingTimeline + scopedBoardUnassigned;
   const tabs = useMemo(
     () =>
       isProjectAdminAnywhere
@@ -443,8 +455,8 @@ export function DashboardPage() {
             </h1>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="min-w-[200px] max-w-[280px] flex-1 sm:flex-none">
+          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+            <div className="min-w-0 w-full max-w-none flex-1 basis-full sm:basis-auto sm:min-w-[200px] sm:max-w-[280px] sm:flex-none">
               <Select
                 value={activeProjectId}
                 onChange={(value) => setActiveProjectId(value as typeof activeProjectId)}
@@ -477,19 +489,19 @@ export function DashboardPage() {
                       : 'bg-[#23a559]',
                 )}
               />
-              <span className="text-[10px] font-semibold tracking-wide text-ink-300 uppercase">
+              <span className="hidden text-[10px] font-semibold tracking-wide text-ink-300 uppercase sm:inline">
                 {!checkedIn ? 'Out' : onBreak ? 'Break' : 'In'}
               </span>
               <span className="text-sm font-semibold tabular-nums text-ink-50">
                 {checkedIn ? elapsedLabel : '00:00:00'}
               </span>
               {checkedIn && checkInAt ? (
-                <span className="hidden text-[10px] text-ink-400 sm:inline">
+                <span className="hidden text-[10px] text-ink-400 md:inline">
                   · in {checkInAt}
                 </span>
               ) : null}
               {!checkedIn && checkOutAt ? (
-                <span className="hidden text-[10px] text-ink-400 sm:inline">
+                <span className="hidden text-[10px] text-ink-400 md:inline">
                   · out {checkOutAt}
                 </span>
               ) : null}
@@ -509,18 +521,21 @@ export function DashboardPage() {
                   {onBreak ? 'End break' : 'Break'}
                 </Button>
                 <Button size="xs" variant="danger" onClick={() => void checkOut()}>
-                  Check out
+                  <span className="sm:hidden">Out</span>
+                  <span className="hidden sm:inline">Check out</span>
                 </Button>
               </>
             )}
             <Button size="xs" variant="secondary" onClick={() => setShowCreateProject(true)}>
-              New project
+              <span className="sm:hidden">New</span>
+              <span className="hidden sm:inline">New project</span>
             </Button>
             {canDeleteActiveProject ? (
               <Button
                 size="xs"
                 variant="danger"
                 onClick={() => setProjectToDelete(activeProjectId)}
+                className="hidden sm:inline-flex"
               >
                 Delete project
               </Button>
@@ -540,22 +555,22 @@ export function DashboardPage() {
         </div>
 
         {/* Tabs */}
-        <nav className="flex flex-wrap gap-0 border-t border-ink-700 px-2 md:px-3">
+        <nav className="flex gap-0 overflow-x-auto border-t border-ink-700 px-2 md:px-3 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {tabs.map((t) => (
             <button
               key={t.id}
               type="button"
               onClick={() => setTab(t.id)}
               className={cn(
-                'border-b-2 px-3 py-2 text-xs font-semibold transition',
+                'shrink-0 border-b-2 px-3 py-2 text-xs font-semibold transition',
                 tab === t.id
                   ? 'border-ink-900 text-ink-50'
                   : 'border-transparent text-ink-300 hover:text-ink-100',
               )}
             >
               {t.label}
-              {t.id === 'timeline' && pendingTimeline > 0 ? (
-                <span className="ml-1.5 tabular-nums text-ink-400">{pendingTimeline}</span>
+              {t.id === 'timeline' && backlogBadge > 0 ? (
+                <span className="ml-1.5 tabular-nums text-ink-400">{backlogBadge}</span>
               ) : null}
             </button>
           ))}
@@ -581,7 +596,7 @@ export function DashboardPage() {
               <h2 className="text-sm font-semibold text-ink-50">Task list view</h2>
               <p className="text-[11px] text-ink-300">{taskList.length} tasks</p>
             </div>
-            <div className="flex items-center gap-1">
+            <div className="flex w-full flex-wrap items-center gap-1 sm:w-auto">
               {(['all', 'open', 'done'] as const).map((f) => (
                 <button
                   key={f}
@@ -597,7 +612,7 @@ export function DashboardPage() {
                   {f}
                 </button>
               ))}
-              <div className="ml-2 w-[140px]">
+              <div className="ml-0 w-full min-w-0 sm:ml-2 sm:w-[140px]">
                 <Select
                   size="xs"
                   value={selectedUserEmail}
@@ -615,7 +630,63 @@ export function DashboardPage() {
             </div>
           </div>
           <div className="min-h-0 flex-1 overflow-auto">
-            <table className="w-full min-w-[720px] text-left text-xs">
+            {/* Mobile cards */}
+            <div className="space-y-2 p-3 md:hidden">
+              {taskList.length === 0 ? (
+                <p className="px-1 py-12 text-center text-xs text-ink-400">
+                  No tasks in this list.
+                </p>
+              ) : (
+                taskList.map((t) => {
+                  const proj = getProject(t.projectId);
+                  return (
+                    <div
+                      key={t.id}
+                      className="rounded-lg border border-ink-700 bg-ink-900/60 px-3 py-2.5"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-ink-50">{t.title}</p>
+                          <p className="text-[10px] text-ink-400">
+                            {t.key}
+                            {proj ? ` · ${proj.name}` : ''}
+                          </p>
+                        </div>
+                        <span className="shrink-0 capitalize text-[10px] font-semibold text-ink-300">
+                          {t.priority}
+                        </span>
+                      </div>
+                      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-ink-300">
+                        <span className="inline-flex items-center gap-1.5">
+                          <UserAvatar
+                            name={t.assigneeName || 'Unassigned'}
+                            src={avatarFromMembers(
+                              getProject(t.projectId)?.members ?? [],
+                              t.assigneeId,
+                              t.assigneeName,
+                            )}
+                            seed={t.assigneeName || t.id}
+                            size="xs"
+                          />
+                          {t.assigneeName || 'Unassigned'}
+                        </span>
+                        <span className="capitalize">{t.status.replace('_', ' ')}</span>
+                        <span>
+                          {t.dueDate
+                            ? new Date(t.dueDate).toLocaleDateString(undefined, {
+                                month: 'short',
+                                day: 'numeric',
+                              })
+                            : 'No due'}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+            {/* Desktop table */}
+            <table className="hidden w-full min-w-[720px] text-left text-xs md:table">
               <thead className="sticky top-0 bg-ink-900 text-[10px] font-bold tracking-wide text-ink-300 uppercase">
                 <tr>
                   <th className="px-4 py-2">Task</th>
@@ -696,7 +767,82 @@ export function DashboardPage() {
             ) : null}
           </div>
           <div className="min-h-0 flex-1 overflow-auto">
-            <table className="w-full min-w-[720px] text-left text-xs">
+            {/* Mobile cards */}
+            <div className="space-y-2 p-3 md:hidden">
+              {teamUsers.length === 0 ? (
+                <p className="px-1 py-12 text-center text-xs text-ink-400">
+                  {isProjectAdminAnywhere
+                    ? 'No users yet. Click Add user to create one.'
+                    : 'No users yet.'}
+                </p>
+              ) : (
+                teamUsers.map((u) => {
+                  const isYou =
+                    u.email.toLowerCase() === (user?.email ?? '').toLowerCase() ||
+                    u.name.toLowerCase() === (user?.name ?? '').toLowerCase();
+                  const orgUser = orgUsers.find(
+                    (ou) => ou.email.toLowerCase() === u.email.toLowerCase(),
+                  );
+                  return (
+                    <div
+                      key={u.id}
+                      className="rounded-lg border border-ink-700 bg-ink-900/60 px-3 py-2.5"
+                    >
+                      <button
+                        type="button"
+                        className="flex w-full items-center gap-2 text-left"
+                        onClick={() => {
+                          setSelectedUserEmail(u.email.toLowerCase());
+                          setTab('tasks');
+                        }}
+                      >
+                        <UserAvatar
+                          name={u.name}
+                          src={
+                            orgUsers.find(
+                              (ou) => ou.email.toLowerCase() === u.email.toLowerCase(),
+                            )?.avatarUrl ??
+                            (u.email.toLowerCase() === (user?.email ?? '').toLowerCase()
+                              ? user?.avatarUrl
+                              : null)
+                          }
+                          seed={u.email || u.name}
+                          size="sm"
+                          className="!h-8 !w-8 !text-[9px]"
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-semibold text-ink-50">
+                            {u.name}
+                            {isYou ? (
+                              <span className="ml-1 font-medium text-ink-400">(you)</span>
+                            ) : null}
+                          </span>
+                          <span className="block truncate text-[11px] text-ink-300">
+                            {u.email}
+                          </span>
+                        </span>
+                        <span className="shrink-0 text-right text-[11px] text-ink-300">
+                          <span className="block font-semibold tabular-nums text-ink-50">
+                            {u.openCount} open
+                          </span>
+                          <span className="capitalize">{orgUser?.role ?? u.role}</span>
+                        </span>
+                      </button>
+                      {isProjectAdminAnywhere && orgUser ? (
+                        <button
+                          type="button"
+                          className="mt-2 text-[11px] font-semibold text-brand-300 hover:underline"
+                          onClick={() => setAssignUser(orgUser)}
+                        >
+                          Assign project
+                        </button>
+                      ) : null}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+            <table className="hidden w-full min-w-[720px] text-left text-xs md:table">
               <thead className="sticky top-0 bg-ink-900 text-[10px] font-bold tracking-wide text-ink-300 uppercase">
                 <tr>
                   <th className="px-4 py-2">User</th>
@@ -903,7 +1049,7 @@ export function DashboardPage() {
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[640px] text-left text-xs">
+              <table className="w-full min-w-[520px] text-left text-xs sm:min-w-[640px]">
                 <thead className="sticky top-0 bg-ink-900 text-[10px] font-bold tracking-wide text-ink-300 uppercase">
                   <tr>
                     <th className="px-4 py-2 font-bold">Task</th>
