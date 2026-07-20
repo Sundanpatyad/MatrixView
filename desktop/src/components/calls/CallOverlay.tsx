@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import {
   IconHand,
   IconLayoutGrid,
@@ -35,6 +36,7 @@ function isScreenTrack(stream: MediaStream | null) {
   const settings = track.getSettings() as MediaTrackSettings & {
     displaySurface?: string;
   };
+  // Only trust explicit display-surface (camera tracks can have odd labels on mobile).
   if (settings.displaySurface) return true;
   const label = track.label.toLowerCase();
   if (
@@ -44,6 +46,8 @@ function isScreenTrack(stream: MediaStream | null) {
     label.includes('monitor') ||
     label.includes('display')
   ) {
+    // Avoid false positives like "Front Camera" / "facing display"
+    if (label.includes('camera') || label.includes('facing')) return false;
     return true;
   }
   return track.contentHint === 'detail';
@@ -81,7 +85,7 @@ function ControlBtn({
       disabled={disabled}
       onClick={onClick}
       className={cn(
-        'flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-40',
+        'flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-40 sm:h-11 sm:w-11',
         danger
           ? 'bg-[#ea4335] text-white hover:bg-[#d93025]'
           : active
@@ -114,22 +118,27 @@ function PeerVideoTile({
     if (person.stream) void el.play().catch(() => undefined);
   }, [person.stream, person.screenShare]);
 
+  // object-cover crops/zooms portrait mobile cameras on landscape desktops —
+  // contain keeps the full frame visible (letterbox if needed).
+  const fitClass =
+    looksLikeScreen || !compact
+      ? 'object-contain bg-[#0e0f11]'
+      : 'object-cover';
+
   return (
     <div
       className={cn(
-        'group relative overflow-hidden rounded-xl bg-[#1a1b1e]',
+        'group relative min-h-0 overflow-hidden rounded-xl bg-[#0e0f11]',
         compact && 'h-[4.5rem] w-[7.5rem] shrink-0 sm:h-24 sm:w-36',
-        fill && 'h-full min-h-0 w-full',
-        !compact && !fill && 'min-h-[160px]',
+        fill && 'h-full w-full',
+        !compact && !fill && 'h-full min-h-0',
         person.pinned && 'ring-2 ring-brand-400 ring-offset-2 ring-offset-ink-950',
       )}
     >
+      {/* Absolute video prevents intrinsic size from blowing out flex/grid height */}
       <video
         ref={ref}
-        className={cn(
-          'h-full w-full',
-          looksLikeScreen ? 'object-contain bg-[#0e0f11]' : 'object-cover',
-        )}
+        className={cn('absolute inset-0 h-full w-full', fitClass)}
         autoPlay
         playsInline
         muted={person.muted}
@@ -142,14 +151,14 @@ function PeerVideoTile({
           <span className="px-2 text-center text-xs text-ink-300">{person.name}</span>
         </div>
       ) : (
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-2.5 pb-2 pt-8">
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[1] bg-gradient-to-t from-black/70 to-transparent px-2.5 pb-2 pt-8">
           <p className="truncate text-xs font-medium text-white">
             {looksLikeScreen ? `${person.name} · Presenting` : person.name}
           </p>
         </div>
       )}
       {person.handRaised ? (
-        <span className="absolute left-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-amber-400 text-ink-950 shadow-md">
+        <span className="absolute left-2 top-2 z-[1] flex h-7 w-7 items-center justify-center rounded-full bg-amber-400 text-ink-950 shadow-md">
           <IconHand className="h-3.5 w-3.5" />
         </span>
       ) : null}
@@ -157,7 +166,8 @@ function PeerVideoTile({
         <button
           type="button"
           className={cn(
-            'absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/55 text-white opacity-0 transition-opacity group-hover:opacity-100',
+            'absolute right-2 top-2 z-[1] flex h-7 w-7 items-center justify-center rounded-full bg-black/55 text-white transition-opacity',
+            'opacity-100 sm:opacity-0 sm:group-hover:opacity-100',
             person.pinned && 'opacity-100 bg-brand-500',
           )}
           title={person.pinned ? 'Unpin' : 'Pin'}
@@ -187,10 +197,10 @@ function StageVideo({
     if (stream) void el.play().catch(() => undefined);
   }, [stream]);
   return (
-    <div className="relative min-h-0 flex-1 overflow-hidden rounded-xl bg-[#0e0f11]">
+    <div className="relative h-full min-h-0 w-full flex-1 overflow-hidden rounded-xl bg-[#0e0f11]">
       <video
         ref={ref}
-        className="h-full w-full object-contain"
+        className="absolute inset-0 h-full w-full object-contain"
         autoPlay
         playsInline
         muted={muted}
@@ -200,7 +210,7 @@ function StageVideo({
           Connecting presentation…
         </div>
       ) : (
-        <span className="absolute left-3 top-3 rounded-md bg-black/55 px-2.5 py-1 text-[11px] font-medium text-white backdrop-blur-sm">
+        <span className="absolute left-3 top-3 z-[1] rounded-md bg-black/55 px-2.5 py-1 text-[11px] font-medium text-white backdrop-blur-sm">
           {label}
         </span>
       )}
@@ -288,117 +298,266 @@ function MeetingDock({
   const [reactOpen, setReactOpen] = useState(false);
   const video = call.mediaKind === 'video';
 
-  return (
-    <div className="relative flex max-w-[calc(100vw-1.5rem)] items-center gap-1.5 overflow-x-auto rounded-full border border-white/10 bg-[#202124]/95 px-2.5 py-2 shadow-2xl backdrop-blur-md sm:max-w-none sm:gap-2.5 sm:px-4 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-      <ControlBtn
-        title={call.muted ? 'Unmute' : 'Mute'}
-        active={call.muted}
-        onClick={onToggleMute}
-      >
-        {call.muted ? <IconMicOff className="h-5 w-5" /> : <IconMic className="h-5 w-5" />}
-      </ControlBtn>
-
-      {video ? (
-        <ControlBtn
-          title={call.cameraOff ? 'Turn camera on' : 'Turn camera off'}
-          active={call.cameraOff}
-          disabled={call.sharingScreen}
-          onClick={onToggleCamera}
-        >
-          {call.cameraOff ? <IconVideoOff className="h-5 w-5" /> : <IconVideo className="h-5 w-5" />}
-        </ControlBtn>
-      ) : null}
-
-      {video ? (
-        <ControlBtn
-          title={call.sharingScreen ? 'Stop presenting' : 'Present now'}
-          active={call.sharingScreen}
-          disabled={shareBusy}
-          onClick={onToggleScreenShare}
-        >
-          {call.sharingScreen ? (
-            <IconScreenShareOff className="h-5 w-5" />
-          ) : (
-            <IconScreenShare className="h-5 w-5" />
+  const layoutMenu = (
+    <div className="min-w-[160px] overflow-hidden rounded-xl border border-white/10 bg-[#303134] py-1 shadow-xl">
+      {(
+        [
+          { id: 'auto' as const, label: 'Auto', icon: <IconPin className="h-4 w-4" /> },
+          { id: 'grid' as const, label: 'Grid', icon: <IconLayoutGrid className="h-4 w-4" /> },
+          { id: 'spotlight' as const, label: 'Spotlight', icon: <IconPin className="h-4 w-4" /> },
+          { id: 'sidebar' as const, label: 'Sidebar', icon: <IconLayoutSidebar className="h-4 w-4" /> },
+        ] as const
+      ).map((opt) => (
+        <button
+          key={opt.id}
+          type="button"
+          className={cn(
+            'flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-ink-100 hover:bg-white/10',
+            layout === opt.id && 'bg-white/10 text-white',
           )}
-        </ControlBtn>
-      ) : null}
+          onClick={() => {
+            onSetLayout(opt.id);
+            setMoreOpen(false);
+          }}
+        >
+          {opt.icon}
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  );
 
-      <ControlBtn title={handRaised ? 'Lower hand' : 'Raise hand'} active={handRaised} onClick={onToggleHand}>
-        <IconHand className="h-5 w-5" />
-      </ControlBtn>
+  const reactMenu = (
+    <div className="flex gap-1 rounded-full border border-white/10 bg-[#303134] p-1.5 shadow-xl">
+      {REACTION_EMOJIS.map((e) => (
+        <button
+          key={e}
+          type="button"
+          className="flex h-9 w-9 items-center justify-center rounded-full text-lg transition-colors hover:bg-white/10"
+          onClick={() => {
+            onSendReaction(e);
+            setReactOpen(false);
+            setMoreOpen(false);
+          }}
+        >
+          {e}
+        </button>
+      ))}
+    </div>
+  );
 
-      <div className="relative">
-        <ControlBtn title="Send a reaction" active={reactOpen} onClick={() => { setReactOpen((v) => !v); setMoreOpen(false); }}>
-          <span className="text-lg leading-none">☺</span>
+  return (
+    <div className="relative flex w-full max-w-full items-center justify-center">
+      <div className="flex max-w-full items-center gap-1 rounded-full border border-white/10 bg-[#202124]/95 px-1.5 py-1.5 shadow-2xl backdrop-blur-md sm:gap-2 sm:px-3 sm:py-2">
+        <ControlBtn
+          title={call.muted ? 'Unmute' : 'Mute'}
+          active={call.muted}
+          onClick={onToggleMute}
+        >
+          {call.muted ? <IconMicOff className="h-5 w-5" /> : <IconMic className="h-5 w-5" />}
         </ControlBtn>
-        {reactOpen ? (
-          <div className="absolute bottom-[calc(100%+10px)] left-1/2 flex -translate-x-1/2 gap-1 rounded-full border border-white/10 bg-[#303134] p-1.5 shadow-xl">
-            {REACTION_EMOJIS.map((e) => (
-              <button
-                key={e}
-                type="button"
-                className="flex h-9 w-9 items-center justify-center rounded-full text-lg transition-colors hover:bg-white/10"
+
+        {video ? (
+          <ControlBtn
+            title={call.cameraOff ? 'Turn camera on' : 'Turn camera off'}
+            active={call.cameraOff}
+            disabled={call.sharingScreen}
+            onClick={onToggleCamera}
+          >
+            {call.cameraOff ? <IconVideoOff className="h-5 w-5" /> : <IconVideo className="h-5 w-5" />}
+          </ControlBtn>
+        ) : null}
+
+        {video ? (
+          <ControlBtn
+            title={call.sharingScreen ? 'Stop presenting' : 'Present now'}
+            active={call.sharingScreen}
+            disabled={shareBusy}
+            onClick={onToggleScreenShare}
+          >
+            {call.sharingScreen ? (
+              <IconScreenShareOff className="h-5 w-5" />
+            ) : (
+              <IconScreenShare className="h-5 w-5" />
+            )}
+          </ControlBtn>
+        ) : null}
+
+        {/* Desktop: hand / react / layout inline */}
+        <div className="hidden items-center gap-1 sm:flex sm:gap-2">
+          <ControlBtn
+            title={handRaised ? 'Lower hand' : 'Raise hand'}
+            active={handRaised}
+            onClick={onToggleHand}
+          >
+            <IconHand className="h-5 w-5" />
+          </ControlBtn>
+
+          <div className="relative">
+            <ControlBtn
+              title="Send a reaction"
+              active={reactOpen}
+              onClick={() => {
+                setReactOpen((v) => !v);
+                setMoreOpen(false);
+              }}
+            >
+              <span className="text-lg leading-none">☺</span>
+            </ControlBtn>
+            {reactOpen ? (
+              <div className="absolute bottom-[calc(100%+10px)] left-1/2 -translate-x-1/2">
+                {reactMenu}
+              </div>
+            ) : null}
+          </div>
+
+          {video ? (
+            <div className="relative">
+              <ControlBtn
+                title="Change layout"
+                active={moreOpen || layout !== 'auto'}
                 onClick={() => {
-                  onSendReaction(e);
+                  setMoreOpen((v) => !v);
                   setReactOpen(false);
                 }}
               >
-                {e}
-              </button>
-            ))}
-          </div>
-        ) : null}
-      </div>
+                <IconLayoutGrid className="h-5 w-5" />
+              </ControlBtn>
+              {moreOpen ? (
+                <div className="absolute bottom-[calc(100%+10px)] left-1/2 -translate-x-1/2">
+                  {layoutMenu}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
 
-      {video ? (
-        <div className="relative">
+        {/* Mobile: More opens a full bottom sheet (portal) so it never clips */}
+        <div className="sm:hidden">
           <ControlBtn
-            title="Change layout"
-            active={moreOpen || layout !== 'auto'}
+            title="More"
+            active={moreOpen || handRaised || layout !== 'auto'}
             onClick={() => {
               setMoreOpen((v) => !v);
               setReactOpen(false);
             }}
           >
-            <IconLayoutGrid className="h-5 w-5" />
+            <span className="text-lg font-bold leading-none">···</span>
           </ControlBtn>
-          {moreOpen ? (
-            <div className="absolute bottom-[calc(100%+10px)] left-1/2 min-w-[160px] -translate-x-1/2 overflow-hidden rounded-xl border border-white/10 bg-[#303134] py-1 shadow-xl">
-              {(
-                [
-                  { id: 'auto' as const, label: 'Auto', icon: <IconPin className="h-4 w-4" /> },
-                  { id: 'grid' as const, label: 'Grid', icon: <IconLayoutGrid className="h-4 w-4" /> },
-                  { id: 'spotlight' as const, label: 'Spotlight', icon: <IconPin className="h-4 w-4" /> },
-                  { id: 'sidebar' as const, label: 'Sidebar', icon: <IconLayoutSidebar className="h-4 w-4" /> },
-                ] as const
-              ).map((opt) => (
-                <button
-                  key={opt.id}
-                  type="button"
-                  className={cn(
-                    'flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-ink-100 hover:bg-white/10',
-                    layout === opt.id && 'bg-white/10 text-white',
-                  )}
-                  onClick={() => {
-                    onSetLayout(opt.id);
-                    setMoreOpen(false);
-                  }}
-                >
-                  {opt.icon}
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          ) : null}
         </div>
-      ) : null}
 
-      <div className="mx-0.5 h-6 w-px bg-white/15" />
+        {moreOpen
+          ? createPortal(
+              <div className="fixed inset-0 z-[10100] sm:hidden">
+                <button
+                  type="button"
+                  aria-label="Close menu"
+                  className="absolute inset-0 bg-black/55"
+                  onClick={() => {
+                    setMoreOpen(false);
+                    setReactOpen(false);
+                  }}
+                />
+                <div className="absolute inset-x-0 bottom-0 max-h-[min(70dvh,28rem)] overflow-y-auto rounded-t-2xl border-t border-white/10 bg-[#202124] px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 shadow-2xl">
+                  <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-white/25" />
+                  <p className="mb-1 px-1 text-xs font-semibold text-white/50">Call options</p>
 
-      <ControlBtn title={call.isGroup ? 'Leave call' : 'End call'} danger onClick={onHangup}>
-        <IconPhoneOff className="h-5 w-5" />
-      </ControlBtn>
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium text-white hover:bg-white/10"
+                    onClick={() => {
+                      onToggleHand();
+                      setMoreOpen(false);
+                    }}
+                  >
+                    <IconHand className="h-4 w-4 text-white/70" />
+                    {handRaised ? 'Lower hand' : 'Raise hand'}
+                  </button>
+
+                  <div className="px-1 py-2">
+                    <p className="mb-2 text-[10px] font-semibold tracking-wide text-white/45 uppercase">
+                      React
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {REACTION_EMOJIS.map((e) => (
+                        <button
+                          key={e}
+                          type="button"
+                          className="flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-xl hover:bg-white/15"
+                          onClick={() => {
+                            onSendReaction(e);
+                            setMoreOpen(false);
+                            setReactOpen(false);
+                          }}
+                        >
+                          {e}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {video ? (
+                    <div className="border-t border-white/10 pt-2">
+                      <p className="mb-1 px-1 text-[10px] font-semibold tracking-wide text-white/45 uppercase">
+                        Layout
+                      </p>
+                      {(
+                        [
+                          { id: 'auto' as const, label: 'Auto', icon: <IconPin className="h-4 w-4" /> },
+                          { id: 'grid' as const, label: 'Grid', icon: <IconLayoutGrid className="h-4 w-4" /> },
+                          {
+                            id: 'spotlight' as const,
+                            label: 'Spotlight',
+                            icon: <IconPin className="h-4 w-4" />,
+                          },
+                          {
+                            id: 'sidebar' as const,
+                            label: 'Sidebar',
+                            icon: <IconLayoutSidebar className="h-4 w-4" />,
+                          },
+                        ] as const
+                      ).map((opt) => (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          className={cn(
+                            'flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium text-white hover:bg-white/10',
+                            layout === opt.id && 'bg-white/10',
+                          )}
+                          onClick={() => {
+                            onSetLayout(opt.id);
+                            setMoreOpen(false);
+                          }}
+                        >
+                          <span className="text-white/70">{opt.icon}</span>
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  <button
+                    type="button"
+                    className="mt-2 flex w-full items-center justify-center rounded-xl px-3 py-3 text-sm font-semibold text-white/70 hover:bg-white/10"
+                    onClick={() => {
+                      setMoreOpen(false);
+                      setReactOpen(false);
+                    }}
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>,
+              document.body,
+            )
+          : null}
+
+        <div className="mx-0.5 h-6 w-px shrink-0 bg-white/15" />
+
+        <ControlBtn title={call.isGroup ? 'Leave call' : 'End call'} danger onClick={onHangup}>
+          <IconPhoneOff className="h-5 w-5" />
+        </ControlBtn>
+      </div>
     </div>
   );
 }
@@ -446,18 +605,34 @@ export function CallOverlay({
     );
   }, [call.isGroup, call.peers, call.presentingUserId]);
 
+  /** True whenever anyone is presenting — drives Meet-style layout even before tracks settle. */
+  const someoneSharing =
+    call.sharingScreen ||
+    Boolean(call.presentingUserId) ||
+    remoteIsScreen ||
+    Boolean(presentingPeer?.sharingScreen);
+
+  /**
+   * Stream that belongs on the large stage (the shared screen).
+   * Local share uses screenShareStream (camera stays on localStream for self-view).
+   * Remote share uses that peer's inbound stream (replaceTrack sends screen).
+   */
   const stageStream = useMemo(() => {
-    if (call.sharingScreen && screenShareStream?.getVideoTracks().some((t) => t.readyState === 'live')) {
+    if (call.sharingScreen) {
+      const tracks = screenShareStream?.getVideoTracks() ?? [];
+      if (tracks.some((t) => t.readyState === 'live') || (screenShareStream && tracks.length > 0)) {
+        return screenShareStream;
+      }
       return screenShareStream;
     }
-    if (call.isGroup && presentingPeer?.stream?.getVideoTracks().some((t) => t.readyState === 'live')) {
-      return presentingPeer.stream;
+    if (call.isGroup) {
+      const peer =
+        presentingPeer ??
+        call.peers.find((p) => p.userId === call.presentingUserId) ??
+        null;
+      return peer?.stream ?? null;
     }
-    if (
-      !call.isGroup &&
-      remoteStream?.getVideoTracks().some((t) => t.readyState === 'live') &&
-      (remoteIsScreen || Boolean(call.presentingUserId))
-    ) {
+    if (call.presentingUserId || remoteIsScreen) {
       return remoteStream;
     }
     return null;
@@ -465,27 +640,45 @@ export function CallOverlay({
     call.sharingScreen,
     call.isGroup,
     call.presentingUserId,
+    call.peers,
     screenShareStream,
     presentingPeer,
     remoteIsScreen,
     remoteStream,
   ]);
 
-  const usePresentationLayout = Boolean(stageStream);
-
-  const someoneSharing =
-    call.sharingScreen ||
-    Boolean(call.presentingUserId) ||
-    remoteIsScreen ||
-    Boolean(presentingPeer?.sharingScreen);
+  const usePresentationLayout = someoneSharing;
 
   const stageLabel = call.sharingScreen
     ? 'You are presenting'
     : presentingPeer
       ? `${presentingPeer.name} is presenting`
-      : remoteIsScreen
-        ? `${call.peerName} is presenting`
+      : call.presentingUserId || remoteIsScreen
+        ? `${call.peerName || 'Peer'} is presenting`
         : 'Presentation';
+
+  const presenterIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (call.sharingScreen) {
+      // Local screen is on stage via screenShareStream — do NOT treat self tile as presenter
+      // (self tile is still the camera for the filmstrip).
+      return ids;
+    }
+    if (call.presentingUserId) ids.add(call.presentingUserId);
+    if (presentingPeer) ids.add(presentingPeer.userId);
+    if (!call.isGroup && (remoteIsScreen || call.presentingUserId)) {
+      if (call.peerUserId) ids.add(call.peerUserId);
+      ids.add('peer');
+    }
+    return ids;
+  }, [
+    call.sharingScreen,
+    call.presentingUserId,
+    call.isGroup,
+    call.peerUserId,
+    presentingPeer,
+    remoteIsScreen,
+  ]);
 
   const people = useMemo((): TilePerson[] => {
     const self: TilePerson = {
@@ -515,7 +708,7 @@ export function CallOverlay({
         userId: call.peerUserId || 'peer',
         name: call.peerName || 'Peer',
         stream: remoteStream,
-        screenShare: remoteIsScreen,
+        screenShare: remoteIsScreen || Boolean(call.presentingUserId),
         handRaised: Boolean(call.peerUserId && raisedHands[call.peerUserId]),
         pinned:
           pinnedUserId === call.peerUserId ||
@@ -533,6 +726,12 @@ export function CallOverlay({
     remoteIsScreen,
     spotlightUserId,
   ]);
+
+  /** Filmstrip: everyone except the remote presenter (their screen is on the big stage). */
+  const presentationStrip = useMemo(
+    () => people.filter((p) => !presenterIds.has(p.userId)),
+    [people, presenterIds],
+  );
 
   const focusUserId = pinnedUserId || spotlightUserId || null;
 
@@ -628,33 +827,63 @@ export function CallOverlay({
   const renderGrid = (tiles: TilePerson[]) => (
     <div
       className={cn(
-        'grid min-h-0 flex-1 gap-3 p-3 sm:p-4',
+        'grid h-full min-h-0 w-full flex-1 gap-2 overflow-hidden p-2 sm:gap-3 sm:p-4',
         tiles.length <= 1
-          ? 'grid-cols-1'
+          ? 'grid-cols-1 grid-rows-1'
           : tiles.length === 2
-            ? 'grid-cols-1 sm:grid-cols-2'
+            ? 'grid-cols-1 grid-rows-2 sm:grid-cols-2 sm:grid-rows-1'
             : tiles.length <= 4
-              ? 'grid-cols-2'
-              : 'grid-cols-2 lg:grid-cols-3',
+              ? 'grid-cols-2 grid-rows-2'
+              : 'grid-cols-2 grid-rows-3 lg:grid-cols-3 lg:auto-rows-fr',
       )}
+      style={
+        tiles.length === 2
+          ? undefined
+          : tiles.length > 4
+            ? { gridAutoRows: 'minmax(0, 1fr)' }
+            : undefined
+      }
     >
       {tiles.map((p) => (
-        <PeerVideoTile key={p.userId} person={p} onPin={handlePin} />
+        <div key={p.userId} className="relative min-h-0 min-w-0 overflow-hidden">
+          <PeerVideoTile person={p} fill onPin={handlePin} />
+        </div>
       ))}
     </div>
   );
 
-  const renderSpotlight = (
-    main: TilePerson | null,
-    strip: TilePerson[],
-    mainStream?: MediaStream | null,
-    mainLabel?: string,
-  ) => (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 p-3 sm:p-4">
-      <div className="min-h-0 flex-1">
-        {mainStream ? (
-          <StageVideo stream={mainStream} label={mainLabel || main?.name || 'Spotlight'} muted />
-        ) : main ? (
+  const renderPresentation = (strip: TilePerson[]) => (
+    <div className="flex h-full min-h-0 w-full flex-1 flex-col gap-2 overflow-hidden p-2 sm:gap-3 sm:p-4">
+      {/* Filmstrip — cameras only */}
+      {strip.length > 0 ? (
+        <div className="flex shrink-0 gap-2 overflow-x-auto pb-0.5 sm:justify-center">
+          {strip.map((p) => (
+            <PeerVideoTile key={p.userId} person={p} compact onPin={handlePin} />
+          ))}
+        </div>
+      ) : null}
+
+      {/* Big stage — shared screen */}
+      <div className="relative min-h-0 flex-1 overflow-hidden rounded-xl bg-[#0e0f11] ring-1 ring-white/10">
+        {stageStream ? (
+          <StageVideo stream={stageStream} label={stageLabel} muted />
+        ) : (
+          <div className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center">
+            <IconScreenShare className="h-8 w-8 text-white/35" />
+            <p className="text-sm font-medium text-white/70">
+              {call.sharingScreen ? 'Starting your presentation…' : 'Waiting for presentation…'}
+            </p>
+            <p className="text-[11px] text-white/40">{stageLabel}</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  const renderSpotlight = (main: TilePerson | null, strip: TilePerson[]) => (
+    <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden p-2 sm:gap-3 sm:p-4">
+      <div className="relative min-h-0 flex-1 overflow-hidden">
+        {main ? (
           <PeerVideoTile person={{ ...main, pinned: true }} fill onPin={handlePin} />
         ) : (
           <div className="flex h-full items-center justify-center rounded-xl bg-[#1a1b1e] text-sm text-ink-400">
@@ -663,7 +892,7 @@ export function CallOverlay({
         )}
       </div>
       {strip.length > 0 ? (
-        <div className="flex gap-2 overflow-x-auto pb-1 sm:justify-center">
+        <div className="flex shrink-0 gap-2 overflow-x-auto pb-1 sm:justify-center">
           {strip.map((p) => (
             <PeerVideoTile key={p.userId} person={p} compact onPin={handlePin} />
           ))}
@@ -673,11 +902,11 @@ export function CallOverlay({
   );
 
   const renderSidebar = (main: TilePerson, strip: TilePerson[]) => (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 p-3 sm:p-4 md:flex-row">
-      <div className="relative min-h-[42vh] flex-1 md:min-h-0">
+    <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden p-2 sm:gap-3 sm:p-4 md:flex-row">
+      <div className="relative min-h-0 flex-1 overflow-hidden">
         <PeerVideoTile person={{ ...main, pinned: true }} fill onPin={handlePin} />
       </div>
-      <div className="flex gap-2 overflow-x-auto md:w-40 md:shrink-0 md:flex-col md:overflow-y-auto md:overflow-x-hidden">
+      <div className="flex shrink-0 gap-2 overflow-x-auto md:w-40 md:flex-col md:overflow-y-auto md:overflow-x-hidden">
         {strip.map((p) => (
           <PeerVideoTile key={p.userId} person={p} compact onPin={handlePin} />
         ))}
@@ -686,9 +915,9 @@ export function CallOverlay({
   );
 
   const videoBody = () => {
+    // Google Meet style: shared screen dominates; cameras stay in a filmstrip
     if (usePresentationLayout) {
-      const strip = people.filter((p) => !(presentingPeer && p.userId === presentingPeer.userId));
-      return renderSpotlight(null, strip, stageStream, stageLabel);
+      return renderPresentation(presentationStrip);
     }
     if (effectiveLayout === 'grid' || (!focusPerson && effectiveLayout !== 'sidebar')) {
       return renderGrid(people);
@@ -798,9 +1027,9 @@ export function CallOverlay({
       ) : null}
 
       {inVideoCall ? (
-        <div className="fixed inset-0 z-[10045] flex flex-col bg-[#0e0f11]">
-          <header className="flex items-center justify-between gap-3 px-4 py-3 sm:px-5">
-            <div className="min-w-0">
+        <div className="fixed inset-0 z-[10045] flex h-[100dvh] max-h-[100dvh] w-full max-w-[100vw] flex-col overflow-hidden bg-[#0e0f11]">
+          <header className="flex shrink-0 items-center justify-between gap-2 px-3 py-2 pt-[max(0.5rem,env(safe-area-inset-top))] sm:gap-3 sm:px-5 sm:py-3">
+            <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-semibold text-white">{title}</p>
               <p className="truncate text-[11px] text-white/45">
                 {subtitle}
@@ -817,11 +1046,24 @@ export function CallOverlay({
             ) : null}
           </header>
 
-          <div className="relative min-h-0 flex-1">{videoBody()}</div>
+          <div className="relative min-h-0 flex-1 overflow-hidden">{videoBody()}</div>
+
+          {error ? (
+            <div className="pointer-events-auto absolute inset-x-2 top-14 z-20 mx-auto max-w-md rounded-xl border border-[#ed4245]/40 bg-[#202124]/95 px-3 py-2 text-center text-xs font-medium text-[#ed4245] shadow-lg backdrop-blur sm:top-16">
+              {error}
+              <button
+                type="button"
+                className="ml-2 text-white/70 underline"
+                onClick={onDismissError}
+              >
+                Dismiss
+              </button>
+            </div>
+          ) : null}
 
           <ReactionBurst reactions={reactions} />
 
-          <div className="flex justify-center px-3 pb-5 pt-2 sm:pb-6">
+          <div className="flex shrink-0 justify-center px-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-1 sm:px-3 sm:pb-6 sm:pt-2">
             <MeetingDock
               call={call}
               shareBusy={shareBusy}
@@ -840,7 +1082,7 @@ export function CallOverlay({
       ) : null}
 
       {inAudioCall ? (
-        <div className="fixed inset-x-0 bottom-0 z-[10040] flex justify-center p-4 sm:bottom-6 sm:p-0">
+        <div className="fixed inset-x-0 bottom-0 z-[10040] flex justify-center p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:bottom-6 sm:p-0">
           <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-white/10 bg-[#202124]/95 p-4 shadow-2xl backdrop-blur-md sm:w-auto sm:min-w-[360px]">
             <div className="mb-4 flex items-center gap-3">
               <span className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-500/25 text-brand-300">

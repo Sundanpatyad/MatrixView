@@ -110,13 +110,8 @@ export class AudioCallSession {
     const wantVideo = this.state.mediaKind === 'video';
     const stream = await navigator.mediaDevices.getUserMedia({
       audio: true,
-      video: wantVideo
-        ? {
-            facingMode: 'user',
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-          }
-        : false,
+      // Prefer device-native aspect (esp. portrait on phones) — avoid forced 16:9 crop.
+      video: wantVideo ? { facingMode: 'user' } : false,
     });
     this.localStream = stream;
     this.cb.onLocalStream?.(stream);

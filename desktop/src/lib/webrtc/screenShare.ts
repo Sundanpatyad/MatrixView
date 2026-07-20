@@ -24,6 +24,12 @@ export function isTauriApp(): boolean {
   return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 }
 
+function isMobileBrowser(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  if (/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)) return true;
+  return navigator.maxTouchPoints > 1 && window.matchMedia('(max-width: 1024px)').matches;
+}
+
 function isOwnAppWindow(name: string): boolean {
   const n = name.trim().toLowerCase();
   return (
@@ -46,7 +52,16 @@ export async function listNativeCaptureTargets(): Promise<CaptureTarget[]> {
 
 async function tryGetDisplayMedia(): Promise<MediaStream | null> {
   if (!navigator.mediaDevices?.getDisplayMedia) return null;
+  const mobile = isMobileBrowser();
   try {
+    // Mobile Chrome/Android reject desktop-only constraints (displaySurface: window, etc.).
+    // Keep options minimal so the system picker can open.
+    if (mobile) {
+      return await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        audio: false,
+      });
+    }
     // Prefer a window/tab and exclude this browser surface to avoid hall-of-mirrors.
     return await navigator.mediaDevices.getDisplayMedia({
       video: {
@@ -72,6 +87,15 @@ async function tryGetDisplayMedia(): Promise<MediaStream | null> {
     }
     if (err instanceof DOMException && err.name === 'AbortError') {
       throw err;
+    }
+    // Mobile: retry once with bare-minimum options if the first attempt failed
+    // for constraint reasons (common on Android WebView / older Chrome).
+    if (mobile && err instanceof DOMException && err.name === 'NotSupportedError') {
+      try {
+        return await navigator.mediaDevices.getDisplayMedia({ video: true });
+      } catch {
+        return null;
+      }
     }
     return null;
   }
@@ -153,6 +177,13 @@ export async function acquireScreenShare(options?: {
   }
 
   if (!options?.preferNative) {
+    if (!navigator.mediaDevices?.getDisplayMedia) {
+      throw new Error(
+        isMobileBrowser()
+          ? 'Screen sharing isn’t supported in this mobile browser. Try Chrome on Android, or share from a desktop.'
+          : 'Screen sharing is not supported in this browser',
+      );
+    }
     const display = await tryGetDisplayMedia();
     if (display) {
       const stop = () => {
@@ -164,7 +195,11 @@ export async function acquireScreenShare(options?: {
   }
 
   if (!isTauriApp()) {
-    throw new Error('Screen sharing was blocked or cancelled');
+    throw new Error(
+      isMobileBrowser()
+        ? 'Couldn’t start screen share. On Android use Chrome and allow screen capture; iPhone/iPad browsers often block sharing.'
+        : 'Screen sharing was blocked or cancelled',
+    );
   }
 
   const targets = await listNativeCaptureTargets();
