@@ -5,6 +5,7 @@ import {
   refreshApiAccessToken,
 } from '@/lib/api/client';
 import type { ChatConversation, ChatMessage } from '@/lib/api/chat';
+import type { AppNotification } from '@/lib/api/notifications';
 
 export type PresenceUser = {
   userId: string;
@@ -30,7 +31,7 @@ export type MessageStatusUpdate = {
   }>;
 };
 
-type Handlers = {
+type ChatHandlers = {
   onPresenceSnapshot?: (users: PresenceUser[]) => void;
   onPresenceUpdate?: (user: PresenceUser) => void;
   onMessageNew?: (message: ChatMessage) => void;
@@ -44,46 +45,70 @@ type Handlers = {
   onDisconnect?: () => void;
 };
 
+type NotificationHandlers = {
+  onNotificationNew?: (notification: AppNotification) => void;
+  onNotificationRead?: (payload: { id?: string; all?: boolean }) => void;
+  onUnreadCount?: (count: number) => void;
+};
+
 let socket: Socket | null = null;
-let handlers: Handlers = {};
+let chatHandlers: ChatHandlers = {};
+let notificationHandlers: NotificationHandlers = {};
 
 function bindSocket(s: Socket) {
-  s.on('connect', () => handlers.onConnect?.());
-  s.on('disconnect', () => handlers.onDisconnect?.());
+  s.on('connect', () => chatHandlers.onConnect?.());
+  s.on('disconnect', () => chatHandlers.onDisconnect?.());
 
   s.on('presence:snapshot', (payload: { users: PresenceUser[] }) => {
-    handlers.onPresenceSnapshot?.(payload.users ?? []);
+    chatHandlers.onPresenceSnapshot?.(payload.users ?? []);
   });
   s.on('presence:update', (payload: PresenceUser) => {
-    handlers.onPresenceUpdate?.(payload);
+    chatHandlers.onPresenceUpdate?.(payload);
   });
   s.on('message:new', (payload: { message: ChatMessage }) => {
-    if (payload?.message) handlers.onMessageNew?.(payload.message);
+    if (payload?.message) chatHandlers.onMessageNew?.(payload.message);
   });
   s.on('message:edited', (payload: { message: ChatMessage }) => {
-    if (payload?.message) handlers.onMessageEdited?.(payload.message);
+    if (payload?.message) chatHandlers.onMessageEdited?.(payload.message);
   });
   s.on('message:deleted', (payload: { message: ChatMessage }) => {
-    if (payload?.message) handlers.onMessageDeleted?.(payload.message);
+    if (payload?.message) chatHandlers.onMessageDeleted?.(payload.message);
   });
   s.on('message:status', (payload: MessageStatusUpdate) => {
-    if (payload?.messageId) handlers.onMessageStatus?.(payload);
+    if (payload?.messageId) chatHandlers.onMessageStatus?.(payload);
   });
   s.on('typing:update', (payload: TypingUpdate) => {
-    if (payload?.conversationId) handlers.onTyping?.(payload);
+    if (payload?.conversationId) chatHandlers.onTyping?.(payload);
   });
   s.on('conversation:upsert', (payload: { conversation: ChatConversation }) => {
-    if (payload?.conversation) handlers.onConversationUpsert?.(payload.conversation);
+    if (payload?.conversation) chatHandlers.onConversationUpsert?.(payload.conversation);
   });
   s.on('conversation:removed', (payload: { conversationId: string }) => {
-    if (payload?.conversationId) handlers.onConversationRemoved?.(payload.conversationId);
+    if (payload?.conversationId) chatHandlers.onConversationRemoved?.(payload.conversationId);
+  });
+
+  s.on('notification:new', (payload: { notification: AppNotification }) => {
+    if (payload?.notification) notificationHandlers.onNotificationNew?.(payload.notification);
+  });
+  s.on('notification:read', (payload: { id?: string; all?: boolean }) => {
+    notificationHandlers.onNotificationRead?.(payload ?? {});
+  });
+  s.on('notification:unread_count', (payload: { count: number }) => {
+    if (typeof payload?.count === 'number') {
+      notificationHandlers.onUnreadCount?.(payload.count);
+    }
   });
 }
 
-export function setChatSocketHandlers(next: Handlers) {
-  handlers = next;
+export function setChatSocketHandlers(next: ChatHandlers) {
+  chatHandlers = next;
 }
 
+export function setNotificationSocketHandlers(next: NotificationHandlers) {
+  notificationHandlers = next;
+}
+
+/** Shared realtime socket for chat + notifications (connect while authenticated). */
 export async function connectChatSocket() {
   const token = peekAccessToken() || (await refreshApiAccessToken());
   if (!token) return null;
@@ -121,7 +146,8 @@ export function disconnectChatSocket() {
   socket.removeAllListeners();
   socket.disconnect();
   socket = null;
-  handlers = {};
+  chatHandlers = {};
+  notificationHandlers = {};
 }
 
 export function getChatSocket() {

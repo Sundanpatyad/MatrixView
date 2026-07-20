@@ -16,6 +16,7 @@ import {
   emitToOrg,
   emitToUser,
 } from '../../gateway/io.js';
+import { notifyQuietly } from '../notifications/service.js';
 import { Conversation } from './models/Conversation.js';
 import { Message } from './models/Message.js';
 
@@ -579,6 +580,22 @@ export async function sendMessage(
   for (const memberId of conversation.memberIds.map(String)) {
     emitToUser(memberId, 'message:new', { message: serialized });
     emitToUser(memberId, 'conversation:upsert', { conversation: convSerialized });
+    if (memberId !== actor.sub) {
+      notifyQuietly({
+        orgId: String(actor.orgId),
+        recipientId: memberId,
+        actorId: actor.sub,
+        actorName: serialized.senderName,
+        type: 'message',
+        title: `New message from ${serialized.senderName}`,
+        body: (serialized.body || preview).slice(0, 160),
+        meta: {
+          conversationId: String(conversation._id),
+          messageId: serialized.id,
+          href: `/chat?c=${conversation._id}`,
+        },
+      });
+    }
   }
 
   return { message: serialized };
@@ -647,6 +664,22 @@ export async function forwardMessage(
   for (const memberId of target.memberIds.map(String)) {
     emitToUser(memberId, 'message:new', { message: serialized });
     emitToUser(memberId, 'conversation:upsert', { conversation: convSerialized });
+    if (memberId !== actor.sub) {
+      notifyQuietly({
+        orgId: String(actor.orgId),
+        recipientId: memberId,
+        actorId: actor.sub,
+        actorName: serialized.senderName,
+        type: 'message',
+        title: `New message from ${serialized.senderName}`,
+        body: (serialized.body || preview).slice(0, 160),
+        meta: {
+          conversationId: String(target._id),
+          messageId: serialized.id,
+          href: `/chat?c=${target._id}`,
+        },
+      });
+    }
   }
 
   return { message: serialized, conversation: convSerialized };

@@ -8,6 +8,7 @@ import {
   type FormEvent,
 } from 'react';
 import { createPortal } from 'react-dom';
+import { useSearchParams } from 'react-router-dom';
 import {
   IconFile,
   IconForward,
@@ -49,7 +50,6 @@ import {
 import { ApiError } from '@/lib/api/client';
 import {
   connectChatSocket,
-  disconnectChatSocket,
   emitMessagesRead,
   emitTypingStart,
   emitTypingStop,
@@ -926,7 +926,9 @@ function GroupManagePanel({
 export function ChatPage() {
   const { user } = useAuth();
   const { online } = useOffline();
+  const [searchParams, setSearchParams] = useSearchParams();
   const meId = user?.id ?? '';
+  const queryConversationId = searchParams.get('c') ?? '';
   const [conversations, setConversations] = useState<ChatConversation[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -1099,6 +1101,28 @@ export function ChatPage() {
   }, [meId]);
 
   useEffect(() => {
+    if (!queryConversationId) return;
+    if (!conversations.some((c) => c.id === queryConversationId)) return;
+    setActiveId((prev) => (prev === queryConversationId ? prev : queryConversationId));
+  }, [queryConversationId, conversations]);
+
+  const selectConversation = useCallback(
+    (id: string | null) => {
+      setActiveId(id);
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (id) next.set('c', id);
+          else next.delete('c');
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
+
+  useEffect(() => {
     if (!user) return;
 
     setChatSocketHandlers({
@@ -1214,7 +1238,8 @@ export function ChatPage() {
 
     if (online) void connectChatSocket();
     return () => {
-      disconnectChatSocket();
+      // Keep the shared app socket alive for notifications; only clear chat handlers.
+      setChatSocketHandlers({});
       setSocketReady(false);
     };
   }, [user, meId, upsertConversationQuiet, online]);
@@ -1305,7 +1330,7 @@ export function ChatPage() {
 
   function upsertConversation(c: ChatConversation) {
     upsertConversationQuiet(c);
-    setActiveId(c.id);
+    selectConversation(c.id);
   }
 
   function notifyTyping() {
@@ -1600,7 +1625,7 @@ export function ChatPage() {
         });
       }
       setForwardMsg(null);
-      setActiveId(targetId);
+      selectConversation(targetId);
     } catch (err) {
       setError(errMsg(err));
     } finally {
@@ -1698,7 +1723,7 @@ export function ChatPage() {
                 <button
                   key={c.id}
                   type="button"
-                  onClick={() => setActiveId(c.id)}
+                  onClick={() => selectConversation(c.id)}
                   className={cn(
                     'flex w-full items-start gap-3 border-b border-ink-700 px-3 py-3 text-left transition-colors',
                     selected ? 'bg-brand-500/10' : 'hover:bg-ink-700',
@@ -2241,7 +2266,7 @@ export function ChatPage() {
           onUpdated={(c) => {
             upsertConversation(c);
             if (!c.memberIds.includes(meId)) {
-              setActiveId(null);
+              selectConversation(null);
               void refreshList();
               setModal(null);
             }

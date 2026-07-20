@@ -65,6 +65,7 @@ export function BoardWorkspacePage() {
   const { checkedIn, onBreak, elapsedLabel, checkIn, checkOut, toggleBreak } = useAttendance();
 
   const queryProjectId = searchParams.get('project') ?? '';
+  const queryTaskId = searchParams.get('task') ?? '';
   const [projectId, setProjectId] = useState(queryProjectId || projects[0]?.id || '');
   const [query, setQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<TaskType | 'all'>('all');
@@ -74,7 +75,7 @@ export function BoardWorkspacePage() {
   const [showCreateProject, setShowCreateProject] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
   const [showCreateTask, setShowCreateTask] = useState(false);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(queryTaskId || null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<TaskStatus | null>(null);
   const draggingIdRef = useRef<string | null>(null);
@@ -316,6 +317,24 @@ export function BoardWorkspacePage() {
     () => boardTasks.find((t) => t.id === selectedId) ?? null,
     [boardTasks, selectedId],
   );
+
+  useEffect(() => {
+    if (!queryTaskId) return;
+    if (boardTasks.some((t) => t.id === queryTaskId)) {
+      setSelectedId(queryTaskId);
+    }
+  }, [queryTaskId, boardTasks]);
+
+  function clearTaskQuery() {
+    if (!searchParams.has('task')) {
+      setSelectedId(null);
+      return;
+    }
+    const next = new URLSearchParams(searchParams);
+    next.delete('task');
+    setSearchParams(next, { replace: true });
+    setSelectedId(null);
+  }
 
   function allowDrop(e: DragEvent, status: TaskStatus) {
     e.preventDefault();
@@ -732,7 +751,13 @@ export function BoardWorkspacePage() {
                             task.assigneeName,
                           )}
                           dragging={draggingId === task.id}
-                          onOpen={() => setSelectedId(task.id)}
+                          onOpen={() => {
+                            setSelectedId(task.id);
+                            const next = new URLSearchParams(searchParams);
+                            if (projectId) next.set('project', projectId);
+                            next.set('task', task.id);
+                            setSearchParams(next, { replace: true });
+                          }}
                           onDragStart={beginDrag}
                           onDragEnd={endDrag}
                           onDropOnCard={(e) => void handleDrop(e, col.id)}
@@ -940,7 +965,7 @@ export function BoardWorkspacePage() {
           task={selected}
           projectName={project.name}
           columns={columns}
-          onClose={() => setSelectedId(null)}
+          onClose={() => clearTaskQuery()}
         />
       ) : null}
 

@@ -25,6 +25,10 @@ import {
   type StoredMediaRef,
 } from '../../storage/media.js';
 import { fileToAttachment, newId } from './upload.js';
+import {
+  notifyQuietly,
+  resolveAssigneeUserId,
+} from '../notifications/service.js';
 
 type Actor = {
   sub: string;
@@ -255,6 +259,20 @@ export async function addMember(
       } as (typeof project.members)[number]);
     }
     await project.save();
+    const actorDisplay = await actorName(actor);
+    notifyQuietly({
+      orgId: String(project.orgId),
+      recipientId: String(existingUser._id),
+      actorId: actor.sub,
+      actorName: actorDisplay,
+      type: 'project_invite',
+      title: `${actorDisplay} added you to ${project.name}`,
+      body: `You joined as ${input.role}`,
+      meta: {
+        projectId: String(project._id),
+        href: `/board?project=${project._id}`,
+      },
+    });
     return {
       project: await presentProject(project),
       result: 'added' as const,
@@ -655,6 +673,25 @@ export async function createTask(
     attachments: [],
   });
 
+  const assigneeUserId = resolveAssigneeUserId(project, task.assigneeId);
+  if (assigneeUserId && assigneeUserId !== actor.sub) {
+    notifyQuietly({
+      orgId: String(project.orgId),
+      recipientId: assigneeUserId,
+      actorId: actor.sub,
+      actorName: displayName,
+      type: 'task_assigned',
+      title: `${displayName} assigned you ${task.key}`,
+      body: task.title,
+      meta: {
+        projectId: String(project._id),
+        taskId: String(task._id),
+        taskKey: task.key,
+        href: `/board?project=${project._id}&task=${task._id}`,
+      },
+    });
+  }
+
   return presentTask(task);
 }
 
@@ -671,6 +708,8 @@ export async function updateTask(
 
   const project = await getAccessibleProject(String(task.projectId), actor);
   requireMembership(project, actor.email);
+
+  const prevAssigneeId = task.assigneeId ?? '';
 
   const allowed = [
     'title',
@@ -701,6 +740,34 @@ export async function updateTask(
   }
 
   await task.save();
+
+  const nextAssigneeId = task.assigneeId ?? '';
+  if (
+    patch.assigneeId !== undefined &&
+    nextAssigneeId &&
+    nextAssigneeId !== prevAssigneeId
+  ) {
+    const assigneeUserId = resolveAssigneeUserId(project, nextAssigneeId);
+    const displayName = await actorName(actor);
+    if (assigneeUserId && assigneeUserId !== actor.sub) {
+      notifyQuietly({
+        orgId: String(project.orgId),
+        recipientId: assigneeUserId,
+        actorId: actor.sub,
+        actorName: displayName,
+        type: 'task_assigned',
+        title: `${displayName} assigned you ${task.key}`,
+        body: task.title,
+        meta: {
+          projectId: String(project._id),
+          taskId: String(task._id),
+          taskKey: task.key,
+          href: `/board?project=${project._id}&task=${task._id}`,
+        },
+      });
+    }
+  }
+
   return presentTask(task);
 }
 
@@ -738,6 +805,27 @@ export async function addComment(
   };
   task.comments.push(comment);
   await task.save();
+
+  const assigneeUserId = resolveAssigneeUserId(project, task.assigneeId);
+  if (assigneeUserId && assigneeUserId !== actor.sub) {
+    notifyQuietly({
+      orgId: String(project.orgId),
+      recipientId: assigneeUserId,
+      actorId: actor.sub,
+      actorName: displayName,
+      type: 'task_comment',
+      title: `${displayName} commented on ${task.key}`,
+      body: text || 'Added an attachment',
+      meta: {
+        projectId: String(project._id),
+        taskId: String(task._id),
+        taskKey: task.key,
+        commentId: comment.id,
+        href: `/board?project=${project._id}&task=${task._id}`,
+      },
+    });
+  }
+
   return presentTask(task);
 }
 
@@ -970,6 +1058,27 @@ export async function updateTimelineItem(
     }
   }
 
+  if (wantsAssignee && task) {
+    const assigneeUserId = resolveAssigneeUserId(project, nextAssigneeId);
+    if (assigneeUserId && assigneeUserId !== actor.sub) {
+      notifyQuietly({
+        orgId: String(project.orgId),
+        recipientId: assigneeUserId,
+        actorId: actor.sub,
+        actorName: displayName,
+        type: 'task_assigned',
+        title: `${displayName} assigned you ${task.key}`,
+        body: task.title,
+        meta: {
+          projectId: String(project._id),
+          taskId: String(task._id),
+          taskKey: task.key,
+          href: `/board?project=${project._id}&task=${task._id}`,
+        },
+      });
+    }
+  }
+
   return {
     item: serializeTimeline(item),
     task: task ? await presentTask(task) : null,
@@ -1003,6 +1112,26 @@ export async function assignTimelineItem(
     item.assigneeName = assignee.name;
     item.assignedAt = new Date();
     await item.save();
+
+    const displayName = await actorName(actor);
+    const assigneeUserId = resolveAssigneeUserId(project, assignee.id);
+    if (assigneeUserId && assigneeUserId !== actor.sub) {
+      notifyQuietly({
+        orgId: String(project.orgId),
+        recipientId: assigneeUserId,
+        actorId: actor.sub,
+        actorName: displayName,
+        type: 'task_assigned',
+        title: `${displayName} assigned you ${task.key}`,
+        body: task.title,
+        meta: {
+          projectId: String(project._id),
+          taskId: String(task._id),
+          taskKey: task.key,
+          href: `/board?project=${project._id}&task=${task._id}`,
+        },
+      });
+    }
 
     return {
       timelineItem: serializeTimeline(item),
@@ -1044,6 +1173,26 @@ export async function assignTimelineItem(
   item.taskId = task._id;
   item.assignedAt = new Date();
   await item.save();
+
+  const displayName = await actorName(actor);
+  const assigneeUserId = resolveAssigneeUserId(project, assignee.id);
+  if (assigneeUserId && assigneeUserId !== actor.sub) {
+    notifyQuietly({
+      orgId: String(project.orgId),
+      recipientId: assigneeUserId,
+      actorId: actor.sub,
+      actorName: displayName,
+      type: 'task_assigned',
+      title: `${displayName} assigned you ${task.key}`,
+      body: task.title,
+      meta: {
+        projectId: String(project._id),
+        taskId: String(task._id),
+        taskKey: task.key,
+        href: `/board?project=${project._id}&task=${task._id}`,
+      },
+    });
+  }
 
   return {
     timelineItem: serializeTimeline(item),

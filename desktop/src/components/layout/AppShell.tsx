@@ -11,6 +11,7 @@ import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { UserAvatar } from '@/components/ui/UserAvatar';
 import { ProfileModal } from '@/components/profile/ProfileModal';
+import { NotificationBell } from '@/components/layout/NotificationBell';
 import { useAttendance } from '@/lib/attendance/AttendanceContext';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { useOffline } from '@/lib/offline/OfflineContext';
@@ -171,6 +172,7 @@ export function AppShell() {
             ) : null}
           </div>
           <div className="flex items-center gap-1.5">
+            <NotificationBell />
             <ThemeToggle />
             <button
               type="button"
