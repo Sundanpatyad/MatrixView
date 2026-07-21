@@ -26,6 +26,8 @@ import {
   removeProjectAvatarRequest,
   updateTimelineRequest,
   updateTeamRequest,
+  addTeamMembersRequest,
+  removeTeamMemberRequest,
   removeColumnRequest,
   removeMemberRequest,
   removeTaskAttachmentRequest,
@@ -44,6 +46,7 @@ import {
   patchChatSocketHandlers,
   type BoardColumnsEventPayload,
   type BoardTaskEventPayload,
+  type BoardTeamEventPayload,
 } from '@/lib/socket/chatSocket';
 import {
   ensureProjectColumns,
@@ -93,6 +96,7 @@ type CreateTimelineInput = {
   type: TaskType;
   priority: TaskPriority;
   dueDate: string;
+  teamId?: string | null;
   files?: File[];
 };
 
@@ -102,6 +106,7 @@ type UpdateTimelineInput = {
   type: TaskType;
   priority: TaskPriority;
   dueDate: string;
+  teamId?: string | null;
   files?: File[];
   removeAttachmentIds?: string[];
   assigneeId?: string;
@@ -173,6 +178,8 @@ type WorkspaceContextValue = {
     teamId: string,
     input: { name?: string; memberIds?: string[] },
   ) => Promise<ProjectTeam>;
+  addTeamMembers: (teamId: string, memberIds: string[]) => Promise<ProjectTeam>;
+  removeTeamMember: (teamId: string, memberId: string) => Promise<ProjectTeam>;
   deleteTeam: (teamId: string) => Promise<void>;
   getProjectTeams: (projectId: string) => ProjectTeam[];
   isProjectAdmin: (projectId: string) => boolean;
@@ -291,10 +298,35 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       });
     };
 
+    const applyTeamUpsert = (payload: BoardTeamEventPayload) => {
+      if (!payload?.team?.id) return;
+      const team = payload.team;
+      setState((prev) => ({
+        ...prev,
+        teams: [...prev.teams.filter((t) => t.id !== team.id), team].sort((a, b) =>
+          a.name.localeCompare(b.name),
+        ),
+      }));
+    };
+
+    const applyTeamDeleted = (payload: BoardTeamEventPayload) => {
+      if (!payload?.teamId) return;
+      const teamId = payload.teamId;
+      setState((prev) => ({
+        ...prev,
+        teams: prev.teams.filter((t) => t.id !== teamId),
+        tasks: prev.tasks.map((t) =>
+          t.teamId === teamId ? ensureTaskFields({ ...t, teamId: null }) : t,
+        ),
+      }));
+    };
+
     patchChatSocketHandlers({
       onTaskCreated: applyTask,
       onTaskUpdated: applyTask,
       onProjectColumns: applyColumns,
+      onTeamUpserted: applyTeamUpsert,
+      onTeamDeleted: applyTeamDeleted,
     });
 
     let cancelled = false;
@@ -313,7 +345,13 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       const s = getChatSocket();
       s?.off('connect', joinAll);
       for (const id of projectIdsRef.current) leaveProject(id);
-      clearChatSocketHandlerKeys(['onTaskCreated', 'onTaskUpdated', 'onProjectColumns']);
+      clearChatSocketHandlerKeys([
+        'onTaskCreated',
+        'onTaskUpdated',
+        'onProjectColumns',
+        'onTeamUpserted',
+        'onTeamDeleted',
+      ]);
     };
   }, [isAuthenticated, isBootstrapping, user?.id]);
 
@@ -525,6 +563,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     setState((prev) => ({
       ...prev,
       projects: upsertProject(prev.projects, ensureProjectColumns(project)),
+      teams: prev.teams.map((t) =>
+        t.projectId === projectId
+          ? { ...t, memberIds: t.memberIds.filter((id) => id !== memberId) }
+          : t,
+      ),
     }));
   }, []);
 
@@ -551,6 +594,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         type: input.type,
         priority: input.priority,
         dueDate: input.dueDate,
+        teamId: input.teamId,
       },
       input.files ?? [],
     );
@@ -571,6 +615,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           type: input.type,
           priority: input.priority,
           dueDate: input.dueDate,
+          teamId: input.teamId,
           removeAttachmentIds: input.removeAttachmentIds,
           assigneeId: input.assigneeId,
           assigneeName: input.assigneeName,
@@ -636,6 +681,28 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  const addTeamMembers = useCallback(async (teamId: string, memberIds: string[]) => {
+    const { team } = await addTeamMembersRequest(teamId, memberIds);
+    setState((prev) => ({
+      ...prev,
+      teams: prev.teams
+        .map((t) => (t.id === teamId ? team : t))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    }));
+    return team;
+  }, []);
+
+  const removeTeamMember = useCallback(async (teamId: string, memberId: string) => {
+    const { team } = await removeTeamMemberRequest(teamId, memberId);
+    setState((prev) => ({
+      ...prev,
+      teams: prev.teams
+        .map((t) => (t.id === teamId ? team : t))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    }));
+    return team;
+  }, []);
+
   const deleteTeam = useCallback(async (teamId: string) => {
     await deleteTeamRequest(teamId);
     setState((prev) => ({
@@ -690,6 +757,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       deleteTimelineItem,
       createTeam,
       updateTeam,
+      addTeamMembers,
+      removeTeamMember,
       deleteTeam,
       getProjectTeams: (projectId) => state.teams.filter((t) => t.projectId === projectId),
       isProjectAdmin,
@@ -723,6 +792,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       deleteTimelineItem,
       createTeam,
       updateTeam,
+      addTeamMembers,
+      removeTeamMember,
       deleteTeam,
       isProjectAdmin,
     ],

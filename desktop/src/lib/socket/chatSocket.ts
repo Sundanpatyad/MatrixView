@@ -5,7 +5,7 @@ import {
   refreshApiAccessToken,
 } from '@/lib/api/client';
 import type { ChatConversation, ChatMessage } from '@/lib/api/chat';
-import type { BoardTask, Project } from '@/lib/workspace/types';
+import type { BoardTask, Project, ProjectTeam } from '@/lib/workspace/types';
 
 export type PresenceUser = {
   userId: string;
@@ -141,6 +141,13 @@ export type BoardColumnsEventPayload = {
   actorId?: string;
 };
 
+export type BoardTeamEventPayload = {
+  projectId: string;
+  team?: ProjectTeam;
+  teamId?: string;
+  actorId?: string;
+};
+
 type Handlers = {
   onPresenceSnapshot?: (users: PresenceUser[]) => void;
   onPresenceUpdate?: (user: PresenceUser) => void;
@@ -167,6 +174,11 @@ type Handlers = {
   onTaskCreated?: (payload: BoardTaskEventPayload) => void;
   onTaskUpdated?: (payload: BoardTaskEventPayload) => void;
   onProjectColumns?: (payload: BoardColumnsEventPayload) => void;
+  onTeamUpserted?: (payload: BoardTeamEventPayload) => void;
+  onTeamDeleted?: (payload: BoardTeamEventPayload) => void;
+  onNotificationNew?: (notification: import('@/lib/api/notifications').AppNotification) => void;
+  onNotificationUnreadCount?: (count: number) => void;
+  onNotificationRead?: (payload: { ids?: string[]; all?: boolean }) => void;
   onConnect?: () => void;
   onDisconnect?: () => void;
 };
@@ -174,11 +186,45 @@ type Handlers = {
 let socket: Socket | null = null;
 let handlers: Handlers = {};
 let connectInFlight: Promise<Socket | null> | null = null;
+let heartbeatTimer: number | null = null;
+let lastPongAt = 0;
+
+const HEARTBEAT_MS = 20_000;
+const PING_STALE_MS = 45_000;
 
 function delay(ms: number) {
   return new Promise<void>((resolve) => {
     window.setTimeout(resolve, ms);
   });
+}
+
+function stopHeartbeat() {
+  if (heartbeatTimer != null) {
+    window.clearInterval(heartbeatTimer);
+    heartbeatTimer = null;
+  }
+}
+
+function startHeartbeat(s: Socket) {
+  stopHeartbeat();
+  lastPongAt = Date.now();
+  heartbeatTimer = window.setInterval(() => {
+    if (!s.connected) return;
+    if (lastPongAt && Date.now() - lastPongAt > PING_STALE_MS) {
+      try {
+        s.disconnect();
+        s.connect();
+      } catch {
+        /* ignore */
+      }
+      return;
+    }
+    s.emit('client:ping', { t: Date.now() });
+  }, HEARTBEAT_MS);
+}
+
+export function isChatSocketConnected() {
+  return Boolean(socket?.connected);
 }
 
 function waitForConnect(s: Socket, timeoutMs: number): Promise<boolean> {
@@ -210,10 +256,22 @@ async function refreshSocketAuth() {
 }
 
 function bindSocket(s: Socket) {
-  s.on('connect', () => handlers.onConnect?.());
-  s.on('disconnect', () => handlers.onDisconnect?.());
+  s.on('connect', () => {
+    lastPongAt = Date.now();
+    startHeartbeat(s);
+    // Kick an immediate ping so the path is warm
+    s.emit('client:ping', { t: Date.now() });
+    handlers.onConnect?.();
+  });
+  s.on('disconnect', () => {
+    stopHeartbeat();
+    handlers.onDisconnect?.();
+  });
   s.on('connect_error', () => {
     void refreshSocketAuth();
+  });
+  s.on('client:pong', () => {
+    lastPongAt = Date.now();
   });
 
   s.on('presence:snapshot', (payload: { users: PresenceUser[] }) => {
@@ -291,6 +349,24 @@ function bindSocket(s: Socket) {
   s.on('project:columns', (payload: BoardColumnsEventPayload) => {
     if (payload?.project?.id) handlers.onProjectColumns?.(payload);
   });
+  s.on('team:upserted', (payload: BoardTeamEventPayload) => {
+    if (payload?.team?.id) handlers.onTeamUpserted?.(payload);
+  });
+  s.on('team:deleted', (payload: BoardTeamEventPayload) => {
+    if (payload?.teamId) handlers.onTeamDeleted?.(payload);
+  });
+  s.on(
+    'notification:new',
+    (payload: { notification: import('@/lib/api/notifications').AppNotification }) => {
+      if (payload?.notification) handlers.onNotificationNew?.(payload.notification);
+    },
+  );
+  s.on('notification:unread-count', (payload: { count: number }) => {
+    if (typeof payload?.count === 'number') handlers.onNotificationUnreadCount?.(payload.count);
+  });
+  s.on('notification:read', (payload: { ids?: string[]; all?: boolean }) => {
+    handlers.onNotificationRead?.(payload ?? {});
+  });
 }
 
 /** Replace all handlers (prefer patchChatSocketHandlers for partial updates). */
@@ -339,6 +415,8 @@ export async function connectChatSocket() {
       reconnectionDelay: 1000,
       reconnectionDelayMax: 10_000,
       timeout: 10_000,
+      // Engine.IO keepalive — complements app-level client:ping / client:pong
+      withCredentials: true,
     });
 
     bindSocket(socket);
@@ -348,6 +426,10 @@ export async function connectChatSocket() {
     });
 
     await waitForConnect(socket, 8_000);
+    if (socket.connected) {
+      lastPongAt = Date.now();
+      startHeartbeat(socket);
+    }
     return socket;
   })().finally(() => {
     connectInFlight = null;
@@ -399,6 +481,8 @@ export async function ensureChatSocketConnected(opts?: {
 
 export function disconnectChatSocket() {
   connectInFlight = null;
+  stopHeartbeat();
+  lastPongAt = 0;
   if (!socket) return;
   const old = socket;
   socket = null;
@@ -415,6 +499,13 @@ export function disconnectChatSocket() {
 
 export function getChatSocket() {
   return socket;
+}
+
+/** Ask the server to re-broadcast who is socket-online (needed after late handler attach). */
+export function requestPresenceSnapshot() {
+  const s = socket;
+  if (!s?.connected) return;
+  s.emit('presence:request');
 }
 
 export function joinConversation(conversationId: string) {

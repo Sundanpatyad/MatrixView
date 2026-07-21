@@ -83,6 +83,8 @@ export type TimelineItem = {
   type: TaskType;
   priority: TaskPriority;
   dueDate: string;
+  /** null = project-wide backlog item */
+  teamId?: string | null;
   attachments: TaskAttachment[];
   createdBy: string;
   createdByName: string;

@@ -18,6 +18,7 @@ import {
   ensureChatSocketConnected,
   getChatSocket,
   patchChatSocketHandlers,
+  requestPresenceSnapshot,
 } from '@/lib/socket/chatSocket';
 import {
   useAudioCall,
@@ -99,12 +100,17 @@ export function CallProvider({ children }: { children: ReactNode }) {
     if (!isAuthenticated || !meId) {
       disconnectChatSocket();
       setSocketReady(false);
+      setSocketRetrying(false);
       return;
     }
 
     const get = () => callHandlersRef.current();
     patchChatSocketHandlers({
-      onConnect: () => setSocketReady(true),
+      onConnect: () => {
+        setSocketReady(true);
+        setSocketRetrying(false);
+        requestPresenceSnapshot();
+      },
       onDisconnect: () => setSocketReady(false),
       onCallIncoming: (p) => get().onCallIncoming?.(p),
       onCallAccepted: (p) => get().onCallAccepted?.(p),
@@ -121,9 +127,17 @@ export function CallProvider({ children }: { children: ReactNode }) {
       onCallSpotlight: (p) => get().onCallSpotlight?.(p),
     });
 
+    // Already live from login/bootstrap — reflect immediately
+    if (getChatSocket()?.connected) {
+      setSocketReady(true);
+    }
+
     if (online) {
       void connectChatSocket().then((s) => {
-        if (s?.connected) setSocketReady(true);
+        if (s?.connected) {
+          setSocketReady(true);
+          setSocketRetrying(false);
+        }
       });
     } else {
       disconnectChatSocket();
@@ -163,7 +177,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
     }
   }, [isAuthenticated, meId, online]);
 
-  // Auto-retry while authenticated + online but socket is down.
+  // Quiet background keepalive while logged in — never flash "Retrying…" for background work
   useEffect(() => {
     if (!isAuthenticated || !meId || !online) return;
 
@@ -179,18 +193,18 @@ export function CallProvider({ children }: { children: ReactNode }) {
     const loop = async () => {
       if (cancelled) return;
       if (sync()) {
-        timer = window.setTimeout(loop, 15_000);
+        timer = window.setTimeout(loop, 20_000);
         return;
       }
-      setSocketRetrying(true);
+      // Silent reconnect — UI only shows Retry on manual click
       try {
         await ensureChatSocketConnected({ attempts: 3 });
         sync();
-      } finally {
-        if (!cancelled) setSocketRetrying(false);
+      } catch {
+        /* ignore */
       }
       if (!cancelled) {
-        timer = window.setTimeout(loop, getChatSocket()?.connected ? 15_000 : 4_000);
+        timer = window.setTimeout(loop, getChatSocket()?.connected ? 20_000 : 5_000);
       }
     };
 

@@ -32,6 +32,8 @@ const timelineSchema = new Schema(
       default: 'medium',
     },
     dueDate: { type: String, default: '' },
+    /** Optional project team — null = project-wide backlog item */
+    teamId: { type: Schema.Types.ObjectId, ref: 'Team', default: null, index: true },
     attachments: { type: [attachmentSchema], default: [] },
     createdBy: { type: String, required: true },
     createdByName: { type: String, required: true },

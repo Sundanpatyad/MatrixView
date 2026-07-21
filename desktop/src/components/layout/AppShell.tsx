@@ -14,6 +14,7 @@ import {
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { UserAvatar } from '@/components/ui/UserAvatar';
+import { NotificationBell } from '@/components/notifications/NotificationBell';
 import { ProfileModal } from '@/components/profile/ProfileModal';
 import { useAttendance } from '@/lib/attendance/AttendanceContext';
 import { useAuth } from '@/lib/auth/AuthContext';
@@ -363,6 +364,7 @@ export function AppShell() {
             ) : null}
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
+            <NotificationBell />
             <ThemeToggle />
             <button
               type="button"

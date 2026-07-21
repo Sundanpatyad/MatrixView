@@ -128,6 +128,7 @@ export function serializeTimeline(doc: TimelineDoc) {
     type: doc.type,
     priority: doc.priority,
     dueDate: doc.dueDate ?? '',
+    teamId: doc.teamId ? String(doc.teamId) : null,
     attachments: (doc.attachments ?? []).map(mapAttachment),
     createdBy: doc.createdBy,
     createdByName: doc.createdByName,

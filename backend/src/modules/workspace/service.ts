@@ -28,6 +28,12 @@ import {
   type StoredMediaRef,
 } from '../../storage/media.js';
 import { fileToAttachment, newId } from './upload.js';
+import {
+  boardTaskHref,
+  createAndEmit,
+  projectHref,
+  resolveMemberUserId,
+} from '../notifications/service.js';
 
 type Actor = {
   sub: string;
@@ -215,6 +221,7 @@ export async function deleteProject(actor: Actor, projectId: string) {
   await Task.deleteMany({ projectId: pid });
   await TimelineItem.deleteMany({ projectId: pid });
   await ProjectInvite.deleteMany({ projectId: pid });
+  await Team.deleteMany({ projectId: pid });
   await project.deleteOne();
   await deleteStoredMediaMany(mediaRefs);
 
@@ -263,6 +270,19 @@ export async function addMember(
       } as (typeof project.members)[number]);
     }
     await project.save();
+    const name = await actorName(actor);
+    void createAndEmit({
+      orgId: String(project.orgId),
+      recipientId: String(existingUser._id),
+      actorId: actor.sub,
+      actorName: name,
+      type: 'project.added',
+      title: 'Added to project',
+      body: `${name} added you to ${project.name}`,
+      href: projectHref(String(project._id)),
+      projectId: String(project._id),
+      meta: { projectName: project.name, role: input.role },
+    }).catch((err) => console.error('[notifications] project.added', err));
     return {
       project: await presentProject(project),
       result: 'added' as const,
@@ -511,6 +531,13 @@ export async function removeMember(actor: Actor, projectId: string, memberId: st
 
   project.members = project.members.filter((m) => m.id !== memberId) as typeof project.members;
   await project.save();
+
+  // Keep team membership in sync when a project member is removed
+  await Team.updateMany(
+    { projectId: project._id },
+    { $pull: { memberIds: memberId } },
+  );
+
   return presentProject(project);
 }
 
@@ -702,6 +729,25 @@ export async function createTask(
     task: presented,
     actorId: actor.sub,
   });
+
+  const assigneeUserId = resolveMemberUserId(project.members, task.assigneeId);
+  if (assigneeUserId && assigneeUserId !== actor.sub) {
+    const name = displayName;
+    void createAndEmit({
+      orgId: String(project.orgId),
+      recipientId: assigneeUserId,
+      actorId: actor.sub,
+      actorName: name,
+      type: 'task.assigned',
+      title: 'Task assigned to you',
+      body: `${name} assigned you “${task.title}”`,
+      href: boardTaskHref(String(project._id), String(task._id)),
+      projectId: String(project._id),
+      taskId: String(task._id),
+      meta: { taskKey: task.key, taskTitle: task.title, projectName: project.name },
+    }).catch((err) => console.error('[notifications] task.assigned', err));
+  }
+
   return presented;
 }
 
@@ -718,6 +764,8 @@ export async function updateTask(
 
   const project = await getAccessibleProject(String(task.projectId), actor);
   requireMembership(project, actor.email);
+
+  const prevAssigneeId = task.assigneeId;
 
   const allowed = [
     'title',
@@ -768,6 +816,30 @@ export async function updateTask(
     actorId: actor.sub,
     changed: Object.keys(patch),
   });
+
+  if (
+    patch.assigneeId !== undefined &&
+    String(task.assigneeId ?? '') !== String(prevAssigneeId ?? '')
+  ) {
+    const assigneeUserId = resolveMemberUserId(project.members, task.assigneeId);
+    if (assigneeUserId && assigneeUserId !== actor.sub) {
+      const name = await actorName(actor);
+      void createAndEmit({
+        orgId: String(project.orgId),
+        recipientId: assigneeUserId,
+        actorId: actor.sub,
+        actorName: name,
+        type: 'task.assigned',
+        title: 'Task assigned to you',
+        body: `${name} assigned you “${task.title}”`,
+        href: boardTaskHref(String(project._id), String(task._id)),
+        projectId: String(project._id),
+        taskId: String(task._id),
+        meta: { taskKey: task.key, taskTitle: task.title, projectName: project.name },
+      }).catch((err) => console.error('[notifications] task.assigned', err));
+    }
+  }
+
   return presented;
 }
 
@@ -811,6 +883,34 @@ export async function addComment(
     actorId: actor.sub,
     changed: ['comments'],
   });
+
+  const notifyIds = new Set<string>();
+  const assigneeUserId = resolveMemberUserId(project.members, task.assigneeId);
+  if (assigneeUserId) notifyIds.add(assigneeUserId);
+  if (task.createdBy) notifyIds.add(String(task.createdBy));
+  notifyIds.delete(actor.sub);
+
+  for (const recipientId of notifyIds) {
+    void createAndEmit({
+      orgId: String(project.orgId),
+      recipientId,
+      actorId: actor.sub,
+      actorName: displayName,
+      type: 'task.commented',
+      title: 'New comment on task',
+      body: `${displayName} commented on “${task.title}”`,
+      href: boardTaskHref(String(project._id), String(task._id)),
+      projectId: String(project._id),
+      taskId: String(task._id),
+      meta: {
+        taskKey: task.key,
+        taskTitle: task.title,
+        projectName: project.name,
+        preview: text.slice(0, 120),
+      },
+    }).catch((err) => console.error('[notifications] task.commented', err));
+  }
+
   return presented;
 }
 
@@ -892,11 +992,22 @@ export async function createTimelineItem(
     type?: string;
     priority?: string;
     dueDate?: string;
+    teamId?: string | null;
   },
   files: Express.Multer.File[] = [],
 ) {
   const project = await getAccessibleProject(input.projectId, actor);
   requireAdmin(project, actor.email);
+
+  let teamOid: Types.ObjectId | null = null;
+  if (input.teamId) {
+    if (!Types.ObjectId.isValid(input.teamId)) {
+      throw new AuthError('Team not found', 404, 'NOT_FOUND');
+    }
+    const team = await Team.findOne({ _id: input.teamId, projectId: project._id });
+    if (!team) throw new AuthError('Team not found', 404, 'NOT_FOUND');
+    teamOid = team._id;
+  }
 
   const displayName = await actorName(actor);
   const item = await TimelineItem.create({
@@ -907,6 +1018,7 @@ export async function createTimelineItem(
     type: input.type ?? 'task',
     priority: input.priority ?? 'medium',
     dueDate: input.dueDate ?? '',
+    teamId: teamOid,
     attachments: await Promise.all(
       files.map((f) => fileToAttachment(f, displayName)),
     ),
@@ -930,6 +1042,7 @@ export async function updateTimelineItem(
     type?: string;
     priority?: string;
     dueDate?: string;
+    teamId?: string | null;
     removeAttachmentIds?: string[];
     assigneeId?: string | null;
     assigneeName?: string | null;
@@ -952,6 +1065,18 @@ export async function updateTimelineItem(
   if (input.type !== undefined) item.type = input.type as typeof item.type;
   if (input.priority !== undefined) item.priority = input.priority as typeof item.priority;
   if (input.dueDate !== undefined) item.dueDate = input.dueDate;
+  if (input.teamId !== undefined) {
+    if (!input.teamId) {
+      item.teamId = null;
+    } else {
+      if (!Types.ObjectId.isValid(input.teamId)) {
+        throw new AuthError('Team not found', 404, 'NOT_FOUND');
+      }
+      const team = await Team.findOne({ _id: input.teamId, projectId: project._id });
+      if (!team) throw new AuthError('Team not found', 404, 'NOT_FOUND');
+      item.teamId = team._id;
+    }
+  }
 
   const removeIds = new Set(input.removeAttachmentIds ?? []);
   const removedRefs: StoredMediaRef[] = [];
@@ -1113,6 +1238,24 @@ export async function assignTimelineItem(
       changed: ['assigneeId', 'assigneeName'],
     });
 
+    const assigneeUserId = resolveMemberUserId(project.members, assignee.id);
+    if (assigneeUserId && assigneeUserId !== actor.sub) {
+      const name = await actorName(actor);
+      void createAndEmit({
+        orgId: String(project.orgId),
+        recipientId: assigneeUserId,
+        actorId: actor.sub,
+        actorName: name,
+        type: 'task.assigned',
+        title: 'Task assigned to you',
+        body: `${name} assigned you “${task.title}”`,
+        href: boardTaskHref(String(project._id), String(task._id)),
+        projectId: String(project._id),
+        taskId: String(task._id),
+        meta: { taskKey: task.key, taskTitle: task.title, projectName: project.name },
+      }).catch((err) => console.error('[notifications] task.assigned', err));
+    }
+
     return {
       timelineItem: serializeTimeline(item),
       task: presentedTask,
@@ -1144,6 +1287,7 @@ export async function assignTimelineItem(
     startDate: '',
     endDate: '',
     dueDate: item.dueDate,
+    teamId: item.teamId ?? null,
     comments: [],
     attachments: [...(item.attachments ?? [])],
   });
@@ -1159,6 +1303,24 @@ export async function assignTimelineItem(
     task: presentedTask,
     actorId: actor.sub,
   });
+
+  const assigneeUserId = resolveMemberUserId(project.members, assignee.id);
+  if (assigneeUserId && assigneeUserId !== actor.sub) {
+    const name = await actorName(actor);
+    void createAndEmit({
+      orgId: String(project.orgId),
+      recipientId: assigneeUserId,
+      actorId: actor.sub,
+      actorName: name,
+      type: 'task.assigned',
+      title: 'Task assigned to you',
+      body: `${name} assigned you “${task.title}”`,
+      href: boardTaskHref(String(project._id), String(task._id)),
+      projectId: String(project._id),
+      taskId: String(task._id),
+      meta: { taskKey: task.key, taskTitle: task.title, projectName: project.name },
+    }).catch((err) => console.error('[notifications] task.assigned', err));
+  }
 
   return {
     timelineItem: serializeTimeline(item),
@@ -1190,6 +1352,25 @@ export async function deleteTimelineItem(actor: Actor, itemId: string) {
   return { ok: true };
 }
 
+function eligibleTeamMemberIds(
+  project: ProjectDoc,
+  memberIds: string[] | undefined,
+): string[] {
+  const allowed = new Set(
+    project.members
+      .filter((m) => m.status !== 'pending')
+      .map((m) => m.id),
+  );
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const id of memberIds ?? []) {
+    if (!allowed.has(id) || seen.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+  }
+  return out;
+}
+
 export async function createTeam(
   actor: Actor,
   projectId: string,
@@ -1200,10 +1381,9 @@ export async function createTeam(
 
   const name = input.name.trim();
   if (!name) throw new AuthError('Team name is required', 400);
+  if (name.length > 80) throw new AuthError('Team name is too long', 400);
 
-  const memberIds = (input.memberIds ?? []).filter((id) =>
-    project.members.some((m) => m.id === id),
-  );
+  const memberIds = eligibleTeamMemberIds(project, input.memberIds);
 
   try {
     const team = await Team.create({
@@ -1212,7 +1392,12 @@ export async function createTeam(
       name,
       memberIds,
     });
-    return serializeTeam(team);
+    const serialized = serializeTeam(team);
+    await broadcastProjectEvent(project, 'team:upserted', {
+      team: serialized,
+      actorId: actor.sub,
+    });
+    return serialized;
   } catch (err) {
     if ((err as { code?: number }).code === 11000) {
       throw new AuthError('A team with that name already exists', 409, 'NAME_TAKEN');
@@ -1238,12 +1423,11 @@ export async function updateTeam(
   if (input.name !== undefined) {
     const name = input.name.trim();
     if (!name) throw new AuthError('Team name is required', 400);
+    if (name.length > 80) throw new AuthError('Team name is too long', 400);
     team.name = name;
   }
   if (input.memberIds !== undefined) {
-    team.memberIds = input.memberIds.filter((id) =>
-      project.members.some((m) => m.id === id),
-    );
+    team.memberIds = eligibleTeamMemberIds(project, input.memberIds);
   }
 
   try {
@@ -1254,7 +1438,73 @@ export async function updateTeam(
     }
     throw err;
   }
-  return serializeTeam(team);
+  const serialized = serializeTeam(team);
+  await broadcastProjectEvent(project, 'team:upserted', {
+    team: serialized,
+    actorId: actor.sub,
+  });
+  return serialized;
+}
+
+export async function addTeamMembers(
+  actor: Actor,
+  teamId: string,
+  memberIds: string[],
+) {
+  if (!Types.ObjectId.isValid(teamId)) {
+    throw new AuthError('Team not found', 404, 'NOT_FOUND');
+  }
+  const team = await Team.findById(teamId);
+  if (!team) throw new AuthError('Team not found', 404, 'NOT_FOUND');
+
+  const project = await getAccessibleProject(String(team.projectId), actor);
+  requireAdmin(project, actor.email);
+
+  const toAdd = eligibleTeamMemberIds(project, memberIds);
+  if (toAdd.length === 0) {
+    throw new AuthError('No valid project members to add', 400);
+  }
+
+  const existing = new Set(team.memberIds ?? []);
+  for (const id of toAdd) existing.add(id);
+  team.memberIds = [...existing];
+  await team.save();
+
+  const serialized = serializeTeam(team);
+  await broadcastProjectEvent(project, 'team:upserted', {
+    team: serialized,
+    actorId: actor.sub,
+  });
+  return serialized;
+}
+
+export async function removeTeamMember(
+  actor: Actor,
+  teamId: string,
+  memberId: string,
+) {
+  if (!Types.ObjectId.isValid(teamId)) {
+    throw new AuthError('Team not found', 404, 'NOT_FOUND');
+  }
+  const team = await Team.findById(teamId);
+  if (!team) throw new AuthError('Team not found', 404, 'NOT_FOUND');
+
+  const project = await getAccessibleProject(String(team.projectId), actor);
+  requireAdmin(project, actor.email);
+
+  if (!(team.memberIds ?? []).includes(memberId)) {
+    throw new AuthError('Member is not on this team', 404, 'NOT_FOUND');
+  }
+
+  team.memberIds = (team.memberIds ?? []).filter((id) => id !== memberId);
+  await team.save();
+
+  const serialized = serializeTeam(team);
+  await broadcastProjectEvent(project, 'team:upserted', {
+    team: serialized,
+    actorId: actor.sub,
+  });
+  return serialized;
 }
 
 export async function deleteTeam(actor: Actor, teamId: string) {
@@ -1267,8 +1517,44 @@ export async function deleteTeam(actor: Actor, teamId: string) {
   const project = await getAccessibleProject(String(team.projectId), actor);
   requireAdmin(project, actor.email);
 
+  const id = String(team._id);
   await Task.updateMany({ teamId: team._id }, { $set: { teamId: null } });
   await team.deleteOne();
-  return { ok: true, teamId };
+  await broadcastProjectEvent(project, 'team:deleted', {
+    teamId: id,
+    actorId: actor.sub,
+  });
+  return { ok: true, teamId: id };
+}
+
+export async function listProjectTeams(actor: Actor, projectId: string) {
+  const project = await getAccessibleProject(projectId, actor);
+  requireMembership(project, actor.email);
+  const teams = await Team.find({ projectId: project._id }).sort({ name: 1 });
+  return teams.map(serializeTeam);
+}
+
+export async function listProjectTasks(
+  actor: Actor,
+  projectId: string,
+  opts?: { teamId?: string | null },
+) {
+  const project = await getAccessibleProject(projectId, actor);
+  requireMembership(project, actor.email);
+
+  const filter: Record<string, unknown> = { projectId: project._id };
+  if (opts?.teamId === 'global') {
+    filter.teamId = null;
+  } else if (opts?.teamId) {
+    if (!Types.ObjectId.isValid(opts.teamId)) {
+      throw new AuthError('Team not found', 404, 'NOT_FOUND');
+    }
+    const team = await Team.findOne({ _id: opts.teamId, projectId: project._id });
+    if (!team) throw new AuthError('Team not found', 404, 'NOT_FOUND');
+    filter.teamId = team._id;
+  }
+
+  const tasks = await Task.find(filter).sort({ updatedAt: -1 });
+  return Promise.all(tasks.map((t) => presentTask(t as TaskDoc)));
 }
 

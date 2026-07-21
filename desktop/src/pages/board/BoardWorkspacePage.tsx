@@ -71,6 +71,7 @@ export function BoardWorkspacePage() {
   const { checkedIn, onBreak, elapsedLabel, checkIn, checkOut, toggleBreak } = useAttendance();
 
   const queryProjectId = searchParams.get('project') ?? '';
+  const queryTaskId = searchParams.get('task') ?? '';
   const [projectId, setProjectId] = useState(queryProjectId || projects[0]?.id || '');
   const [query, setQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<TaskType | 'all'>('all');
@@ -82,7 +83,7 @@ export function BoardWorkspacePage() {
   const [showInvite, setShowInvite] = useState(false);
   const [showTeams, setShowTeams] = useState(false);
   const [showCreateTask, setShowCreateTask] = useState(false);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(queryTaskId || null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<TaskStatus | null>(null);
   const draggingIdRef = useRef<string | null>(null);
@@ -114,6 +115,11 @@ export function BoardWorkspacePage() {
     }
   }, [projects, projectId, queryProjectId]);
 
+  useEffect(() => {
+    if (!queryTaskId) return;
+    setSelectedId(queryTaskId);
+  }, [queryTaskId]);
+
   function selectProject(id: string) {
     setProjectId(id);
     if (searchParams.has('project')) {
@@ -132,6 +138,13 @@ export function BoardWorkspacePage() {
   );
   const hasTeams = projectTeams.length > 0;
   const canEditColumns = Boolean(project && user && isProjectAdmin(project.id));
+  const canManageProject = Boolean(project && user && isProjectAdmin(project.id));
+
+  const teamNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const t of projectTeams) map.set(t.id, t.name);
+    return map;
+  }, [projectTeams]);
 
   useEffect(() => {
     setTeamFilter('all');
@@ -282,6 +295,11 @@ export function BoardWorkspacePage() {
   }
 
   const boardLabel = useMemo(() => {
+    if (hasTeams && teamFilter !== 'all' && teamFilter !== 'global') {
+      const team = projectTeams.find((t) => t.id === teamFilter);
+      return team ? `${team.name} team` : 'Team';
+    }
+    if (teamFilter === 'global') return 'Project-wide';
     if (selectedMembers.length === 0) return null;
     if (selectedMembers.length === members.length && members.length > 1) return 'Everyone';
     const names = selectedMembers.map((m) => {
@@ -292,7 +310,15 @@ export function BoardWorkspacePage() {
     });
     if (names.length <= 2) return names.join(' + ');
     return `${names[0]} + ${names.length - 1} more`;
-  }, [selectedMembers, members.length, user?.email, user?.name]);
+  }, [
+    selectedMembers,
+    members.length,
+    user?.email,
+    user?.name,
+    hasTeams,
+    teamFilter,
+    projectTeams,
+  ]);
 
   const defaultAssignee = useMemo(() => {
     const me = selectedMembers.find(
@@ -304,7 +330,7 @@ export function BoardWorkspacePage() {
   }, [selectedMembers, user?.email, user?.name]);
 
   const boardTasks = useMemo(() => {
-    if (!projectId || selectedMembers.length === 0) return [];
+    if (!projectId) return [];
     return getProjectTasks(projectId).filter((t) => {
       if (hasTeams) {
         if (teamFilter === 'global' && t.teamId) return false;
@@ -312,9 +338,22 @@ export function BoardWorkspacePage() {
           return false;
         }
       }
+      // Specific team view: show every task on that team (including unassigned)
+      if (hasTeams && teamFilter !== 'all' && teamFilter !== 'global') {
+        return true;
+      }
+      if (selectedMembers.length === 0) return false;
       return selectedMembers.some((m) => isMemberBoardTask(t, m));
     });
   }, [getProjectTasks, projectId, selectedMembers, hasTeams, teamFilter]);
+
+  function viewTeamOnBoard(teamId: string, memberIds: string[]) {
+    setTeamFilter(teamId);
+    if (memberIds.length > 0) {
+      setBoardMemberIds(memberIds);
+    }
+    setShowTeams(false);
+  }
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -422,14 +461,16 @@ export function BoardWorkspacePage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-1 rounded-lg border border-ink-600 bg-ink-900/80 p-0.5">
-            <Button
-              size="xs"
-              variant="ghost"
-              disabled={!project}
-              onClick={() => setShowInvite(true)}
-            >
-              Invite
-            </Button>
+            {canManageProject ? (
+              <Button
+                size="xs"
+                variant="ghost"
+                disabled={!project}
+                onClick={() => setShowInvite(true)}
+              >
+                Invite
+              </Button>
+            ) : null}
             <Button
               size="xs"
               variant="ghost"
@@ -786,6 +827,9 @@ export function BoardWorkspacePage() {
                         <DashboardTaskCard
                           key={task.id}
                           task={task}
+                          teamName={
+                            task.teamId ? teamNameById.get(task.teamId) ?? null : null
+                          }
                           avatarUrl={avatarFromMembers(
                             members,
                             task.assigneeId,
@@ -837,14 +881,16 @@ export function BoardWorkspacePage() {
               Project
             </p>
             <div className="flex items-center gap-2">
-              <button
-                type="button"
-                disabled={!project}
-                onClick={() => setShowInvite(true)}
-                className="shrink-0 text-xs font-semibold text-brand-800 disabled:opacity-40"
-              >
-                + Add
-              </button>
+              {canManageProject ? (
+                <button
+                  type="button"
+                  disabled={!project}
+                  onClick={() => setShowInvite(true)}
+                  className="shrink-0 text-xs font-semibold text-brand-800 disabled:opacity-40"
+                >
+                  + Add
+                </button>
+              ) : null}
               <button
                 type="button"
                 aria-label="Close"
@@ -1017,7 +1063,11 @@ export function BoardWorkspacePage() {
         <InviteMembersModal project={project} onClose={() => setShowInvite(false)} />
       ) : null}
       {showTeams && projectId ? (
-        <ManageTeamsModal projectId={projectId} onClose={() => setShowTeams(false)} />
+        <ManageTeamsModal
+          projectId={projectId}
+          onClose={() => setShowTeams(false)}
+          onViewTeamTasks={viewTeamOnBoard}
+        />
       ) : null}
       {showCreateTask && projectId && defaultAssignee ? (
         <CreateTaskModal

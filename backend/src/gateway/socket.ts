@@ -313,6 +313,9 @@ export function initSocket(httpServer: HttpServer) {
       credentials: true,
     },
     path: '/socket.io',
+    // Keep connections alive while users stay logged in
+    pingInterval: 20_000,
+    pingTimeout: 20_000,
   });
   setIO(io);
 
@@ -335,6 +338,11 @@ export function initSocket(httpServer: HttpServer) {
     socket.join(`org:${orgId}`);
     socket.join(`user:${userId}`);
 
+    // App-level ping/pong (in addition to Engine.IO keepalive)
+    socket.on('client:ping', (payload?: { t?: number }) => {
+      socket.emit('client:pong', { t: payload?.t ?? Date.now(), serverTime: Date.now() });
+    });
+
     onlineCounts.set(userId, (onlineCounts.get(userId) ?? 0) + 1);
 
     const attendance = await ActivitySession.exists({
@@ -351,6 +359,16 @@ export function initSocket(httpServer: HttpServer) {
 
     socket.emit('presence:snapshot', {
       users: await orgPresenceSnapshot(orgId),
+    });
+
+    socket.on('presence:request', async (_payload?: unknown, ack?) => {
+      try {
+        const users = await orgPresenceSnapshot(orgId);
+        socket.emit('presence:snapshot', { users });
+        ack?.({ ok: true, count: users.length });
+      } catch (err) {
+        ack?.({ ok: false, error: err instanceof Error ? err.message : 'Failed' });
+      }
     });
 
     socket.on('conversation:join', async (payload: { conversationId?: string }, ack?) => {

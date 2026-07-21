@@ -7,6 +7,7 @@ export type ChatMember = {
   role: string;
   avatarUrl?: string | null;
   checkedIn?: boolean;
+  online?: boolean;
 };
 
 export type MessageDeliveryStatus = 'sent' | 'delivered' | 'read';

@@ -174,6 +174,18 @@ router.post('/projects/:projectId/teams', async (req, res, next) => {
   }
 });
 
+router.get('/projects/:projectId/teams', async (req, res, next) => {
+  try {
+    const teams = await workspace.listProjectTeams(
+      await actorFrom(req as AuthedRequest),
+      param(req.params.projectId),
+    );
+    res.json({ teams });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.patch('/teams/:teamId', async (req, res, next) => {
   try {
     const body = z
@@ -186,6 +198,37 @@ router.patch('/teams/:teamId', async (req, res, next) => {
       await actorFrom(req as AuthedRequest),
       param(req.params.teamId),
       body,
+    );
+    res.json({ team });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/teams/:teamId/members', async (req, res, next) => {
+  try {
+    const body = z
+      .object({
+        memberIds: z.array(z.string().max(64)).min(1).max(200),
+      })
+      .parse(req.body);
+    const team = await workspace.addTeamMembers(
+      await actorFrom(req as AuthedRequest),
+      param(req.params.teamId),
+      body.memberIds,
+    );
+    res.json({ team });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete('/teams/:teamId/members/:memberId', async (req, res, next) => {
+  try {
+    const team = await workspace.removeTeamMember(
+      await actorFrom(req as AuthedRequest),
+      param(req.params.teamId),
+      param(req.params.memberId),
     );
     res.json({ team });
   } catch (err) {
@@ -266,8 +309,12 @@ router.delete('/projects/:projectId/columns/:columnId', async (req, res, next) =
 
 router.get('/projects/:projectId/tasks', async (req, res, next) => {
   try {
-    const data = await workspace.getWorkspace(await actorFrom(req as AuthedRequest));
-    const tasks = data.tasks.filter((t) => t.projectId === param(req.params.projectId));
+    const teamIdRaw = typeof req.query.teamId === 'string' ? req.query.teamId : undefined;
+    const tasks = await workspace.listProjectTasks(
+      await actorFrom(req as AuthedRequest),
+      param(req.params.projectId),
+      teamIdRaw ? { teamId: teamIdRaw } : undefined,
+    );
     res.json({ tasks });
   } catch (err) {
     next(err);
@@ -394,6 +441,7 @@ router.post('/timeline', upload.array('files', 10), async (req, res, next) => {
           .optional()
           .default('medium'),
         dueDate: z.string().max(40).optional().default(''),
+        teamId: z.string().max(64).nullable().optional(),
       })
       .parse(req.body);
     const item = await workspace.createTimelineItem(
@@ -429,6 +477,7 @@ router.patch('/timeline/:itemId', upload.array('files', 10), async (req, res, ne
         type: z.enum(['task', 'bug', 'story', 'time']).optional(),
         priority: z.enum(['lowest', 'low', 'medium', 'high', 'highest']).optional(),
         dueDate: z.string().max(40).optional(),
+        teamId: z.string().max(64).nullable().optional(),
         assigneeId: z.string().max(64).optional(),
         assigneeName: z.string().max(120).optional(),
       })
@@ -438,6 +487,7 @@ router.patch('/timeline/:itemId', upload.array('files', 10), async (req, res, ne
         type: req.body.type,
         priority: req.body.priority,
         dueDate: req.body.dueDate,
+        teamId: req.body.teamId === '' || req.body.teamId === 'null' ? null : req.body.teamId,
         assigneeId: req.body.assigneeId,
         assigneeName: req.body.assigneeName,
       });

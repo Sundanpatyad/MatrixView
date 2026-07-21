@@ -30,7 +30,12 @@ export function ThemeToggle({ className }: { className?: string }) {
   return (
     <button
       type="button"
-      onClick={() => setTheme(nextTheme)}
+      onClick={() => {
+        const next = theme === 'dark' ? 'light' : 'dark';
+        applyTheme(next);
+        window.localStorage.setItem(STORAGE_KEY, next);
+        setTheme(next);
+      }}
       className={cn(
         'inline-flex h-8 w-8 items-center justify-center rounded-md border border-ink-600 bg-ink-800 text-ink-200 transition-colors hover:border-ink-500 hover:bg-ink-700 hover:text-ink-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500',
         className,

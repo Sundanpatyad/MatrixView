@@ -21,6 +21,7 @@ const priorityChip: Record<string, string> = {
 type Props = {
   task: BoardTask;
   avatarUrl?: string | null;
+  teamName?: string | null;
   dragging?: boolean;
   onOpen: () => void;
   onDragStart: (taskId: string) => void;
@@ -31,6 +32,7 @@ type Props = {
 export function DashboardTaskCard({
   task,
   avatarUrl,
+  teamName,
   dragging,
   onOpen,
   onDragStart,
@@ -94,6 +96,12 @@ export function DashboardTaskCard({
       <p className="mt-1.5 line-clamp-2 text-xs leading-snug font-semibold text-ink-50">
         {task.title}
       </p>
+
+      {teamName ? (
+        <span className="mt-1 inline-flex max-w-full truncate rounded bg-brand-500/10 px-1.5 py-px text-[9px] font-bold text-brand-300 ring-1 ring-brand-500/20 ring-inset">
+          {teamName}
+        </span>
+      ) : null}
 
       {task.description ? (
         <p className="mt-0.5 line-clamp-1 text-[11px] leading-snug text-ink-300">

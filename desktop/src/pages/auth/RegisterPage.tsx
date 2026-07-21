@@ -1,8 +1,12 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
+import {
+  AuthError,
+  AuthField,
+  AuthInput,
+  AuthLayout,
+} from '@/components/auth/AuthLayout';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { ApiError, apiFetch } from '@/lib/api/client';
 
@@ -24,6 +28,7 @@ export function RegisterPage() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [invite, setInvite] = useState<InvitePreview | null>(null);
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -54,7 +59,7 @@ export function RegisterPage() {
 
   if (isBootstrapping) {
     return (
-      <div className="atmosphere flex min-h-screen items-center justify-center text-sm text-ink-300">
+      <div className="flex min-h-[100dvh] items-center justify-center bg-ink-950 text-sm text-ink-300">
         Restoring session…
       </div>
     );
@@ -83,91 +88,119 @@ export function RegisterPage() {
 
   const isInvite = Boolean(inviteToken);
 
-  return (
-    <div className="atmosphere relative flex min-h-screen items-center justify-center px-6">
-      <ThemeToggle className="absolute top-5 right-5" />
-      <div className="w-full max-w-sm">
-        <div className="flex items-center gap-3">
-          <img
-            src="/logo.png"
-            alt="DockX"
-            className="h-12 w-12 rounded-xl object-cover shadow-sm shadow-brand-500/25"
-          />
-          <div>
-            <p className="font-display text-3xl font-semibold text-ink-50">DockX</p>
-            <h1 className="text-lg font-semibold text-ink-100">
-              {isInvite ? 'Join project' : 'Create your account'}
-            </h1>
-          </div>
-        </div>
-        <p className="mt-3 text-sm text-ink-300">
-          {isInvite
-            ? invite
-              ? `You’ve been invited to ${invite.projectName} as ${invite.role}. Create your account to get in.`
-              : inviteError || 'Loading invite…'
-            : 'Sign up free — create projects and invite teammates as admin or member.'}
-        </p>
+  const subtitle = isInvite
+    ? invite
+      ? `You’ve been invited to ${invite.projectName} as ${invite.role}. Create your account to join.`
+      : inviteError || 'Loading your invite…'
+    : 'Create a free account to start projects and invite your team.';
 
-        {isInvite && inviteError ? (
-          <p className="mt-6 text-sm text-[#ed4245]">
-            {inviteError}{' '}
-            <Link to="/register" className="font-medium text-brand-400 underline">
-              Sign up without invite
+  return (
+    <AuthLayout
+      title={isInvite ? 'Join your project' : 'Create your account'}
+      subtitle={subtitle}
+      footer={
+        <p className="text-center text-sm text-ink-300">
+          Already have an account?{' '}
+          <Link
+            to="/login"
+            className="font-semibold text-brand-300 transition hover:text-brand-400"
+          >
+            Sign in
+          </Link>
+        </p>
+      }
+    >
+      {isInvite && invite ? (
+        <div className="mb-5 rounded-xl border border-brand-500/25 bg-brand-500/10 px-3.5 py-3">
+          <p className="text-[11px] font-semibold tracking-wide text-brand-300 uppercase">
+            Invite
+          </p>
+          <p className="mt-1 text-sm font-medium text-ink-50">
+            {invite.projectName}
+            {invite.orgName ? (
+              <span className="font-normal text-ink-300"> · {invite.orgName}</span>
+            ) : null}
+          </p>
+          <p className="mt-0.5 text-xs capitalize text-ink-300">Role · {invite.role}</p>
+        </div>
+      ) : null}
+
+      {isInvite && inviteError ? (
+        <div className="space-y-4">
+          <AuthError message={inviteError} />
+          <p className="text-sm text-ink-300">
+            <Link to="/register" className="font-semibold text-brand-300 hover:text-brand-400">
+              Sign up without an invite
             </Link>{' '}
             instead.
           </p>
-        ) : (
-          <form onSubmit={onSubmit} className="mt-8 space-y-4">
-            <div>
-              <label htmlFor="name" className="mb-1.5 block text-sm font-medium text-ink-200">
-                Your name
-              </label>
-              <Input id="name" value={name} onChange={(e) => setName(e.target.value)} required />
-            </div>
-            <div>
-              <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-ink-200">
-                Email
-              </label>
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                readOnly={isInvite}
-                className={isInvite ? 'bg-ink-900' : undefined}
-              />
-            </div>
-            <div>
-              <label htmlFor="password" className="mb-1.5 block text-sm font-medium text-ink-200">
-                Password
-              </label>
-              <Input
+        </div>
+      ) : (
+        <form onSubmit={onSubmit} className="space-y-4">
+          <AuthField id="name" label="Full name">
+            <AuthInput
+              id="name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+              autoComplete="name"
+              placeholder="Alex Rivera"
+              autoFocus={!isInvite}
+            />
+          </AuthField>
+
+          <AuthField
+            id="email"
+            label="Work email"
+            hint={isInvite ? 'From invite' : undefined}
+          >
+            <AuthInput
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              readOnly={isInvite}
+              autoComplete="email"
+              placeholder="you@company.com"
+            />
+          </AuthField>
+
+          <AuthField id="password" label="Password" hint="Min. 8 characters">
+            <div className="relative">
+              <AuthInput
                 id="password"
-                type="password"
+                type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 minLength={8}
+                autoComplete="new-password"
+                placeholder="Create a strong password"
+                className="pr-20"
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                className="absolute top-1/2 right-2 -translate-y-1/2 rounded-lg px-2.5 py-1 text-[12px] font-semibold text-ink-300 transition hover:bg-ink-700 hover:text-ink-50"
+              >
+                {showPassword ? 'Hide' : 'Show'}
+              </button>
             </div>
-            {error ? <p className="text-sm text-[#ed4245]">{error}</p> : null}
-            <Button
-              type="submit"
-              className="w-full"
-              disabled={loading || (isInvite && !invite)}
-            >
-              {loading ? 'Creating…' : isInvite ? 'Join project' : 'Create account'}
-            </Button>
-          </form>
-        )}
-        <p className="mt-4 text-center text-sm text-ink-300">
-          Already have an account?{' '}
-          <Link to="/login" className="font-medium text-brand-400 underline-offset-2 hover:underline">
-            Sign in
-          </Link>
-        </p>
-      </div>
-    </div>
+          </AuthField>
+
+          <AuthError message={error} />
+
+          <Button
+            type="submit"
+            size="lg"
+            className="mt-1 w-full rounded-xl"
+            disabled={loading || (isInvite && !invite)}
+          >
+            {loading ? 'Creating…' : isInvite ? 'Accept invite' : 'Create account'}
+          </Button>
+        </form>
+      )}
+    </AuthLayout>
   );
 }

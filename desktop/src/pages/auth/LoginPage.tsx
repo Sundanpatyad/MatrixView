@@ -1,22 +1,27 @@
 import { useState, type FormEvent } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
+import {
+  AuthError,
+  AuthField,
+  AuthInput,
+  AuthLayout,
+} from '@/components/auth/AuthLayout';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { ApiError } from '@/lib/api/client';
 
 export function LoginPage() {
   const { login, isAuthenticated, isBootstrapping } = useAuth();
   const navigate = useNavigate();
-  const [email, setEmail] = useState('riya@acme.dev');
-  const [password, setPassword] = useState('Password123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   if (isBootstrapping) {
     return (
-      <div className="atmosphere flex min-h-screen items-center justify-center text-sm text-ink-300">
+      <div className="flex min-h-[100dvh] items-center justify-center bg-ink-950 text-sm text-ink-300">
         Restoring session…
       </div>
     );
@@ -39,66 +44,82 @@ export function LoginPage() {
   }
 
   return (
-    <div className="atmosphere relative flex min-h-screen items-center justify-center px-6">
-      <ThemeToggle className="absolute top-5 right-5" />
-      <div className="w-full max-w-sm">
-        <div className="flex items-center gap-3">
-          <img
-            src="/logo.png"
-            alt="DockX"
-            className="h-12 w-12 rounded-xl object-cover shadow-sm shadow-brand-500/25"
-          />
-          <div>
-            <p className="font-display text-3xl font-semibold text-ink-50">DockX</p>
-            <h1 className="text-lg font-semibold text-ink-100">Desktop Agent</h1>
-          </div>
-        </div>
-        <p className="mt-3 text-sm text-ink-300">
-          Sign in once — silent login on every launch after this.
+    <AuthLayout
+      title="Welcome back"
+      subtitle="Sign in to your workspace. You’ll stay signed in on this device."
+      footer={
+        <p className="text-center text-[13px] text-ink-300">
+          New to DockX?{' '}
+          <Link
+            to="/register"
+            className="font-semibold text-brand-300 underline-offset-4 transition hover:text-brand-400 hover:underline"
+          >
+            Create an account
+          </Link>
         </p>
+      }
+    >
+      <form onSubmit={onSubmit} className="space-y-5">
+        <AuthField id="email" label="Work email">
+          <AuthInput
+            id="email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            autoComplete="username"
+            placeholder="you@company.com"
+            autoFocus
+          />
+        </AuthField>
 
-        <form onSubmit={onSubmit} className="mt-8 space-y-4">
-          <div>
-            <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-ink-200">
-              Email
-            </label>
-            <Input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              autoComplete="username"
-            />
-          </div>
-          <div>
-            <label htmlFor="password" className="mb-1.5 block text-sm font-medium text-ink-200">
-              Password
-            </label>
-            <Input
+        <AuthField id="password" label="Password">
+          <div className="relative">
+            <AuthInput
               id="password"
-              type="password"
+              type={showPassword ? 'text' : 'password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
               autoComplete="current-password"
+              placeholder="Your password"
+              className="pr-16"
             />
+            <button
+              type="button"
+              onClick={() => setShowPassword((v) => !v)}
+              className="absolute top-1/2 right-2.5 -translate-y-1/2 rounded-xl px-2.5 py-1.5 text-[12px] font-semibold text-ink-300 transition hover:bg-ink-700/80 hover:text-ink-50"
+            >
+              {showPassword ? 'Hide' : 'Show'}
+            </button>
           </div>
-          {error ? <p className="text-sm text-[#ed4245]">{error}</p> : null}
-          <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? 'Signing in…' : 'Continue'}
-          </Button>
-        </form>
-        <p className="mt-4 text-center text-xs text-ink-400">
-          Demo: riya@acme.dev / Password123
-        </p>
-        <p className="mt-2 text-center text-sm text-ink-300">
-          New org?{' '}
-          <Link to="/register" className="font-medium text-brand-400 underline-offset-2 hover:underline">
-            Create account
-          </Link>
-        </p>
-      </div>
-    </div>
+        </AuthField>
+
+        <AuthError message={error} />
+
+        <Button
+          type="submit"
+          size="lg"
+          className="mt-1 h-12 w-full rounded-2xl text-[15px] shadow-[0_10px_30px_rgba(88,101,242,0.28)]"
+          disabled={loading}
+        >
+          {loading ? 'Signing in…' : 'Continue'}
+        </Button>
+      </form>
+
+      <p className="mt-6 text-center text-[11px] leading-relaxed text-ink-400">
+        Demo access ·{' '}
+        <button
+          type="button"
+          className="font-medium text-ink-200 transition hover:text-ink-50"
+          onClick={() => {
+            setEmail('riya@acme.dev');
+            setPassword('Password123');
+          }}
+        >
+          Fill demo credentials
+        </button>
+      </p>
+    </AuthLayout>
   );
 }

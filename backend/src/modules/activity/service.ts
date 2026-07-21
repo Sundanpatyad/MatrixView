@@ -137,6 +137,29 @@ export async function ingestSamples(
     throw new AuthError('Session not found', 404, 'NOT_FOUND');
   }
 
+  // Desktop can POST overlapping sample batches; retry on Mongoose VersionError.
+  const maxAttempts = 4;
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      return await ingestSamplesOnce(actor, sessionId, samples);
+    } catch (err) {
+      lastErr = err;
+      const isVersionConflict =
+        err instanceof Error &&
+        (err.name === 'VersionError' ||
+          /No matching document found for id/.test(err.message));
+      if (!isVersionConflict || attempt === maxAttempts - 1) throw err;
+    }
+  }
+  throw lastErr;
+}
+
+async function ingestSamplesOnce(
+  actor: Actor,
+  sessionId: string,
+  samples: ActivitySampleInput[],
+) {
   const session = await ActivitySession.findOne({
     _id: sessionId,
     userId: actor.sub,

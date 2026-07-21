@@ -24,9 +24,10 @@ type Props = {
 };
 
 export function EditTimelineModal({ item, onClose }: Props) {
-  const { updateTimelineItem, getProject } = useWorkspace();
+  const { updateTimelineItem, getProject, getProjectTeams } = useWorkspace();
   const project = getProject(item.projectId);
   const members = project?.members ?? [];
+  const teams = getProjectTeams(item.projectId);
 
   const initialAssigneeId = useMemo(() => {
     return (
@@ -43,6 +44,7 @@ export function EditTimelineModal({ item, onClose }: Props) {
   const [type, setType] = useState<TaskType>(item.type);
   const [priority, setPriority] = useState<TaskPriority>(item.priority);
   const [dueDate, setDueDate] = useState(item.dueDate);
+  const [teamId, setTeamId] = useState(item.teamId ?? '');
   const [assigneeId, setAssigneeId] = useState(initialAssigneeId);
   const [kept, setKept] = useState<TaskAttachment[]>(item.attachments ?? []);
   const [removedIds, setRemovedIds] = useState<string[]>([]);
@@ -85,6 +87,7 @@ export function EditTimelineModal({ item, onClose }: Props) {
         type,
         priority,
         dueDate,
+        teamId: teamId || null,
         files: newFiles,
         removeAttachmentIds: removedIds,
         assigneeId: member?.id ?? '',
@@ -147,7 +150,25 @@ export function EditTimelineModal({ item, onClose }: Props) {
               aria-label="Priority"
             />
           </div>
-          <DatePicker value={dueDate} onChange={setDueDate} />
+          <DatePicker value={dueDate} onChange={setDueDate} clearable />
+
+          {teams.length > 0 ? (
+            <div>
+              <p className="mb-1.5 text-[10px] font-bold tracking-wide text-ink-300 uppercase">
+                Team
+              </p>
+              <Select
+                size="sm"
+                value={teamId}
+                onChange={setTeamId}
+                options={[
+                  { value: '', label: 'Project-wide' },
+                  ...teams.map((t) => ({ value: t.id, label: t.name })),
+                ]}
+                aria-label="Team"
+              />
+            </div>
+          ) : null}
 
           <div>
             <p className="mb-1.5 text-[10px] font-bold tracking-wide text-ink-300 uppercase">

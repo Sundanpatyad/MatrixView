@@ -259,6 +259,7 @@ export function createTimelineRequest(
     type: TaskType;
     priority: TaskPriority;
     dueDate: string;
+    teamId?: string | null;
   },
   files: File[] = [],
 ): Promise<{ item: TimelineItem }> {
@@ -269,6 +270,7 @@ export function createTimelineRequest(
   form.append('type', input.type);
   form.append('priority', input.priority);
   form.append('dueDate', input.dueDate);
+  if (input.teamId) form.append('teamId', input.teamId);
   for (const file of files) form.append('files', file);
   return apiFetch('/api/timeline', {
     method: 'POST',
@@ -285,6 +287,7 @@ export function updateTimelineRequest(
     type: TaskType;
     priority: TaskPriority;
     dueDate: string;
+    teamId?: string | null;
     removeAttachmentIds?: string[];
     assigneeId?: string;
     assigneeName?: string;
@@ -297,6 +300,9 @@ export function updateTimelineRequest(
   form.append('type', input.type);
   form.append('priority', input.priority);
   form.append('dueDate', input.dueDate);
+  if (input.teamId !== undefined) {
+    form.append('teamId', input.teamId ?? '');
+  }
   if (input.assigneeId !== undefined) form.append('assigneeId', input.assigneeId);
   if (input.assigneeName !== undefined) form.append('assigneeName', input.assigneeName);
   if (input.removeAttachmentIds?.length) {
@@ -332,6 +338,12 @@ export function createTeamRequest(
   });
 }
 
+export function listProjectTeamsRequest(
+  projectId: string,
+): Promise<{ teams: ProjectTeam[] }> {
+  return apiFetch(`/api/projects/${projectId}/teams`, { auth: true });
+}
+
 export function updateTeamRequest(
   teamId: string,
   input: { name?: string; memberIds?: string[] },
@@ -343,11 +355,40 @@ export function updateTeamRequest(
   });
 }
 
+export function addTeamMembersRequest(
+  teamId: string,
+  memberIds: string[],
+): Promise<{ team: ProjectTeam }> {
+  return apiFetch(`/api/teams/${teamId}/members`, {
+    method: 'POST',
+    auth: true,
+    body: JSON.stringify({ memberIds }),
+  });
+}
+
+export function removeTeamMemberRequest(
+  teamId: string,
+  memberId: string,
+): Promise<{ team: ProjectTeam }> {
+  return apiFetch(`/api/teams/${teamId}/members/${memberId}`, {
+    method: 'DELETE',
+    auth: true,
+  });
+}
+
 export function deleteTeamRequest(teamId: string): Promise<{ ok: boolean; teamId: string }> {
   return apiFetch(`/api/teams/${teamId}`, {
     method: 'DELETE',
     auth: true,
   });
+}
+
+export function listProjectTasksRequest(
+  projectId: string,
+  opts?: { teamId?: string },
+): Promise<{ tasks: BoardTask[] }> {
+  const q = opts?.teamId ? `?teamId=${encodeURIComponent(opts.teamId)}` : '';
+  return apiFetch(`/api/projects/${projectId}/tasks${q}`, { auth: true });
 }
 
 export function deleteTimelineRequest(itemId: string): Promise<{ ok: boolean }> {

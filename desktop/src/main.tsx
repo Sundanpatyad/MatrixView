@@ -5,6 +5,7 @@ import { AttendanceProvider } from '@/lib/attendance/AttendanceContext';
 import { AuthProvider } from '@/lib/auth/AuthContext';
 import { OfflineProvider } from '@/lib/offline/OfflineContext';
 import { WorkspaceProvider } from '@/lib/workspace/WorkspaceContext';
+import { NotificationProvider } from '@/lib/notifications/NotificationContext';
 import App from './App';
 import './styles/globals.css';
 
@@ -25,7 +26,9 @@ createRoot(document.getElementById('root')!).render(
         <OfflineProvider>
           <WorkspaceProvider>
             <AttendanceProvider>
-              <App />
+              <NotificationProvider>
+                <App />
+              </NotificationProvider>
             </AttendanceProvider>
           </WorkspaceProvider>
         </OfflineProvider>

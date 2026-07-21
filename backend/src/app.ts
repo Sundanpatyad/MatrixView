@@ -6,6 +6,7 @@ import workspaceRoutes from './modules/workspace/routes.js';
 import activityRoutes from './modules/activity/routes.js';
 import orgRoutes from './modules/org/routes.js';
 import chatRoutes from './modules/chat/routes.js';
+import notificationRoutes from './modules/notifications/routes.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { uploadsDir } from './storage/paths.js';
 
@@ -30,6 +31,7 @@ export function createApp() {
   app.use('/api', activityRoutes);
   app.use('/api', orgRoutes);
   app.use('/api', chatRoutes);
+  app.use('/api', notificationRoutes);
 
   app.use(errorHandler);
   return app;

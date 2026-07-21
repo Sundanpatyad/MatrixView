@@ -15,9 +15,14 @@ import {
   emitToConversation,
   emitToOrg,
   emitToUser,
+  onlineCounts,
 } from '../../gateway/io.js';
 import { Conversation } from './models/Conversation.js';
 import { Message } from './models/Message.js';
+import {
+  chatHref,
+  createAndEmitMany,
+} from '../notifications/service.js';
 
 type Actor = { sub: string; orgId: string; email: string; role?: string };
 
@@ -314,10 +319,14 @@ export async function listChatUsers(actor: Actor) {
   const checkedIn = new Set(activeSessions.map((s) => String(s.userId)));
 
   return {
-    users: users.map((u) => ({
-      ...serializeUser(u),
-      checkedIn: checkedIn.has(String(u._id)),
-    })),
+    users: users.map((u) => {
+      const id = String(u._id);
+      return {
+        ...serializeUser(u),
+        checkedIn: checkedIn.has(id),
+        online: (onlineCounts.get(id) ?? 0) > 0,
+      };
+    }),
   };
 }
 
@@ -416,6 +425,26 @@ export async function createGroup(
   for (const memberId of serialized.memberIds) {
     emitToUser(memberId, 'conversation:upsert', { conversation: serialized });
   }
+
+  const creator = users.find((u) => String(u._id) === actor.sub);
+  const creatorName = creator?.name ?? 'Someone';
+  void createAndEmitMany(
+    users
+      .filter((u) => String(u._id) !== actor.sub)
+      .map((u) => ({
+        orgId: actor.orgId,
+        recipientId: String(u._id),
+        actorId: actor.sub,
+        actorName: creatorName,
+        type: 'team.added' as const,
+        title: 'Added to team chat',
+        body: `${creatorName} added you to “${name}”`,
+        href: chatHref(String(conversation._id)),
+        conversationId: String(conversation._id),
+        meta: { conversationName: name },
+      })),
+  ).catch((err) => console.error('[notifications] team.added', err));
+
   return { conversation: serialized };
 }
 
@@ -476,9 +505,11 @@ export async function addGroupMembers(
   await assertCanChatWith(actor, memberIds);
   const users = await usersByIds(memberIds);
   const existing = new Set(conversation.memberIds.map(String));
+  const newlyAdded: string[] = [];
   for (const u of users) {
     if (!existing.has(String(u._id))) {
       conversation.memberIds.push(u._id);
+      newlyAdded.push(String(u._id));
     }
   }
   await conversation.save();
@@ -486,6 +517,27 @@ export async function addGroupMembers(
   for (const memberId of serialized.memberIds) {
     emitToUser(memberId, 'conversation:upsert', { conversation: serialized });
   }
+
+  if (newlyAdded.length > 0) {
+    const actorUser = await User.findById(actor.sub).select('name').lean();
+    const actorName = actorUser?.name ?? 'Someone';
+    const groupName = conversation.name || 'group chat';
+    void createAndEmitMany(
+      newlyAdded.map((recipientId) => ({
+        orgId: actor.orgId,
+        recipientId,
+        actorId: actor.sub,
+        actorName,
+        type: 'team.added' as const,
+        title: 'Added to team chat',
+        body: `${actorName} added you to “${groupName}”`,
+        href: chatHref(conversationId),
+        conversationId,
+        meta: { conversationName: groupName },
+      })),
+    ).catch((err) => console.error('[notifications] team.added', err));
+  }
+
   return { conversation: serialized };
 }
 
@@ -632,6 +684,38 @@ export async function sendMessage(
     emitToUser(memberId, 'conversation:upsert', { conversation: convSerialized });
   }
 
+  const sender = await User.findById(actor.sub).select('name').lean();
+  const senderName = sender?.name ?? 'Someone';
+  const convLabel =
+    conversation.type === 'group'
+      ? conversation.name || 'team chat'
+      : 'a direct message';
+  const previewText = (preview || 'New message').slice(0, 140);
+  void createAndEmitMany(
+    conversation.memberIds
+      .map(String)
+      .filter((id) => id !== actor.sub)
+      .map((recipientId) => ({
+        orgId: actor.orgId,
+        recipientId,
+        actorId: actor.sub,
+        actorName: senderName,
+        type: 'message.new' as const,
+        title:
+          conversation.type === 'group'
+            ? `New message in ${convLabel}`
+            : `Message from ${senderName}`,
+        body: previewText,
+        href: chatHref(conversationId, String(message._id)),
+        conversationId,
+        messageId: String(message._id),
+        meta: {
+          conversationType: conversation.type,
+          conversationName: convLabel,
+        },
+      })),
+  ).catch((err) => console.error('[notifications] message.new', err));
+
   return { message: serialized };
 }
 
@@ -702,6 +786,33 @@ export async function forwardMessage(
     emitToUser(memberId, 'message:new', { message: serialized });
     emitToUser(memberId, 'conversation:upsert', { conversation: convSerialized });
   }
+
+  const forwarder = await User.findById(actor.sub).select('name').lean();
+  const forwarderName = forwarder?.name ?? 'Someone';
+  const convLabel =
+    target.type === 'group' ? target.name || 'team chat' : 'a direct message';
+  void createAndEmitMany(
+    target.memberIds
+      .map(String)
+      .filter((id) => id !== actor.sub)
+      .map((recipientId) => ({
+        orgId: actor.orgId,
+        recipientId,
+        actorId: actor.sub,
+        actorName: forwarderName,
+        type: 'message.new' as const,
+        title: `Forwarded message from ${forwarderName}`,
+        body: (preview || 'Forwarded message').slice(0, 140),
+        href: chatHref(targetConversationId, String(message._id)),
+        conversationId: targetConversationId,
+        messageId: String(message._id),
+        meta: {
+          conversationType: target.type,
+          conversationName: convLabel,
+          forwarded: true,
+        },
+      })),
+  ).catch((err) => console.error('[notifications] message.new forward', err));
 
   return { message: serialized, conversation: convSerialized };
 }

@@ -106,7 +106,7 @@ function DonutChart({
 function BarChart({
   bars,
 }: {
-  bars: { label: string; value: number; color: string }[];
+  bars: { id: string; label: string; value: number; color: string }[];
 }) {
   const max = Math.max(...bars.map((b) => b.value), 1);
   const h = 112;
@@ -121,7 +121,7 @@ function BarChart({
         const x = gap + i * (barW + gap);
         const y = h - bh;
         return (
-          <g key={b.label}>
+          <g key={b.id}>
             <rect
               x={x}
               y={4}
@@ -407,6 +407,7 @@ export function DashboardPage() {
 
     // Workload per project for bar chart
     const byProject = scopedProjects.map((p) => ({
+      id: p.id,
       label: p.key.slice(0, 4),
       value: scope.filter((t) => t.projectId === p.id).length,
       color: '#5865F2',
@@ -439,6 +440,7 @@ export function DashboardPage() {
   }));
 
   const priorityBars = PRIORITY_META.map((p) => ({
+    id: p.id,
     label: p.label.slice(0, 3),
     value: stats.byPriority[p.id] ?? 0,
     color: p.color,
@@ -1012,7 +1014,9 @@ export function DashboardPage() {
                 ) : (
                   <BarChart
                     bars={stats.byProject.map((b, i) => ({
-                      ...b,
+                      id: b.id,
+                      label: b.label,
+                      value: b.value,
                       color: ['#00a8fc', '#23a559', '#f0b232', '#ed4245'][i % 4],
                     }))}
                   />

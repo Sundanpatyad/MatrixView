@@ -8,6 +8,7 @@ import {
   type FormEvent,
 } from 'react';
 import { createPortal } from 'react-dom';
+import { useSearchParams } from 'react-router-dom';
 import {
   IconChevronLeft,
   IconEdit,
@@ -59,9 +60,11 @@ import {
   emitMessagesRead,
   emitTypingStart,
   emitTypingStop,
+  getChatSocket,
   joinConversation,
   leaveConversation,
   patchChatSocketHandlers,
+  requestPresenceSnapshot,
   type PresenceUser,
 } from '@/lib/socket/chatSocket';
 import { useCall } from '@/lib/calls/CallContext';
@@ -539,29 +542,37 @@ function PresenceDot({
   online?: boolean;
   className?: string;
 }) {
-  const active = Boolean(checkedIn);
+  // Socket-online takes priority for call affordances; checked-in is attendance.
+  const socketOnline = Boolean(online);
+  const title = socketOnline
+    ? checkedIn
+      ? 'Online · checked in'
+      : 'Online'
+    : checkedIn
+      ? 'Checked in (offline for calls)'
+      : 'Offline';
   return (
     <span
       className={cn(
         'absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-white',
-        active ? 'bg-[#23a559]' : 'bg-ink-300',
-        online && active && 'ring-1 ring-[#23a559]/40',
+        socketOnline ? 'bg-[#23a559]' : checkedIn ? 'bg-[#f0b232]' : 'bg-ink-300',
+        socketOnline && 'ring-1 ring-[#23a559]/40',
         className,
       )}
-      title={active ? 'Checked in' : 'Checked out'}
+      title={title}
     />
   );
 }
 
 function ChatListSkeleton() {
   return (
-    <div className="space-y-0 p-1">
+    <div className="space-y-1 p-1">
       {Array.from({ length: 7 }).map((_, i) => (
-        <div key={i} className="flex items-center gap-3 px-3 py-3">
+        <div key={i} className="flex items-center gap-3 rounded-xl px-2.5 py-2.5">
           <div className="h-10 w-10 shrink-0 animate-pulse rounded-full bg-ink-700" />
           <div className="min-w-0 flex-1 space-y-2">
-            <div className="h-3 w-[66%] animate-pulse rounded bg-ink-700" />
-            <div className="h-2.5 w-[80%] animate-pulse rounded bg-ink-900" />
+            <div className="h-3 w-[55%] animate-pulse rounded bg-ink-700" />
+            <div className="h-2.5 w-[75%] animate-pulse rounded bg-ink-900" />
           </div>
         </div>
       ))}
@@ -1229,6 +1240,9 @@ export function ChatPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
+  const [listFilter, setListFilter] = useState<'all' | 'dm' | 'group'>('all');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const deepLinkConversationId = searchParams.get('c');
   const [draft, setDraft] = useState('');
   const [files, setFiles] = useState<File[]>([]);
   const [mediaPreview, setMediaPreview] = useState<ChatAttachment | null>(null);
@@ -1288,6 +1302,15 @@ export function ChatPage() {
     setActiveId(focusConversationId);
     clearFocusConversationId();
   }, [focusConversationId, clearFocusConversationId]);
+
+  useEffect(() => {
+    if (!deepLinkConversationId) return;
+    setActiveId(deepLinkConversationId);
+    const next = new URLSearchParams(searchParams);
+    next.delete('c');
+    next.delete('m');
+    setSearchParams(next, { replace: true });
+  }, [deepLinkConversationId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function scrollThreadToBottom() {
     const el = threadScrollRef.current;
@@ -1352,14 +1375,17 @@ export function ChatPage() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return conversations;
-    return conversations.filter(
-      (c) =>
+    return conversations.filter((c) => {
+      if (listFilter === 'dm' && c.type !== 'dm') return false;
+      if (listFilter === 'group' && c.type !== 'group') return false;
+      if (!q) return true;
+      return (
         c.name.toLowerCase().includes(q) ||
         c.lastMessagePreview.toLowerCase().includes(q) ||
-        c.members.some((m) => m.name.toLowerCase().includes(q)),
-    );
-  }, [conversations, query]);
+        c.members.some((m) => m.name.toLowerCase().includes(q))
+      );
+    });
+  }, [conversations, query, listFilter]);
 
   const typingLabel = useMemo(() => {
     const names = Object.values(typingUsers);
@@ -1443,7 +1469,8 @@ export function ChatPage() {
           next[u.id] = {
             userId: u.id,
             checkedIn: Boolean(u.checkedIn),
-            online: prev[u.id]?.online ?? false,
+            // Prefer live socket presence; fall back to API online flag
+            online: prev[u.id]?.online ?? Boolean(u.online),
           };
         }
         return next;
@@ -1479,9 +1506,20 @@ export function ChatPage() {
         });
       },
       onPresenceUpdate: (u) => {
-        setPresence((prev) => ({ ...prev, [u.userId]: u }));
+        setPresence((prev) => ({
+          ...prev,
+          [u.userId]: {
+            userId: u.userId,
+            checkedIn: Boolean(u.checkedIn),
+            online: Boolean(u.online),
+          },
+        }));
         setOrgUsers((prev) =>
-          prev.map((m) => (m.id === u.userId ? { ...m, checkedIn: u.checkedIn } : m)),
+          prev.map((m) =>
+            m.id === u.userId
+              ? { ...m, checkedIn: u.checkedIn, online: u.online }
+              : m,
+          ),
         );
       },
       onMessageNew: (message) => {
@@ -1579,7 +1617,15 @@ export function ChatPage() {
       },
     });
 
-    if (online) void connectChatSocket();
+    // Socket is owned by Auth/CallProvider for the whole session — just ensure it's up
+    if (online && !getChatSocket()?.connected) {
+      void connectChatSocket().then((s) => {
+        if (s?.connected) requestPresenceSnapshot();
+      });
+    } else if (getChatSocket()?.connected) {
+      // Snapshot may have fired before Chat mounted — refresh online flags now
+      requestPresenceSnapshot();
+    }
 
     return () => {
       clearChatSocketHandlerKeys([
@@ -2087,76 +2133,125 @@ export function ChatPage() {
   }, [actionMsgId, menuMsgId]);
 
   return (
-    <div className="flex h-full min-h-0 overflow-hidden border-0 border-ink-600 bg-ink-800 md:border">
+    <div className="flex h-full min-h-0 overflow-hidden bg-ink-900">
       {/* Sidebar — full width on mobile until a chat is opened */}
       <aside
         className={cn(
-          'flex w-full shrink-0 flex-col border-r border-ink-600 bg-ink-800/40 md:w-[300px]',
+          'flex w-full shrink-0 flex-col border-r border-ink-600/80 bg-ink-800 md:w-[300px]',
           activeId ? 'hidden md:flex' : 'flex',
         )}
       >
-        <div className="border-b border-ink-600 p-3">
+        <div className="shrink-0 px-3 pt-3 pb-2">
           <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <h1 className="text-sm font-semibold text-ink-50">Chat</h1>
+            <div className="flex min-w-0 items-center gap-2">
+              <h1 className="text-[15px] font-semibold tracking-tight text-ink-50">Messages</h1>
               <span
                 className={cn(
-                  'h-1.5 w-1.5 rounded-full',
-                  socketReady ? 'bg-[#23a559]' : socketRetrying ? 'bg-[#f0b232]' : 'bg-ink-300',
+                  'h-1.5 w-1.5 shrink-0 rounded-full',
+                  socketReady
+                    ? 'bg-[#23a559]'
+                    : online
+                      ? 'bg-[#f0b232]'
+                      : 'bg-ink-400',
                 )}
                 title={
-                  socketReady ? 'Live' : socketRetrying ? 'Reconnecting…' : 'Disconnected'
+                  socketReady
+                    ? 'Live'
+                    : online
+                      ? 'Connecting…'
+                      : 'Offline'
                 }
               />
-              {!socketReady ? (
+              {!socketReady && online ? (
                 <button
                   type="button"
-                  className="text-[11px] font-medium text-[#00a8fc] hover:underline disabled:opacity-60"
-                  disabled={socketRetrying || !online}
-                  title={online ? 'Retry live connection' : 'You are offline'}
+                  className="truncate text-[11px] font-medium text-ink-400 hover:text-ink-100 disabled:opacity-60"
+                  disabled={socketRetrying}
+                  title="Reconnect"
                   onClick={() => {
                     void reconnectSocket();
                   }}
                 >
-                  {socketRetrying ? 'Retrying…' : 'Retry'}
+                  {socketRetrying ? 'Connecting…' : 'Reconnect'}
                 </button>
               ) : null}
             </div>
-            <div className="flex gap-1">
-              <Button type="button" variant="ghost" size="xs" onClick={() => setModal('dm')} title="New chat">
-                <IconPlus className="h-3.5 w-3.5" />
-                DM
-              </Button>
-              <Button
+            <div className="flex shrink-0 items-center gap-0.5">
+              <button
                 type="button"
-                variant="ghost"
-                size="xs"
-                onClick={() => setModal('group')}
-                title="New group"
+                title="New direct message"
+                onClick={() => setModal('dm')}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-ink-300 transition hover:bg-ink-700 hover:text-ink-50"
               >
-                <IconUsers className="h-3.5 w-3.5" />
-                Group
-              </Button>
+                <IconPlus className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                title="New team chat"
+                onClick={() => setModal('group')}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-ink-300 transition hover:bg-ink-700 hover:text-ink-50"
+              >
+                <IconUsers className="h-4 w-4" />
+              </button>
             </div>
           </div>
-          <div className="relative mt-2">
-            <IconSearch className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-400" />
+
+          <div className="relative mt-2.5">
+            <IconSearch className="pointer-events-none absolute top-1/2 left-3 h-3.5 w-3.5 -translate-y-1/2 text-ink-400" />
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search chats…"
-              className="h-9 w-full rounded-md border border-ink-600 bg-ink-800 pl-8 pr-3 text-sm outline-none focus:border-brand-500"
+              placeholder="Search"
+              className="h-9 w-full rounded-lg border-0 bg-ink-900/70 pr-3 pl-9 text-sm text-ink-50 outline-none placeholder:text-ink-400 ring-1 ring-ink-600/60 transition focus:bg-ink-900 focus:ring-brand-500/50"
             />
+          </div>
+
+          <div className="mt-2.5 flex rounded-lg bg-ink-900/60 p-0.5">
+            {(
+              [
+                { id: 'all', label: 'All' },
+                { id: 'dm', label: 'Direct' },
+                { id: 'group', label: 'Team' },
+              ] as const
+            ).map((f) => (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => setListFilter(f.id)}
+                className={cn(
+                  'h-7 flex-1 rounded-md text-[12px] font-medium transition-colors',
+                  listFilter === f.id
+                    ? 'bg-ink-700 text-ink-50 shadow-sm'
+                    : 'text-ink-400 hover:text-ink-200',
+                )}
+              >
+                {f.label}
+              </button>
+            ))}
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto">
+        <div className="min-h-0 flex-1 overflow-y-auto px-1.5 pb-2">
           {showListSkeleton ? (
             <ChatListSkeleton />
           ) : filtered.length === 0 ? (
-            <div className="p-4 text-center text-sm text-ink-300">
-              <p>No chats yet.</p>
-              <p className="mt-1 text-xs">Start a DM or create a group.</p>
+            <div className="px-3 py-10 text-center">
+              <p className="text-sm font-medium text-ink-200">
+                {listFilter === 'dm'
+                  ? 'No direct chats'
+                  : listFilter === 'group'
+                    ? 'No team chats'
+                    : query.trim()
+                      ? 'No matches'
+                      : 'No conversations yet'}
+              </p>
+              <p className="mt-1 text-xs text-ink-400">
+                {listFilter === 'dm'
+                  ? 'Start a DM to message someone.'
+                  : listFilter === 'group'
+                    ? 'Create a group for your team.'
+                    : 'Use + to start a DM or team chat.'}
+              </p>
             </div>
           ) : (
             filtered.map((c) => {
@@ -2165,40 +2260,48 @@ export function ChatPage() {
                 c.type === 'dm' ? c.memberIds.find((id) => id !== meId) : undefined;
               const peer = peerId ? presence[peerId] : undefined;
               const liveCall = c.type === 'group' ? activeRooms[c.id] : undefined;
+              const preview = liveCall
+                ? `${liveCall.participantCount} in call · tap to join`
+                : c.lastMessagePreview ||
+                  (c.type === 'group' ? 'Team chat' : 'Direct message');
               return (
                 <button
                   key={c.id}
                   type="button"
                   onClick={() => setActiveId(c.id)}
                   className={cn(
-                    'flex w-full items-start gap-3 border-b border-ink-700 px-3 py-3 text-left transition-colors',
-                    selected ? 'bg-brand-500/10' : 'hover:bg-ink-700',
+                    'flex w-full items-center gap-3 rounded-xl px-2.5 py-2.5 text-left transition-colors',
+                    selected
+                      ? 'bg-ink-700/90'
+                      : 'hover:bg-ink-700/50',
                   )}
                 >
-                  <span className="relative mt-0.5 shrink-0">
+                  <span className="relative shrink-0">
                     <ConversationAvatar conversation={c} meId={meId} size="lg" />
                     {c.type === 'dm' ? (
                       <PresenceDot checkedIn={peer?.checkedIn} online={peer?.online} />
                     ) : null}
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="flex items-center justify-between gap-2">
-                      <span className="truncate text-sm font-semibold text-ink-50">{c.name}</span>
-                      <span className="shrink-0 text-[10px] text-ink-400">
+                    <span className="flex items-baseline justify-between gap-2">
+                      <span className="truncate text-[13px] font-semibold text-ink-50">
+                        {c.name}
+                      </span>
+                      <span className="shrink-0 text-[10px] tabular-nums text-ink-400">
                         {liveCall ? (
-                          <span className="font-semibold text-brand-400">In call</span>
+                          <span className="font-semibold text-[#23a559]">Live</span>
                         ) : (
                           formatTime(c.lastMessageAt)
                         )}
                       </span>
                     </span>
-                    <span className="mt-0.5 block truncate text-xs text-ink-300">
-                      {liveCall
-                        ? `${liveCall.participantCount} in call · tap to join`
-                        : c.type === 'dm' && peer?.checkedIn
-                          ? 'Checked in'
-                          : c.lastMessagePreview ||
-                            (c.type === 'group' ? 'Group chat' : 'Direct message')}
+                    <span
+                      className={cn(
+                        'mt-0.5 block truncate text-[12px]',
+                        liveCall ? 'font-medium text-[#23a559]' : 'text-ink-400',
+                      )}
+                    >
+                      {preview}
                     </span>
                   </span>
                 </button>
@@ -2211,30 +2314,37 @@ export function ChatPage() {
       {/* Thread — full screen on mobile when a chat is selected */}
       <section
         className={cn(
-          'min-w-0 flex-1 flex-col bg-ink-900',
+          'min-w-0 flex-1 flex-col bg-ink-700',
           activeId ? 'flex' : 'hidden md:flex',
         )}
       >
         {!active ? (
-          <div className="flex flex-1 flex-col items-center justify-center gap-2 px-4 text-ink-300">
-            <IconUsers className="h-10 w-10 opacity-40" />
-            <p className="text-center text-sm font-medium">Select a chat or start a new one</p>
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
+            <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-ink-800 text-ink-400">
+              <IconUsers className="h-7 w-7" />
+            </span>
+            <div>
+              <p className="text-sm font-semibold text-ink-100">Select a conversation</p>
+              <p className="mt-1 max-w-xs text-xs text-ink-400">
+                Pick a chat from the left, or start a new direct or team conversation.
+              </p>
+            </div>
           </div>
         ) : (
           <>
-            <header className="flex items-center justify-between gap-2 border-b border-ink-600 bg-ink-800/90 px-2 py-2.5 backdrop-blur sm:gap-3 sm:px-4 sm:py-3">
-              <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+            <header className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-ink-600/70 bg-ink-800/80 px-2 backdrop-blur-sm sm:px-4">
+              <div className="flex min-w-0 items-center gap-2.5">
                 <button
                   type="button"
                   aria-label="Back to chats"
                   title="Back to chats"
                   onClick={() => setActiveId(null)}
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-ink-300 hover:bg-ink-700 hover:text-ink-50 md:hidden"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-ink-300 transition hover:bg-ink-700 hover:text-ink-50 md:hidden"
                 >
                   <IconChevronLeft className="h-5 w-5" />
                 </button>
                 <span className="relative shrink-0">
-                  <ConversationAvatar conversation={active} meId={meId} size="lg" />
+                  <ConversationAvatar conversation={active} meId={meId} size="md" />
                   {active.type === 'dm' && peerPresence && 'checkedIn' in peerPresence ? (
                     <PresenceDot
                       checkedIn={peerPresence.checkedIn}
@@ -2243,10 +2353,10 @@ export function ChatPage() {
                   ) : null}
                 </span>
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-ink-50">{active.name}</p>
-                  <p className="truncate text-xs text-ink-300">
+                  <p className="truncate text-[14px] font-semibold text-ink-50">{active.name}</p>
+                  <p className="truncate text-[11px] text-ink-400">
                     {typingLabel ? (
-                      <span className="font-medium text-brand-700">{typingLabel}</span>
+                      <span className="font-medium text-brand-300">{typingLabel}</span>
                     ) : active.type === 'group' ? (
                       <>
                         {active.members.length} members
@@ -2255,12 +2365,15 @@ export function ChatPage() {
                           : ''}
                       </>
                     ) : peerPresence && 'checkedIn' in peerPresence ? (
-                      peerPresence.checkedIn ? (
-                        <span className="font-medium text-[#57f287]">
-                          Checked in{peerPresence.online ? ' · online' : ''}
+                      peerPresence.online ? (
+                        <span className="text-[#23a559]">
+                          Online
+                          {peerPresence.checkedIn ? ' · checked in' : ''}
                         </span>
+                      ) : peerPresence.checkedIn ? (
+                        <span className="text-[#f0b232]">Checked in · offline for calls</span>
                       ) : (
-                        'Checked out'
+                        'Offline'
                       )
                     ) : (
                       active.members.find((m) => m.id !== meId)?.email ?? 'Direct message'
@@ -2268,20 +2381,30 @@ export function ChatPage() {
                   </p>
                 </div>
               </div>
-              <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
+              <div className="flex shrink-0 items-center gap-0.5">
                 {active.type === 'dm' || active.type === 'group' ? (
                   <>
-                    <Button
+                    <button
                       type="button"
-                      variant="secondary"
-                      size="sm"
-                      title={active.type === 'group' ? 'Group audio call' : 'Audio call'}
+                      title={
+                        !socketReady
+                          ? 'Connecting…'
+                          : call.phase !== 'idle'
+                            ? 'Already in a call'
+                            : active.type === 'dm' &&
+                                !(peerPresence && 'online' in peerPresence && peerPresence.online)
+                              ? 'Peer is offline for calls'
+                              : active.type === 'group'
+                                ? 'Group audio call'
+                                : 'Audio call'
+                      }
                       disabled={
                         !socketReady ||
                         call.phase !== 'idle' ||
                         (active.type === 'dm' &&
                           !(peerPresence && 'online' in peerPresence && peerPresence.online))
                       }
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-ink-300 transition hover:bg-ink-700 hover:text-ink-50 disabled:cursor-not-allowed disabled:opacity-35"
                       onClick={() => {
                         if (active.type === 'group') {
                           void startCall({
@@ -2306,20 +2429,29 @@ export function ChatPage() {
                         });
                       }}
                     >
-                      <IconPhone className="h-3.5 w-3.5" />
-                      <span className="hidden sm:inline">Call</span>
-                    </Button>
-                    <Button
+                      <IconPhone className="h-4 w-4" />
+                    </button>
+                    <button
                       type="button"
-                      variant="secondary"
-                      size="sm"
-                      title={active.type === 'group' ? 'Group video call' : 'Video call'}
+                      title={
+                        !socketReady
+                          ? 'Connecting…'
+                          : call.phase !== 'idle'
+                            ? 'Already in a call'
+                            : active.type === 'dm' &&
+                                !(peerPresence && 'online' in peerPresence && peerPresence.online)
+                              ? 'Peer is offline for calls'
+                              : active.type === 'group'
+                                ? 'Group video call'
+                                : 'Video call'
+                      }
                       disabled={
                         !socketReady ||
                         call.phase !== 'idle' ||
                         (active.type === 'dm' &&
                           !(peerPresence && 'online' in peerPresence && peerPresence.online))
                       }
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-ink-300 transition hover:bg-ink-700 hover:text-ink-50 disabled:cursor-not-allowed disabled:opacity-35"
                       onClick={() => {
                         if (active.type === 'group') {
                           void startCall({
@@ -2348,16 +2480,19 @@ export function ChatPage() {
                         });
                       }}
                     >
-                      <IconVideo className="h-3.5 w-3.5" />
-                      <span className="hidden sm:inline">Video</span>
-                    </Button>
+                      <IconVideo className="h-4 w-4" />
+                    </button>
                   </>
                 ) : null}
                 {active.type === 'group' ? (
-                  <Button type="button" variant="secondary" size="sm" onClick={() => setModal('manage')}>
-                    <span className="sm:hidden">···</span>
-                    <span className="hidden sm:inline">Manage</span>
-                  </Button>
+                  <button
+                    type="button"
+                    title="Manage group"
+                    onClick={() => setModal('manage')}
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-ink-300 transition hover:bg-ink-700 hover:text-ink-50"
+                  >
+                    <IconUsers className="h-4 w-4" />
+                  </button>
                 ) : null}
               </div>
             </header>
@@ -2365,9 +2500,11 @@ export function ChatPage() {
             {active.type === 'group' &&
             activeRooms[active.id] &&
             !(call.phase !== 'idle' && call.conversationId === active.id) ? (
-              <div className="flex flex-col gap-2 border-b border-ink-700 bg-ink-900/80 px-4 py-2 sm:flex-row sm:items-center sm:gap-3">
+              <div className="flex flex-col gap-2 border-b border-ink-600/70 bg-[#23a559]/10 px-4 py-2.5 sm:flex-row sm:items-center sm:gap-3">
                 <div className="flex min-w-0 flex-1 items-center gap-3">
-                  <IconPhone className="h-4 w-4 shrink-0 text-brand-500" />
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#23a559]/20 text-[#23a559]">
+                    <IconPhone className="h-3.5 w-3.5" />
+                  </span>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-ink-50">
                       {activeRooms[active.id]!.mediaKind === 'video' ? 'Video' : 'Voice'} call in
@@ -2378,32 +2515,13 @@ export function ChatPage() {
                       {active.members.length > activeRooms[active.id]!.participantCount
                         ? ` · ${active.members.length - activeRooms[active.id]!.participantCount} not in call`
                         : ''}
-                      {' · '}
-                      {(activeRooms[active.id]!.members.length
-                        ? activeRooms[active.id]!.members
-                        : active.members.map((m) => ({
-                            userId: m.id,
-                            name: m.name,
-                            joined: activeRooms[active.id]!.participants.some(
-                              (p) => p.userId === m.id,
-                            ),
-                          }))
-                      )
-                        .map((m) => {
-                          const name =
-                            m.name ||
-                            active.members.find((x) => x.id === m.userId)?.name ||
-                            'Member';
-                          return m.joined ? name : `${name} (not joined)`;
-                        })
-                        .join(', ')}
                     </p>
                   </div>
                 </div>
                 <Button
                   type="button"
                   size="sm"
-                  className="shrink-0"
+                  className="shrink-0 rounded-lg"
                   disabled={!socketReady || call.phase !== 'idle'}
                   onClick={() => {
                     const room = activeRooms[active.id];
@@ -2418,7 +2536,7 @@ export function ChatPage() {
                     });
                   }}
                 >
-                  Join
+                  Join call
                 </Button>
               </div>
             ) : null}
@@ -2426,7 +2544,7 @@ export function ChatPage() {
             <div
               ref={threadScrollRef}
               onScroll={onThreadScroll}
-              className="flex-1 space-y-2 overflow-y-auto px-4 py-4"
+              className="flex-1 space-y-0.5 overflow-y-auto px-3 py-4 sm:px-5"
             >
               {loadingOlder ? (
                 <div className="flex justify-center py-1">
@@ -2446,15 +2564,32 @@ export function ChatPage() {
               {showThreadSkeleton ? (
                 <ChatThreadSkeleton />
               ) : messages.length === 0 ? (
-                <p className="text-center text-sm text-ink-300">No messages yet. Say hello.</p>
+                <div className="flex h-full min-h-[12rem] flex-col items-center justify-center gap-1 text-center">
+                  <p className="text-sm font-medium text-ink-200">No messages yet</p>
+                  <p className="text-xs text-ink-400">Say hello to start the conversation.</p>
+                </div>
               ) : (
                 messages.map((msg, i) => {
                   const mine = msg.senderId === meId;
                   const deleted = Boolean(msg.deletedAt);
                   const prev = messages[i - 1];
+                  const next = messages[i + 1];
                   const showDay =
                     !prev || formatDay(prev.createdAt) !== formatDay(msg.createdAt);
                   const isCall = msg.type === 'call' && msg.call;
+                  const sameSenderAsPrev =
+                    !!prev &&
+                    prev.type !== 'call' &&
+                    msg.type !== 'call' &&
+                    prev.senderId === msg.senderId &&
+                    formatDay(prev.createdAt) === formatDay(msg.createdAt);
+                  const sameSenderAsNext =
+                    !!next &&
+                    next.type !== 'call' &&
+                    msg.type !== 'call' &&
+                    next.senderId === msg.senderId &&
+                    formatDay(next.createdAt) === formatDay(msg.createdAt);
+                  const showAvatar = !mine && !sameSenderAsNext;
 
                   if (isCall) {
                     const missed =
@@ -2464,19 +2599,19 @@ export function ChatPage() {
                     return (
                       <div key={msg.id}>
                         {showDay ? (
-                          <div className="my-3 flex justify-center">
-                            <span className="rounded-full bg-ink-800/80 px-3 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-300 shadow-sm">
+                          <div className="my-4 flex justify-center">
+                            <span className="rounded-full bg-ink-800/90 px-2.5 py-1 text-[10px] font-semibold tracking-wide text-ink-300 uppercase">
                               {formatDay(msg.createdAt)}
                             </span>
                           </div>
                         ) : null}
-                        <div className="my-2 flex justify-center">
+                        <div className="my-3 flex justify-center">
                           <div
                             className={cn(
-                              'inline-flex max-w-[90%] items-center gap-2 rounded-full border px-3 py-1.5 text-xs shadow-sm',
+                              'inline-flex max-w-[90%] items-center gap-2 rounded-full px-3 py-1.5 text-xs',
                               missed
-                                ? 'border-[#ed4245]/30 bg-[#ed4245]/10 text-[#c03537] dark:text-[#ed4245]'
-                                : 'border-ink-600 bg-ink-800 text-ink-200',
+                                ? 'bg-[#ed4245]/10 text-[#c03537] dark:text-[#ed4245]'
+                                : 'bg-ink-800/80 text-ink-300',
                             )}
                           >
                             {missed ? (
@@ -2533,10 +2668,10 @@ export function ChatPage() {
                   );
 
                   return (
-                    <div key={msg.id}>
+                    <div key={msg.id} className={cn(sameSenderAsPrev ? 'mt-0.5' : 'mt-3')}>
                       {showDay ? (
-                        <div className="my-3 flex justify-center">
-                          <span className="rounded-full bg-ink-800/80 px-3 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-300 shadow-sm ring-1 ring-ink-600/60">
+                        <div className="my-4 flex justify-center">
+                          <span className="rounded-full bg-ink-800/90 px-2.5 py-1 text-[10px] font-semibold tracking-wide text-ink-300 uppercase">
                             {formatDay(msg.createdAt)}
                           </span>
                         </div>
@@ -2548,16 +2683,20 @@ export function ChatPage() {
                         )}
                       >
                         {!mine ? (
-                          <UserAvatar
-                            name={msg.senderName}
-                            src={
-                              msg.senderAvatarUrl ??
-                              active.members.find((m) => m.id === msg.senderId)?.avatarUrl
-                            }
-                            seed={msg.senderId}
-                            size="sm"
-                            className="mb-0.5"
-                          />
+                          showAvatar ? (
+                            <UserAvatar
+                              name={msg.senderName}
+                              src={
+                                msg.senderAvatarUrl ??
+                                active.members.find((m) => m.id === msg.senderId)?.avatarUrl
+                              }
+                              seed={msg.senderId}
+                              size="sm"
+                              className="mb-0.5"
+                            />
+                          ) : (
+                            <span className="mb-0.5 inline-block h-6 w-6 shrink-0" aria-hidden />
+                          )
                         ) : null}
                         <div className="relative w-max max-w-[min(88%,22rem)] sm:max-w-[min(78%,22rem)]">
                           <div
@@ -2583,19 +2722,31 @@ export function ChatPage() {
                               openMessageActions(msg.id);
                             }}
                             className={cn(
-                              'relative overflow-hidden rounded-2xl shadow-sm outline-none',
-                              mediaOnly ? 'p-1' : 'px-2.5 py-1.5',
+                              'relative overflow-hidden outline-none',
+                              mediaOnly ? 'p-1' : 'px-3 py-2',
                               mine
-                                ? 'rounded-br-md bg-brand-500 text-white'
-                                : 'rounded-bl-md border border-ink-600/70 bg-ink-800 text-ink-50',
+                                ? cn(
+                                    'bg-brand-500 text-white',
+                                    sameSenderAsPrev
+                                      ? 'rounded-2xl rounded-tr-md'
+                                      : 'rounded-2xl rounded-br-md',
+                                    sameSenderAsNext && 'rounded-br-2xl',
+                                  )
+                                : cn(
+                                    'bg-ink-800 text-ink-50',
+                                    sameSenderAsPrev
+                                      ? 'rounded-2xl rounded-tl-md'
+                                      : 'rounded-2xl rounded-bl-md',
+                                    sameSenderAsNext && 'rounded-bl-2xl',
+                                  ),
                               deleted && 'opacity-70',
                               actionMsgId === msg.id && 'ring-2 ring-brand-400/40',
                             )}
                           >
-                          {!mine && active.type === 'group' ? (
+                          {!mine && active.type === 'group' && !sameSenderAsPrev ? (
                             <p
                               className={cn(
-                                'mb-0.5 text-[11px] font-semibold text-brand-600 dark:text-brand-300',
+                                'mb-0.5 text-[11px] font-semibold text-brand-300',
                                 mediaOnly && 'px-1.5 pt-0.5',
                               )}
                             >
@@ -2683,11 +2834,11 @@ export function ChatPage() {
                                 mine ? 'right-0' : 'left-0',
                               )}
                             >
-                              <div className="flex items-center gap-0.5 rounded-lg border border-ink-600 bg-ink-800 p-0.5 text-ink-200 shadow-md">
+                              <div className="flex items-center gap-0.5 rounded-lg border border-ink-600/80 bg-ink-800/95 p-0.5 text-ink-300 shadow-lg backdrop-blur">
                                 <button
                                   type="button"
                                   title="Reply"
-                                  className="rounded-md p-1.5 hover:bg-ink-600"
+                                  className="rounded-md p-1.5 transition hover:bg-ink-700 hover:text-ink-50"
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     startReply(msg);
@@ -2698,7 +2849,7 @@ export function ChatPage() {
                                 <button
                                   type="button"
                                   title="Forward"
-                                  className="rounded-md p-1.5 hover:bg-ink-600"
+                                  className="rounded-md p-1.5 transition hover:bg-ink-700 hover:text-ink-50"
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     requestForward(msg);
@@ -2709,7 +2860,7 @@ export function ChatPage() {
                                 <button
                                   type="button"
                                   title="More"
-                                  className="rounded-md px-1.5 py-1 text-[11px] font-bold hover:bg-ink-600"
+                                  className="rounded-md px-1.5 py-1 text-[11px] font-bold transition hover:bg-ink-700 hover:text-ink-50"
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     toggleMoreMenu(msg, e.currentTarget);
@@ -2736,24 +2887,30 @@ export function ChatPage() {
             ) : null}
 
             {(replyTo || editing) && (
-              <div className="flex items-center justify-between gap-2 border-t border-ink-600 bg-ink-800 px-4 py-2">
-                <div className="min-w-0 text-xs text-ink-200">
+              <div className="flex items-center justify-between gap-2 border-t border-ink-600/70 bg-ink-800/90 px-4 py-2">
+                <div className="min-w-0 border-l-2 border-brand-500 pl-2.5 text-xs text-ink-200">
                   {editing ? (
                     <span>
-                      Editing message:{' '}
-                      <span className="font-medium text-ink-100">{editing.body.slice(0, 80)}</span>
+                      <span className="font-semibold text-ink-100">Editing</span>
+                      <span className="mt-0.5 block truncate text-ink-400">
+                        {editing.body.slice(0, 80)}
+                      </span>
                     </span>
                   ) : replyTo ? (
-                    <span className="flex items-center gap-1.5">
-                      <IconReply className="h-3.5 w-3.5" />
-                      Replying to <span className="font-semibold">{replyTo.senderName}</span>:{' '}
-                      <span className="truncate">{replyTo.body || 'Attachment'}</span>
+                    <span>
+                      <span className="inline-flex items-center gap-1 font-semibold text-ink-100">
+                        <IconReply className="h-3 w-3" />
+                        {replyTo.senderName}
+                      </span>
+                      <span className="mt-0.5 block truncate text-ink-400">
+                        {replyTo.body || 'Attachment'}
+                      </span>
                     </span>
                   ) : null}
                 </div>
                 <button
                   type="button"
-                  className="rounded p-1 text-ink-300 hover:bg-ink-600"
+                  className="rounded-lg p-1.5 text-ink-400 transition hover:bg-ink-700 hover:text-ink-50"
                   onClick={() => {
                     setReplyTo(null);
                     setEditing(null);
@@ -2766,9 +2923,9 @@ export function ChatPage() {
             )}
 
             {files.length > 0 ? (
-              <div className="border-t border-ink-600 bg-ink-900/60 px-3 py-2.5">
+              <div className="border-t border-ink-600/70 bg-ink-800/60 px-3 py-2.5">
                 <div className="mb-1.5 flex items-center justify-between gap-2">
-                  <p className="text-[11px] font-medium text-ink-300">
+                  <p className="text-[11px] font-medium text-ink-400">
                     {files.length} attachment{files.length === 1 ? '' : 's'}
                   </p>
                   <button
@@ -2792,11 +2949,11 @@ export function ChatPage() {
             ) : null}
 
             {recording ? (
-              <div className="flex items-center justify-between gap-3 border-t border-ink-600 bg-rose-50/80 px-4 py-2.5">
-                <div className="flex items-center gap-2 text-sm text-rose-700">
-                  <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-rose-500" />
-                  Recording audio note…
-                  <span className="tabular-nums font-medium">
+              <div className="flex items-center justify-between gap-3 border-t border-ink-600/70 bg-[#ed4245]/10 px-4 py-2.5">
+                <div className="flex items-center gap-2 text-sm text-[#ed4245]">
+                  <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-[#ed4245]" />
+                  Recording…
+                  <span className="tabular-nums font-medium text-ink-200">
                     {String(Math.floor(recordSecs / 60)).padStart(2, '0')}:
                     {String(recordSecs % 60).padStart(2, '0')}
                   </span>
@@ -2805,32 +2962,33 @@ export function ChatPage() {
                   <button
                     type="button"
                     onClick={cancelAudioNote}
-                    className="rounded-md px-2.5 py-1.5 text-xs font-medium text-ink-200 hover:bg-ink-800"
+                    className="rounded-lg px-2.5 py-1.5 text-xs font-medium text-ink-300 hover:bg-ink-700"
                   >
                     Cancel
                   </button>
                   <button
                     type="button"
                     onClick={stopAudioNote}
-                    className="inline-flex items-center gap-1.5 rounded-md bg-rose-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-rose-700"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-[#ed4245] px-2.5 py-1.5 text-xs font-medium text-white hover:bg-[#c03537]"
                   >
                     <IconStop className="h-3.5 w-3.5" />
-                    Stop & attach
+                    Attach
                   </button>
                 </div>
               </div>
             ) : null}
 
             {recordError ? (
-              <p className="border-t border-ink-600 bg-ink-800 px-4 py-2 text-xs text-rose-600">
+              <p className="border-t border-ink-600/70 bg-ink-800 px-4 py-2 text-xs text-[#ed4245]">
                 {recordError}
               </p>
             ) : null}
 
             <form
               onSubmit={onSend}
-              className="flex items-end gap-1.5 border-t border-ink-600 bg-ink-800/90 px-2 py-2.5 sm:gap-2 sm:px-3 sm:py-3"
+              className="border-t border-ink-600/70 bg-ink-800/90 px-2.5 py-2.5 sm:px-4 sm:py-3"
             >
+              <div className="flex items-end gap-1.5 rounded-2xl bg-ink-900/70 p-1 ring-1 ring-ink-600/50 focus-within:ring-brand-500/40">
               <input
                 ref={photoInputRef}
                 type="file"
@@ -2881,52 +3039,52 @@ export function ChatPage() {
                     title="Attach"
                     onClick={() => setAttachMenuOpen((o) => !o)}
                     className={cn(
-                      'rounded-md p-2 text-ink-300 hover:bg-ink-600 hover:text-ink-100',
+                      'rounded-xl p-2 text-ink-400 transition hover:bg-ink-700 hover:text-ink-100',
                       attachMenuOpen && 'bg-ink-700 text-ink-50',
                     )}
                   >
                     <IconPaperclip className="h-5 w-5" />
                   </button>
                   {attachMenuOpen ? (
-                    <div className="absolute bottom-full left-0 z-30 mb-2 w-52 overflow-hidden rounded-xl border border-ink-600 bg-ink-800 py-1 shadow-lg">
+                    <div className="absolute bottom-full left-0 z-30 mb-2 w-48 overflow-hidden rounded-xl border border-ink-600 bg-ink-800 py-1 shadow-xl">
                       <button
                         type="button"
                         onClick={() => openAttachPicker('photo')}
-                        className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm text-ink-100 hover:bg-ink-900"
+                        className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-ink-100 hover:bg-ink-700"
                       >
-                        <IconImage className="h-4 w-4 text-brand-600" />
+                        <IconImage className="h-4 w-4 text-ink-400" />
                         Photo
                       </button>
                       <button
                         type="button"
                         onClick={() => openAttachPicker('document')}
-                        className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm text-ink-100 hover:bg-ink-900"
+                        className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-ink-100 hover:bg-ink-700"
                       >
-                        <IconFile className="h-4 w-4 text-brand-600" />
+                        <IconFile className="h-4 w-4 text-ink-400" />
                         Document
                       </button>
                       <button
                         type="button"
                         onClick={() => void startAudioNote()}
-                        className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm text-ink-100 hover:bg-ink-900"
+                        className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-ink-100 hover:bg-ink-700"
                       >
-                        <IconMic className="h-4 w-4 text-brand-600" />
+                        <IconMic className="h-4 w-4 text-ink-400" />
                         Audio note
                       </button>
                       <button
                         type="button"
                         onClick={() => openAttachPicker('audio')}
-                        className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm text-ink-100 hover:bg-ink-900"
+                        className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-ink-100 hover:bg-ink-700"
                       >
-                        <IconMic className="h-4 w-4 text-ink-300" />
+                        <IconMic className="h-4 w-4 text-ink-400" />
                         Audio file
                       </button>
                       <button
                         type="button"
                         onClick={() => openAttachPicker('gallery')}
-                        className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm text-ink-100 hover:bg-ink-900"
+                        className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-ink-100 hover:bg-ink-700"
                       >
-                        <IconGallery className="h-4 w-4 text-brand-600" />
+                        <IconGallery className="h-4 w-4 text-ink-400" />
                         Gallery
                       </button>
                     </div>
@@ -2940,8 +3098,8 @@ export function ChatPage() {
                   notifyTyping();
                 }}
                 rows={1}
-                placeholder={editing ? 'Edit message…' : 'Type a message…'}
-                className="max-h-28 min-h-[40px] flex-1 resize-none rounded-xl border border-ink-600 bg-ink-900/40 px-3 py-2.5 text-sm text-ink-50 outline-none placeholder:text-ink-400 focus:border-brand-500 focus:bg-ink-800"
+                placeholder={editing ? 'Edit message…' : 'Message'}
+                className="max-h-28 min-h-[40px] flex-1 resize-none border-0 bg-transparent px-1 py-2.5 text-sm text-ink-50 outline-none placeholder:text-ink-400"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
@@ -2957,12 +3115,12 @@ export function ChatPage() {
                   recording ||
                   (!editing && !draft.trim() && files.length === 0)
                 }
-                className="mb-0.5 shrink-0"
+                className="mb-0.5 h-10 w-10 shrink-0 rounded-xl !px-0"
                 title={editing ? 'Save' : 'Send'}
               >
                 <IconSend className="h-4 w-4" />
-                <span className="hidden sm:inline">{editing ? 'Save' : 'Send'}</span>
               </Button>
+              </div>
             </form>
           </>
         )}
