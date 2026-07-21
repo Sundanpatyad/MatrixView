@@ -46,21 +46,21 @@ export function LoginPage() {
   return (
     <AuthLayout
       title="Welcome back"
-      subtitle="Sign in to your workspace. You’ll stay signed in on this device."
+      subtitle="Sign in to continue to your workspace. You’ll stay signed in on this device."
       footer={
-        <p className="text-center text-[13px] text-ink-300">
+        <p className="text-center text-sm text-ink-300">
           New to DockX?{' '}
           <Link
             to="/register"
-            className="font-semibold text-brand-300 underline-offset-4 transition hover:text-brand-400 hover:underline"
+            className="font-semibold text-brand-300 transition hover:text-brand-400"
           >
             Create an account
           </Link>
         </p>
       }
     >
-      <form onSubmit={onSubmit} className="space-y-5">
-        <AuthField id="email" label="Work email">
+      <form onSubmit={onSubmit} className="space-y-4">
+        <AuthField id="email" label="Email">
           <AuthInput
             id="email"
             type="email"
@@ -82,13 +82,13 @@ export function LoginPage() {
               onChange={(e) => setPassword(e.target.value)}
               required
               autoComplete="current-password"
-              placeholder="Your password"
-              className="pr-16"
+              placeholder="Enter your password"
+              className="pr-20"
             />
             <button
               type="button"
               onClick={() => setShowPassword((v) => !v)}
-              className="absolute top-1/2 right-2.5 -translate-y-1/2 rounded-xl px-2.5 py-1.5 text-[12px] font-semibold text-ink-300 transition hover:bg-ink-700/80 hover:text-ink-50"
+              className="absolute top-1/2 right-2 -translate-y-1/2 rounded-lg px-2.5 py-1 text-[12px] font-semibold text-ink-300 transition hover:bg-ink-700 hover:text-ink-50"
             >
               {showPassword ? 'Hide' : 'Show'}
             </button>
@@ -97,28 +97,14 @@ export function LoginPage() {
 
         <AuthError message={error} />
 
-        <Button
-          type="submit"
-          size="lg"
-          className="mt-1 h-12 w-full rounded-2xl text-[15px] shadow-[0_10px_30px_rgba(88,101,242,0.28)]"
-          disabled={loading}
-        >
-          {loading ? 'Signing in…' : 'Continue'}
+        <Button type="submit" size="lg" className="mt-1 w-full rounded-xl" disabled={loading}>
+          {loading ? 'Signing in…' : 'Sign in'}
         </Button>
       </form>
 
-      <p className="mt-6 text-center text-[11px] leading-relaxed text-ink-400">
-        Demo access ·{' '}
-        <button
-          type="button"
-          className="font-medium text-ink-200 transition hover:text-ink-50"
-          onClick={() => {
-            setEmail('riya@acme.dev');
-            setPassword('Password123');
-          }}
-        >
-          Fill demo credentials
-        </button>
+      <p className="mt-5 rounded-xl border border-ink-600 bg-ink-900/60 px-3.5 py-2.5 text-center text-[11px] leading-relaxed text-ink-400">
+        Demo · <span className="font-medium text-ink-300">riya@acme.dev</span> /{' '}
+        <span className="font-medium text-ink-300">Password123</span>
       </p>
     </AuthLayout>
   );
