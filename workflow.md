@@ -784,3 +784,7 @@ The following modules follow the same 24-point template and will be appended nex
 Then Phase 2: Chat, Calendar, Meetings, Files, Knowledge Base, Leave Management, Client Portal.
 
 Say **"continue"** (or name a specific module you want prioritized) and I'll append the next batch to this same file.
+
+
+git tag v0.1.2
+git push origin v0.1.2

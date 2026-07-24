@@ -88,7 +88,7 @@ jobs:
           # Tag from the push event (e.g. v0.1.2)
           TAG="${{ github.ref_name }}"
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
-          echo "name=DockX" >> "$GITHUB_OUTPUT"
+          echo "name=DockX ${TAG}" >> "$GITHUB_OUTPUT"
 
       - name: Build Tauri app & upload to GitHub Release
         uses: tauri-apps/tauri-action@v0
@@ -112,7 +112,8 @@ jobs:
             Builds are unsigned unless signing secrets are configured.
             macOS: right-click → Open on first launch if Gatekeeper blocks the app.
             Windows: SmartScreen may warn on unsigned installers.
-          releaseDraft: true
+          # Publish publicly (drafts are hidden from non-collaborators)
+          releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
           includeUpdaterJson: false
