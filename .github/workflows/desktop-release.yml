@@ -1,9 +1,9 @@
 # Build DockX desktop for macOS, Linux, and Windows, then attach
 # installers to a GitHub Release (draft by default).
 #
-# Triggers:
-#   - Push a version tag: git tag v0.1.0 && git push origin v0.1.0
-#   - Manual run from Actions → Desktop Release → Run workflow
+# Trigger (tag only — not on normal branch pushes):
+#   git tag v0.1.2
+#   git push origin v0.1.2
 #
 # Repo settings tip: Settings → Actions → General → Workflow permissions
 # → “Read and write permissions” (needed to create releases).
@@ -14,12 +14,6 @@ on:
   push:
     tags:
       - 'v*'
-  workflow_dispatch:
-    inputs:
-      api_url:
-        description: 'VITE_API_URL baked into the desktop build'
-        required: false
-        default: 'https://matrixview-569448299007.asia-south1.run.app'
 
 permissions:
   contents: write
@@ -29,7 +23,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  DEFAULT_API_URL: https://matrixview-569448299007.asia-south1.run.app
+  VITE_API_URL: https://matrixview-569448299007.asia-south1.run.app
 
 jobs:
   publish:
@@ -37,12 +31,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # One macOS build only — asset names are docx.dmg / docx.app.tar.gz (no arch/version)
           - platform: macos-latest
             args: --target aarch64-apple-darwin
             rust_targets: aarch64-apple-darwin
-          - platform: macos-latest
-            args: --target x86_64-apple-darwin
-            rust_targets: x86_64-apple-darwin
           - platform: ubuntu-22.04
             args: ''
             rust_targets: ''
@@ -93,21 +85,16 @@ jobs:
         id: meta
         shell: bash
         run: |
-          VERSION=$(node -p "require('./desktop/src-tauri/tauri.conf.json').version")
-          if [ "${{ github.ref_type }}" = "tag" ]; then
-            TAG="${{ github.ref_name }}"
-          else
-            TAG="v${VERSION}"
-          fi
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          # Tag from the push event (e.g. v0.1.2)
+          TAG="${{ github.ref_name }}"
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
-          echo "name=DockX ${TAG}" >> "$GITHUB_OUTPUT"
+          echo "name=DockX" >> "$GITHUB_OUTPUT"
 
       - name: Build Tauri app & upload to GitHub Release
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VITE_API_URL: ${{ inputs.api_url || env.DEFAULT_API_URL }}
+          VITE_API_URL: ${{ env.VITE_API_URL }}
           # Avoid AppImage strip failures on newer glibc
           NO_STRIP: true
         with:
@@ -118,9 +105,9 @@ jobs:
             DockX desktop builds for this release.
 
             **Downloads**
-            - **Windows**: `.msi` or `.exe` (NSIS)
-            - **macOS**: `.dmg` (Apple Silicon and Intel)
-            - **Linux**: `.AppImage` and/or `.deb`
+            - **Windows**: `docx.exe` / `docx.msi`
+            - **macOS**: `docx.dmg` (Apple Silicon)
+            - **Linux**: `docx.AppImage` / `docx.deb` / `docx.rpm`
 
             Builds are unsigned unless signing secrets are configured.
             macOS: right-click → Open on first launch if Gatekeeper blocks the app.
@@ -129,3 +116,6 @@ jobs:
           prerelease: false
           args: ${{ matrix.args }}
           includeUpdaterJson: false
+          # Plain names only: docx.dmg, docx.exe, docx.AppImage, docx.deb, etc.
+          releaseAssetNamePattern: 'docx[ext]'
+
