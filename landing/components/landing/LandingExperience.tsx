@@ -4,7 +4,12 @@ import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { HeroScene } from "./HeroScene";
-import { DownloadDesktopButton, DownloadDesktopNavLink, DESKTOP_DOWNLOAD_URL } from "./DownloadDesktop";
+import {
+  DownloadDesktopButton,
+  DownloadDesktopNavLink,
+  DownloadDesktopPlatformList,
+  DESKTOP_DOWNLOAD_URL,
+} from "./DownloadDesktop";
 import { CursorGlow, MagneticLink, SplitBrand } from "./InteractiveBits";
 import { DashboardMock } from "./DashboardMock";
 import {
@@ -493,9 +498,15 @@ export function LandingExperience() {
                   All releases
                 </a>
               </div>
+              <div className="mt-8">
+                <p className="text-[11px] font-semibold tracking-[0.18em] text-ink-400 uppercase">
+                  Download for your OS
+                </p>
+                <DownloadDesktopPlatformList className="mt-4" />
+              </div>
               <p className="mt-5 text-xs text-ink-400">
-                Windows builds ship via CI. macOS / Linux installers appear on
-                the same releases page when published.
+                Installers come from the latest GitHub Release — macOS (Apple
+                Silicon &amp; Intel), Windows, and Linux.
               </p>
             </div>
 

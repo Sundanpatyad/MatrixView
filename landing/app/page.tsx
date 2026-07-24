@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { LandingExperience } from "@/components/landing/LandingExperience";
 import { JsonLd } from "@/components/seo/JsonLd";
+import { DESKTOP_DOWNLOAD_URL, DESKTOP_DOWNLOADS } from "@/lib/site";
 
 const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ||
@@ -22,12 +23,20 @@ const softwareAppLd = {
   description:
     "Desktop agent and work OS for attendance, live kanban boards, chat, and manager dashboards.",
   url: SITE_URL,
+  downloadUrl: DESKTOP_DOWNLOAD_URL,
   image: `${SITE_URL}/og-image.png`,
   offers: {
     "@type": "Offer",
     price: "0",
     priceCurrency: "USD",
   },
+  softwareVersion: "0.1.0",
+  installUrl: [
+    DESKTOP_DOWNLOADS.macSilicon,
+    DESKTOP_DOWNLOADS.macIntel,
+    DESKTOP_DOWNLOADS.windows,
+    DESKTOP_DOWNLOADS.linuxAppImage,
+  ],
 };
 
 const orgLd = {
