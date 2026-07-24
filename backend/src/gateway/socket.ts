@@ -309,7 +309,7 @@ async function isConversationMember(conversationId: string, userId: string, orgI
 export function initSocket(httpServer: HttpServer) {
   const io = new Server(httpServer, {
     cors: {
-      origin: config.corsOrigin,
+      origin: [...config.corsOrigin, ...config.desktopCorsOrigins],
       credentials: true,
     },
     path: '/socket.io',

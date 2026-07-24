@@ -19,6 +19,19 @@ export const config = {
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean),
+  /**
+   * Origins used by packaged Tauri / WebView shells. Always allowed so desktop
+   * builds can call the API even when CORS_ORIGIN only lists web URLs.
+   */
+  desktopCorsOrigins: [
+    'tauri://localhost',
+    'https://tauri.localhost',
+    'http://tauri.localhost',
+    'http://localhost.tauri.localhost',
+    'https://localhost.tauri.localhost',
+    'asset://localhost',
+    'ipc://localhost',
+  ],
   seedEmail: process.env.SEED_EMAIL ?? 'riya@acme.dev',
   seedPassword: process.env.SEED_PASSWORD ?? 'Password123',
   appUrl: (process.env.APP_URL ?? 'http://localhost:5175').replace(/\/$/, ''),

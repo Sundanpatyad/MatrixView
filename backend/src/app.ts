@@ -10,12 +10,28 @@ import notificationRoutes from './modules/notifications/routes.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { uploadsDir } from './storage/paths.js';
 
+const allowedOrigins = new Set([
+  ...config.corsOrigin,
+  ...config.desktopCorsOrigins,
+]);
+
+function isAllowedOrigin(origin: string | undefined): boolean {
+  if (!origin) return true;
+  return allowedOrigins.has(origin);
+}
+
 export function createApp() {
   const app = express();
 
   app.use(
     cors({
-      origin: config.corsOrigin,
+      origin(origin, callback) {
+        if (isAllowedOrigin(origin)) {
+          callback(null, true);
+          return;
+        }
+        callback(null, false);
+      },
       credentials: true,
     }),
   );

@@ -1,6 +1,12 @@
 export const API_BASE =
   (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') || '';
 
+if (import.meta.env.PROD && !API_BASE) {
+  console.error(
+    '[DockX] VITE_API_URL was not baked into this build. Login will fail until you rebuild with VITE_API_URL set.',
+  );
+}
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -38,6 +44,14 @@ export async function apiFetch<T>(
   path: string,
   init: RequestInit & { auth?: boolean; skipRefresh?: boolean } = {},
 ): Promise<T> {
+  if (!API_BASE) {
+    throw new ApiError(
+      'App is not configured with an API URL. Rebuild with VITE_API_URL set.',
+      0,
+      'MISSING_API_URL',
+    );
+  }
+
   const { auth = false, skipRefresh = false, headers, ...rest } = init;
   const url = `${API_BASE}${path.startsWith('/') ? path : `/${path}`}`;
 
@@ -52,13 +66,30 @@ export async function apiFetch<T>(
     if (token) finalHeaders.set('Authorization', `Bearer ${token}`);
   }
 
-  let res = await fetch(url, { ...rest, headers: finalHeaders });
+  let res: Response;
+  try {
+    res = await fetch(url, { ...rest, headers: finalHeaders });
+  } catch {
+    throw new ApiError(
+      'Cannot reach the DockX API. Check your network connection.',
+      0,
+      'NETWORK_ERROR',
+    );
+  }
 
   if (res.status === 401 && auth && !skipRefresh) {
     const next = await accessTokenRefresher();
     if (next) {
       finalHeaders.set('Authorization', `Bearer ${next}`);
-      res = await fetch(url, { ...rest, headers: finalHeaders });
+      try {
+        res = await fetch(url, { ...rest, headers: finalHeaders });
+      } catch {
+        throw new ApiError(
+          'Cannot reach the DockX API. Check your network connection.',
+          0,
+          'NETWORK_ERROR',
+        );
+      }
     }
   }
 

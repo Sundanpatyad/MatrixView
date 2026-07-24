@@ -97,6 +97,15 @@ jobs:
         working-directory: desktop
         run: npm ci
 
+      # Vite only embeds VITE_* at build time. Write production env so the
+      # packaged app always points at Cloud Run (desktop/.env is gitignored).
+      - name: Bake production API URL
+        working-directory: desktop
+        run: |
+          echo "VITE_API_URL=${VITE_API_URL}" > .env.production
+          echo "Baked VITE_API_URL into desktop/.env.production"
+          cat .env.production
+
       - name: Import Apple Developer certificate
         if: startsWith(matrix.platform, 'macos')
         env:
@@ -158,6 +167,7 @@ jobs:
             - **Linux**: `docx_linux.*`
 
             macOS builds are signed and notarized when Apple secrets are configured.
+            Desktop login talks to: `${{ env.VITE_API_URL }}`
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
