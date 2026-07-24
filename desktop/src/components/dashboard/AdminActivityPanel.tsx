@@ -13,6 +13,7 @@ import {
 import { useAuth } from '@/lib/auth/AuthContext';
 import { useWorkspace } from '@/lib/workspace/WorkspaceContext';
 import { cn } from '@/lib/cn';
+import { useToast } from '@/lib/toast/ToastContext';
 
 function sitesFromMember(m: MemberActivity): SiteUsage[] {
   if (m.sites && m.sites.length > 0) return m.sites;
@@ -247,7 +248,7 @@ export function AdminActivityPanel({ projectId }: { projectId?: string } = {}) {
   const [selectedId, setSelectedId] = useState<string | 'all'>('all');
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const toast = useToast();
 
   const adminProjects = useMemo(() => {
     if (!user) return [];
@@ -264,7 +265,6 @@ export function AdminActivityPanel({ projectId }: { projectId?: string } = {}) {
   const scopedProjectId = projectId ?? filterProjectId;
 
   const load = useCallback(async (date: string, pid: string | 'all') => {
-    setError('');
     try {
       const data = await getOrgActivityByDate(date, pid === 'all' ? undefined : pid);
       setMembers(data.members);
@@ -277,7 +277,7 @@ export function AdminActivityPanel({ projectId }: { projectId?: string } = {}) {
         return 'all';
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load activity');
+      toast.fromError(err, 'Failed to load activity');
     } finally {
       setLoading(false);
     }
@@ -477,12 +477,6 @@ export function AdminActivityPanel({ projectId }: { projectId?: string } = {}) {
           </div>
         </div>
       </div>
-
-      {error ? (
-        <div className="shrink-0 border-b border-[#ed4245]/25 bg-[#ed4245]/10 px-3 py-1.5 text-[11px] text-[#ed4245]">
-          {error}
-        </div>
-      ) : null}
 
       {/* Dashboard grid — no page scroll; panes scroll independently */}
       <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden lg:grid-cols-[180px_1fr]">

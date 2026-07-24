@@ -1,14 +1,14 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import {
-  AuthError,
   AuthField,
   AuthInput,
   AuthLayout,
 } from '@/components/auth/AuthLayout';
 import { Button } from '@/components/ui/Button';
 import { useAuth } from '@/lib/auth/AuthContext';
-import { ApiError, apiFetch } from '@/lib/api/client';
+import { apiFetch } from '@/lib/api/client';
+import { useToast } from '@/lib/toast/ToastContext';
 
 type InvitePreview = {
   email: string;
@@ -21,6 +21,7 @@ type InvitePreview = {
 
 export function RegisterPage() {
   const { register, isAuthenticated, isBootstrapping } = useAuth();
+  const toast = useToast();
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const inviteToken = params.get('invite')?.trim() || '';
@@ -30,8 +31,7 @@ export function RegisterPage() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [invite, setInvite] = useState<InvitePreview | null>(null);
-  const [inviteError, setInviteError] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [inviteBroken, setInviteBroken] = useState(false);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -48,7 +48,8 @@ export function RegisterPage() {
         if (data.invite.name) setName(data.invite.name);
       } catch (err) {
         if (!cancelled) {
-          setInviteError(err instanceof ApiError ? err.message : 'Invite is invalid or expired');
+          setInviteBroken(true);
+          toast.fromError(err, 'Invite is invalid or expired');
         }
       }
     })();
@@ -69,7 +70,6 @@ export function RegisterPage() {
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    setError(null);
     setLoading(true);
     try {
       await register({
@@ -80,7 +80,7 @@ export function RegisterPage() {
       });
       navigate('/');
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Unable to create account');
+      toast.fromError(err, 'Unable to create account');
     } finally {
       setLoading(false);
     }
@@ -91,7 +91,9 @@ export function RegisterPage() {
   const subtitle = isInvite
     ? invite
       ? `You’ve been invited to ${invite.projectName} as ${invite.role}. Create your account to join.`
-      : inviteError || 'Loading your invite…'
+      : inviteBroken
+        ? 'This invite could not be loaded.'
+        : 'Loading your invite…'
     : 'Create a free account to start projects and invite your team.';
 
   return (
@@ -125,9 +127,8 @@ export function RegisterPage() {
         </div>
       ) : null}
 
-      {isInvite && inviteError ? (
+      {isInvite && inviteBroken ? (
         <div className="space-y-4">
-          <AuthError message={inviteError} />
           <p className="text-sm text-ink-300">
             <Link to="/register" className="font-semibold text-brand-300 hover:text-brand-400">
               Sign up without an invite
@@ -188,8 +189,6 @@ export function RegisterPage() {
               </button>
             </div>
           </AuthField>
-
-          <AuthError message={error} />
 
           <Button
             type="submit"

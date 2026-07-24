@@ -8,6 +8,7 @@ import { UserAvatar } from '@/components/ui/UserAvatar';
 import { cn } from '@/lib/cn';
 import type { ProjectMember, ProjectTeam } from '@/lib/workspace/types';
 import { useWorkspace } from '@/lib/workspace/WorkspaceContext';
+import { useToast } from '@/lib/toast/ToastContext';
 
 type Props = {
   projectId: string;
@@ -28,6 +29,7 @@ export function ManageTeamsModal({ projectId, onClose, onViewTeamTasks }: Props)
     deleteTeam,
     isProjectAdmin,
   } = useWorkspace();
+  const toast = useToast();
 
   const project = getProject(projectId);
   const teams = getProjectTeams(projectId);
@@ -43,7 +45,6 @@ export function ManageTeamsModal({ projectId, onClose, onViewTeamTasks }: Props)
   const [memberIds, setMemberIds] = useState<string[]>([]);
   const [memberQuery, setMemberQuery] = useState('');
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
   const [toDelete, setToDelete] = useState<ProjectTeam | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -65,14 +66,12 @@ export function ManageTeamsModal({ projectId, onClose, onViewTeamTasks }: Props)
     if (selectedId === 'new') {
       setName('');
       setMemberIds([]);
-      setError('');
       setMemberQuery('');
       return;
     }
     if (!selectedTeam) return;
     setName(selectedTeam.name);
     setMemberIds([...selectedTeam.memberIds]);
-    setError('');
     setMemberQuery('');
   }, [selectedId, selectedTeam]);
 
@@ -108,7 +107,6 @@ export function ManageTeamsModal({ projectId, onClose, onViewTeamTasks }: Props)
     setSelectedId('new');
     setName('');
     setMemberIds([]);
-    setError('');
     setMemberQuery('');
   }
 
@@ -116,7 +114,6 @@ export function ManageTeamsModal({ projectId, onClose, onViewTeamTasks }: Props)
     e.preventDefault();
     if (!canManage || !name.trim()) return;
     setBusy(true);
-    setError('');
     try {
       if (selectedId === 'new') {
         const team = await createTeam(projectId, {
@@ -131,7 +128,7 @@ export function ManageTeamsModal({ projectId, onClose, onViewTeamTasks }: Props)
         });
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not save team');
+      toast.fromError(err, 'Could not save team');
     } finally {
       setBusy(false);
     }
@@ -145,12 +142,11 @@ export function ManageTeamsModal({ projectId, onClose, onViewTeamTasks }: Props)
     }
     if (!selectedTeam) return;
     setBusy(true);
-    setError('');
     try {
       const team = await addTeamMembers(selectedTeam.id, [member.id]);
       setMemberIds([...team.memberIds]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not add member');
+      toast.fromError(err, 'Could not add member');
     } finally {
       setBusy(false);
     }
@@ -164,12 +160,11 @@ export function ManageTeamsModal({ projectId, onClose, onViewTeamTasks }: Props)
     }
     if (!selectedTeam) return;
     setBusy(true);
-    setError('');
     try {
       const team = await removeTeamMember(selectedTeam.id, memberId);
       setMemberIds([...team.memberIds]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not remove member');
+      toast.fromError(err, 'Could not remove member');
     } finally {
       setBusy(false);
     }
@@ -434,10 +429,6 @@ export function ManageTeamsModal({ projectId, onClose, onViewTeamTasks }: Props)
                       )}
                     </div>
                   </div>
-                ) : null}
-
-                {error ? (
-                  <p className="text-[11px] font-medium text-[#ed4245]">{error}</p>
                 ) : null}
               </div>
 

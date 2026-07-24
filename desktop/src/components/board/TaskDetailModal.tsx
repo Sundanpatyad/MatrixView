@@ -21,6 +21,7 @@ import {
 } from '@/lib/workspace/types';
 import { useWorkspace } from '@/lib/workspace/WorkspaceContext';
 import { cn } from '@/lib/cn';
+import { useToast } from '@/lib/toast/ToastContext';
 
 type Props = {
   task: BoardTask;
@@ -122,7 +123,7 @@ export function TaskDetailModal({ task, projectName, columns, onClose }: Props) 
   const [comment, setComment] = useState('');
   const [labelDraft, setLabelDraft] = useState('');
   const [commentFiles, setCommentFiles] = useState<File[]>([]);
-  const [fileError, setFileError] = useState('');
+  const toast = useToast();
   const taskFileRef = useRef<HTMLInputElement>(null);
   const commentFileRef = useRef<HTMLInputElement>(null);
 
@@ -154,13 +155,12 @@ export function TaskDetailModal({ task, projectName, columns, onClose }: Props) 
   async function onTaskFiles(e: ChangeEvent<HTMLInputElement>) {
     const files = e.target.files;
     if (!files?.length) return;
-    setFileError('');
     const { ok, skipped } = filterFiles(files);
     try {
       if (ok.length) await addTaskAttachments(liveTask.id, ok);
-      if (skipped.length) setFileError(`Skipped: ${skipped.join(', ')}`);
+      if (skipped.length) toast.error(`Skipped: ${skipped.join(', ')}`);
     } catch (err) {
-      setFileError(err instanceof Error ? err.message : 'Upload failed');
+      toast.fromError(err, 'Upload failed');
     }
     e.target.value = '';
   }
@@ -168,10 +168,9 @@ export function TaskDetailModal({ task, projectName, columns, onClose }: Props) 
   function onCommentFiles(e: ChangeEvent<HTMLInputElement>) {
     const files = e.target.files;
     if (!files?.length) return;
-    setFileError('');
     const { ok, skipped } = filterFiles(files);
     if (ok.length) setCommentFiles((prev) => [...prev, ...ok]);
-    if (skipped.length) setFileError(`Skipped: ${skipped.join(', ')}`);
+    if (skipped.length) toast.error(`Skipped: ${skipped.join(', ')}`);
     e.target.value = '';
   }
 
@@ -410,9 +409,6 @@ export function TaskDetailModal({ task, projectName, columns, onClose }: Props) 
                   </Button>
                 </div>
               </form>
-              {fileError ? (
-                <p className="mt-2 text-[11px] font-medium text-[#ed4245]">{fileError}</p>
-              ) : null}
 
               <div className="mt-4 space-y-2">
                 {comments.length === 0 ? (

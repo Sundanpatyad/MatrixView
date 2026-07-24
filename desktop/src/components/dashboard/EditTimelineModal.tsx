@@ -15,6 +15,7 @@ import {
   type TimelineItem,
 } from '@/lib/workspace/types';
 import { useWorkspace } from '@/lib/workspace/WorkspaceContext';
+import { useToast } from '@/lib/toast/ToastContext';
 
 const MAX_FILE_BYTES = 2 * 1024 * 1024;
 
@@ -25,6 +26,7 @@ type Props = {
 
 export function EditTimelineModal({ item, onClose }: Props) {
   const { updateTimelineItem, getProject, getProjectTeams } = useWorkspace();
+  const toast = useToast();
   const project = getProject(item.projectId);
   const members = project?.members ?? [];
   const teams = getProjectTeams(item.projectId);
@@ -49,23 +51,20 @@ export function EditTimelineModal({ item, onClose }: Props) {
   const [kept, setKept] = useState<TaskAttachment[]>(item.attachments ?? []);
   const [removedIds, setRemovedIds] = useState<string[]>([]);
   const [newFiles, setNewFiles] = useState<File[]>([]);
-  const [fileError, setFileError] = useState('');
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
 
   function onFiles(e: ChangeEvent<HTMLInputElement>) {
     const picked = e.target.files;
     if (!picked?.length) return;
-    setFileError('');
-    const ok: File[] = [];
+        const ok: File[] = [];
     const skipped: string[] = [];
     for (const file of Array.from(picked)) {
       if (file.size > MAX_FILE_BYTES) skipped.push(`${file.name} (max 2MB)`);
       else ok.push(file);
     }
     if (ok.length) setNewFiles((prev) => [...prev, ...ok]);
-    if (skipped.length) setFileError(`Skipped: ${skipped.join(', ')}`);
+    if (skipped.length) toast.error(`Skipped: ${skipped.join(', ')}`);
     e.target.value = '';
   }
 
@@ -78,7 +77,6 @@ export function EditTimelineModal({ item, onClose }: Props) {
     e.preventDefault();
     if (!title.trim()) return;
     setSaving(true);
-    setError('');
     try {
       const member = members.find((m) => m.id === assigneeId);
       await updateTimelineItem(item.id, {
@@ -95,7 +93,7 @@ export function EditTimelineModal({ item, onClose }: Props) {
       });
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not save changes');
+      toast.fromError(err, 'Could not save changes');
     } finally {
       setSaving(false);
     }
@@ -275,12 +273,7 @@ export function EditTimelineModal({ item, onClose }: Props) {
                 ))}
               </ul>
             )}
-            {fileError ? (
-              <p className="mt-1.5 text-[11px] font-medium text-[#ed4245]">{fileError}</p>
-            ) : null}
           </div>
-
-          {error ? <p className="text-sm text-[#ed4245]">{error}</p> : null}
 
           <div className="flex justify-end gap-2 pt-1">
             <Button type="button" size="sm" variant="secondary" onClick={onClose}>

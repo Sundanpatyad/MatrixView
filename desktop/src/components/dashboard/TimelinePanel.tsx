@@ -21,6 +21,7 @@ import {
   type TimelineItem,
 } from '@/lib/workspace/types';
 import { useWorkspace } from '@/lib/workspace/WorkspaceContext';
+import { useToast } from '@/lib/toast/ToastContext';
 
 const MAX_FILE_BYTES = 2 * 1024 * 1024;
 
@@ -656,7 +657,7 @@ export function TimelinePanel() {
   const [dueDate, setDueDate] = useState('');
   const [teamId, setTeamId] = useState('');
   const [files, setFiles] = useState<File[]>([]);
-  const [fileError, setFileError] = useState('');
+  const toast = useToast();
   const [filter, setFilter] = useState<WorkFilter>('all');
   const [rangeMode, setRangeMode] = useState<RangeMode>('week');
   const [anchorDate, setAnchorDate] = useState(todayYmd);
@@ -940,7 +941,6 @@ export function TimelinePanel() {
   function onFiles(e: ChangeEvent<HTMLInputElement>) {
     const picked = e.target.files;
     if (!picked?.length) return;
-    setFileError('');
     const ok: File[] = [];
     const skipped: string[] = [];
     for (const file of Array.from(picked)) {
@@ -948,7 +948,7 @@ export function TimelinePanel() {
       else ok.push(file);
     }
     if (ok.length) setFiles((prev) => [...prev, ...ok]);
-    if (skipped.length) setFileError(`Skipped: ${skipped.join(', ')}`);
+    if (skipped.length) toast.error(`Skipped: ${skipped.join(', ')}`);
     e.target.value = '';
   }
 
@@ -972,7 +972,6 @@ export function TimelinePanel() {
     setType('task');
     setPriority('medium');
     setFiles([]);
-    setFileError('');
     setFilter('backlog');
   }
 
@@ -1158,9 +1157,6 @@ export function TimelinePanel() {
                 ))}
               </ul>
             )}
-            {fileError ? (
-              <p className="mt-1.5 text-[11px] font-medium text-[#ed4245]">{fileError}</p>
-            ) : null}
           </div>
 
           <Button type="submit" size="sm" className="w-full" disabled={!title.trim()}>

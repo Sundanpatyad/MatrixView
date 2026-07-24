@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import type { Project, ProjectMember, ProjectRole } from '@/lib/workspace/types';
 import { useWorkspace } from '@/lib/workspace/WorkspaceContext';
+import { useToast } from '@/lib/toast/ToastContext';
 
 type Props = {
   project: Project;
@@ -19,10 +20,9 @@ const ROLE_OPTIONS = [
 
 export function InviteMembersModal({ project, onClose }: Props) {
   const { getProject, addMember, updateMemberRole, removeMember } = useWorkspace();
+  const toast = useToast();
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<ProjectRole>('member');
-  const [error, setError] = useState('');
-  const [info, setInfo] = useState('');
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [memberToRemove, setMemberToRemove] = useState<ProjectMember | null>(null);
@@ -33,30 +33,28 @@ export function InviteMembersModal({ project, onClose }: Props) {
 
   async function onAdd(e: FormEvent) {
     e.preventDefault();
-    setError('');
-    setInfo('');
     setInviteLink(null);
     setBusy(true);
     try {
       const res = await addMember(live.id, { email, role });
       if (!res.member) {
-        setError('Could not invite — they may already be on this project.');
+        toast.error('Could not invite — they may already be on this project.');
         return;
       }
       setEmail('');
       setRole('member');
       if (res.result === 'added') {
-        setInfo('User found in DockX — added to the project.');
+        toast.success('User found in DockX — added to the project.');
       } else {
-        setInfo(
+        toast.success(
           res.emailSent
-            ? 'Invite email sent. They’ll join this project after creating an account.'
+            ? 'Invite email sent. They’ll join after creating an account.'
             : 'Invite created. Copy the link below (email SMTP not configured).',
         );
         setInviteLink(res.inviteLink);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not invite member');
+      toast.fromError(err, 'Could not invite member');
     } finally {
       setBusy(false);
     }
@@ -66,9 +64,9 @@ export function InviteMembersModal({ project, onClose }: Props) {
     if (!inviteLink) return;
     try {
       await navigator.clipboard.writeText(inviteLink);
-      setInfo('Invite link copied.');
+      toast.success('Invite link copied.');
     } catch {
-      setInfo('Could not copy — select the link manually.');
+      toast.error('Could not copy — select the link manually.');
     }
   }
 
@@ -107,8 +105,6 @@ export function InviteMembersModal({ project, onClose }: Props) {
             Invite
           </Button>
         </form>
-        {error ? <p className="mt-2 text-xs font-medium text-[#ed4245]">{error}</p> : null}
-        {info ? <p className="mt-2 text-xs font-medium text-[#57f287]">{info}</p> : null}
         {inviteLink ? (
           <div className="mt-2 flex gap-2">
             <input

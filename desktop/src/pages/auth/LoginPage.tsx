@@ -1,22 +1,21 @@
 import { useState, type FormEvent } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import {
-  AuthError,
   AuthField,
   AuthInput,
   AuthLayout,
 } from '@/components/auth/AuthLayout';
 import { Button } from '@/components/ui/Button';
 import { useAuth } from '@/lib/auth/AuthContext';
-import { ApiError } from '@/lib/api/client';
+import { useToast } from '@/lib/toast/ToastContext';
 
 export function LoginPage() {
   const { login, isAuthenticated, isBootstrapping } = useAuth();
+  const toast = useToast();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   if (isBootstrapping) {
@@ -31,13 +30,12 @@ export function LoginPage() {
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    setError(null);
     setLoading(true);
     try {
       await login(email, password);
       navigate('/');
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Unable to sign in');
+      toast.fromError(err, 'Unable to sign in');
     } finally {
       setLoading(false);
     }
@@ -94,8 +92,6 @@ export function LoginPage() {
             </button>
           </div>
         </AuthField>
-
-        <AuthError message={error} />
 
         <Button type="submit" size="lg" className="mt-1 w-full rounded-xl" disabled={loading}>
           {loading ? 'Signing in…' : 'Sign in'}

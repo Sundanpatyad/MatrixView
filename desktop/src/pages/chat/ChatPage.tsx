@@ -53,7 +53,6 @@ import {
   type ChatMember,
   type ChatMessage,
 } from '@/lib/api/chat';
-import { ApiError } from '@/lib/api/client';
 import {
   connectChatSocket,
   clearChatSocketHandlerKeys,
@@ -73,6 +72,7 @@ import {
   chatSendQueue,
   persistOptimisticLocal,
 } from '@/lib/chat/sendQueue';
+import { useToast } from '@/lib/toast/ToastContext';
 import {
   appendMessageSorted,
   loadConversations,
@@ -206,12 +206,6 @@ function callHistoryLabel(msg: ChatMessage, meId: string) {
     default:
       return `${noun} failed`;
   }
-}
-
-function errMsg(err: unknown) {
-  if (err instanceof ApiError) return err.message;
-  if (err instanceof Error) return err.message;
-  return 'Something went wrong';
 }
 
 function MessageTicks({
@@ -380,13 +374,16 @@ function MediaPreviewModal({
   );
 }
 
-function VoiceNotePlayer({ att, mine }: { att: ChatAttachment; mine?: boolean }) {
+function VoiceNotePlayer({
+  att,
+  mine,
+}: {
+  att: ChatAttachment;
+  mine?: boolean;
+}) {
+  const toast = useToast();
   const src = resolveMediaUrl(att.url);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    setError(null);
-  }, [src]);
+  const [failed, setFailed] = useState(false);
 
   return (
     <div
@@ -404,21 +401,18 @@ function VoiceNotePlayer({ att, mine }: { att: ChatAttachment; mine?: boolean })
         <IconMic className={cn('h-3.5 w-3.5', mine ? 'text-white/80' : 'text-brand-500')} />
         <span className="truncate">{att.name || 'Voice note'}</span>
       </div>
-      {error ? (
-        <div className="space-y-1">
-          <p className={cn('text-[11px]', mine ? 'text-rose-100' : 'text-rose-600')}>{error}</p>
-          <a
-            href={src}
-            target="_blank"
-            rel="noreferrer"
-            className={cn(
-              'text-[11px] font-semibold underline',
-              mine ? 'text-white' : 'text-brand-600',
-            )}
-          >
-            Open audio file
-          </a>
-        </div>
+      {failed ? (
+        <a
+          href={src}
+          target="_blank"
+          rel="noreferrer"
+          className={cn(
+            'text-[11px] font-semibold underline',
+            mine ? 'text-white' : 'text-brand-600',
+          )}
+        >
+          Open audio file
+        </a>
       ) : (
         <audio
           key={src}
@@ -426,9 +420,10 @@ function VoiceNotePlayer({ att, mine }: { att: ChatAttachment; mine?: boolean })
           preload="metadata"
           className="h-8 w-full"
           src={src}
-          onError={() =>
-            setError('Couldn’t play this voice note. Try opening the file instead.')
-          }
+          onError={() => {
+            setFailed(true);
+            toast.error('Couldn’t play this voice note. Try opening the file instead.');
+          }}
         >
           <track kind="captions" />
         </audio>
@@ -736,10 +731,10 @@ function NewDmModal({
   onClose: () => void;
   onCreated: (c: ChatConversation) => void;
 }) {
+  const toast = useToast();
   const [q, setQ] = useState('');
   const [email, setEmail] = useState('');
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
   const filtered = users.filter(
     (u) =>
       u.id !== meId &&
@@ -749,13 +744,12 @@ function NewDmModal({
 
   async function openDm(input: { userId?: string; email?: string }) {
     setBusy(true);
-    setError('');
     try {
       const { conversation } = await createDm(input);
       onCreated(conversation);
       onClose();
     } catch (e) {
-      setError(errMsg(e));
+      toast.fromError(e);
     } finally {
       setBusy(false);
     }
@@ -765,7 +759,7 @@ function NewDmModal({
     e.preventDefault();
     const trimmed = email.trim();
     if (!trimmed) {
-      setError('Enter an email address');
+      toast.error('Enter an email address');
       return;
     }
     await openDm({ email: trimmed });
@@ -808,7 +802,6 @@ function NewDmModal({
           disabled={busy}
         />
       </div>
-      {error ? <p className="mt-2 text-xs font-medium text-[#ed4245]">{error}</p> : null}
       <div className="mt-3 max-h-72 overflow-y-auto">
         {filtered.length === 0 ? (
           <p className="py-6 text-center text-sm text-ink-300">
@@ -856,10 +849,10 @@ function NewGroupModal({
   onClose: () => void;
   onCreated: (c: ChatConversation) => void;
 }) {
+  const toast = useToast();
   const [name, setName] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const avatarRef = useRef<HTMLInputElement>(null);
@@ -877,10 +870,9 @@ function NewGroupModal({
   function onPickAvatar(file: File | undefined) {
     if (!file) return;
     if (!file.type.startsWith('image/')) {
-      setError('Group photo must be an image');
+      toast.error('Group photo must be an image');
       return;
     }
-    setError('');
     setAvatarFile(file);
     setAvatarPreview(URL.createObjectURL(file));
   }
@@ -888,7 +880,6 @@ function NewGroupModal({
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
-    setError('');
     try {
       let { conversation } = await createGroup({
         name: name.trim(),
@@ -901,7 +892,7 @@ function NewGroupModal({
       onCreated(conversation);
       onClose();
     } catch (err) {
-      setError(errMsg(err));
+      toast.fromError(err);
     } finally {
       setBusy(false);
     }
@@ -977,7 +968,6 @@ function NewGroupModal({
             );
           })}
         </div>
-        {error ? <p className="text-xs font-medium text-[#ed4245]">{error}</p> : null}
         <div className="flex justify-end gap-2">
           <Button type="button" variant="secondary" size="sm" onClick={onClose}>
             Cancel
@@ -1004,9 +994,9 @@ function GroupManagePanel({
   onUpdated: (c: ChatConversation) => void;
   onClose: () => void;
 }) {
+  const toast = useToast();
   const [name, setName] = useState(conversation.rawName || conversation.name);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
   const [addIds, setAddIds] = useState<Set<string>>(new Set());
   const [memberToRemove, setMemberToRemove] = useState<ChatMember | null>(null);
   const avatarRef = useRef<HTMLInputElement>(null);
@@ -1017,12 +1007,11 @@ function GroupManagePanel({
   async function saveName(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
-    setError('');
     try {
       const { conversation: next } = await updateGroup(conversation.id, { name: name.trim() });
       onUpdated(next);
     } catch (err) {
-      setError(errMsg(err));
+      toast.fromError(err);
     } finally {
       setBusy(false);
     }
@@ -1031,16 +1020,15 @@ function GroupManagePanel({
   async function onAvatarChange(file: File | undefined) {
     if (!file) return;
     if (!file.type.startsWith('image/')) {
-      setError('Group photo must be an image');
+      toast.error('Group photo must be an image');
       return;
     }
     setBusy(true);
-    setError('');
     try {
       const { conversation: next } = await uploadGroupAvatar(conversation.id, file);
       onUpdated(next);
     } catch (err) {
-      setError(errMsg(err));
+      toast.fromError(err);
     } finally {
       setBusy(false);
     }
@@ -1049,13 +1037,12 @@ function GroupManagePanel({
   async function addMembers() {
     if (addIds.size === 0) return;
     setBusy(true);
-    setError('');
     try {
       const { conversation: next } = await addGroupMembers(conversation.id, [...addIds]);
       onUpdated(next);
       setAddIds(new Set());
     } catch (err) {
-      setError(errMsg(err));
+      toast.fromError(err);
     } finally {
       setBusy(false);
     }
@@ -1064,7 +1051,6 @@ function GroupManagePanel({
   async function confirmRemoveMember() {
     if (!memberToRemove) return;
     setBusy(true);
-    setError('');
     try {
       const { conversation: next } = await removeGroupMember(
         conversation.id,
@@ -1074,7 +1060,7 @@ function GroupManagePanel({
       onUpdated(next);
       if (memberToRemove.id === meId) onClose();
     } catch (err) {
-      setError(errMsg(err));
+      toast.fromError(err);
     } finally {
       setBusy(false);
     }
@@ -1197,8 +1183,6 @@ function GroupManagePanel({
           </Button>
         </div>
       ) : null}
-
-      {error ? <p className="mt-2 text-xs font-medium text-[#ed4245]">{error}</p> : null}
     </ModalShell>
 
     <ConfirmModal
@@ -1222,6 +1206,7 @@ function GroupManagePanel({
 }
 
 export function ChatPage() {
+  const toast = useToast();
   const { user } = useAuth();
   const { online } = useOffline();
   const meId = user?.id ?? '';
@@ -1254,7 +1239,6 @@ export function ChatPage() {
   const [sending, setSending] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [hasMoreOlder, setHasMoreOlder] = useState(false);
-  const [error, setError] = useState('');
   const [orgUsers, setOrgUsers] = useState<ChatMember[]>([]);
   const [presence, setPresence] = useState<Record<string, PresenceUser>>({});
   const [typingUsers, setTypingUsers] = useState<Record<string, string>>({});
@@ -1438,7 +1422,6 @@ export function ChatPage() {
     let cancelled = false;
 
     (async () => {
-      setError('');
       // 1) Paint from SQLite immediately (WhatsApp-style)
       const local = await openConversationsFromLocal(meId);
       if (cancelled) return;
@@ -1663,7 +1646,6 @@ export function ChatPage() {
     setEditing(null);
     closeMessageMenus();
     setTypingUsers({});
-    setError('');
     setFiles([]);
     setHasMoreOlder(false);
     hasMoreOlderRef.current = false;
@@ -1935,8 +1917,6 @@ export function ChatPage() {
       isTypingRef.current = false;
     }
 
-    setError('');
-
     // Edit stays blocking (small payload)
     if (editing) {
       setSending(true);
@@ -1946,7 +1926,7 @@ export function ChatPage() {
         setEditing(null);
         setDraft('');
       } catch (err) {
-        setError(errMsg(err));
+        toast.fromError(err);
       } finally {
         setSending(false);
       }
@@ -2004,7 +1984,7 @@ export function ChatPage() {
         void refreshList(conversationId);
       },
       onFailure: (err, localId) => {
-        setError(errMsg(err));
+        toast.fromError(err);
         setMessages((prev) => {
           const patch = (list: ChatMessage[]) =>
             list.map((m) =>
@@ -2043,7 +2023,6 @@ export function ChatPage() {
   async function confirmForward(targetId: string) {
     if (!forwardMsg) return;
     setForwardBusy(true);
-    setError('');
     try {
       const { message, conversation } = await forwardMessage(forwardMsg.id, targetId);
       upsertConversationQuiet(conversation);
@@ -2057,7 +2036,7 @@ export function ChatPage() {
       setForwardMsg(null);
       setActiveId(targetId);
     } catch (err) {
-      setError(errMsg(err));
+      toast.fromError(err);
     } finally {
       setForwardBusy(false);
     }
@@ -2071,7 +2050,7 @@ export function ChatPage() {
       setMessages((prev) => prev.map((m) => (m.id === message.id ? message : m)));
       setDeleteMsg(null);
     } catch (err) {
-      setError(errMsg(err));
+      toast.fromError(err);
     } finally {
       setDeletingMsg(false);
     }
@@ -2413,7 +2392,7 @@ export function ChatPage() {
                             mediaKind: 'audio',
                             isGroup: true,
                           }).catch((err) => {
-                            setError(err instanceof Error ? err.message : 'Could not start call');
+                            toast.fromError(err, 'Could not start call');
                           });
                           return;
                         }
@@ -2425,7 +2404,7 @@ export function ChatPage() {
                           peerName: active.name,
                           mediaKind: 'audio',
                         }).catch((err) => {
-                          setError(err instanceof Error ? err.message : 'Could not start call');
+                          toast.fromError(err, 'Could not start call');
                         });
                       }}
                     >
@@ -2460,9 +2439,7 @@ export function ChatPage() {
                             mediaKind: 'video',
                             isGroup: true,
                           }).catch((err) => {
-                            setError(
-                              err instanceof Error ? err.message : 'Could not start video call',
-                            );
+                            toast.fromError(err, 'Could not start video call');
                           });
                           return;
                         }
@@ -2474,9 +2451,7 @@ export function ChatPage() {
                           peerName: active.name,
                           mediaKind: 'video',
                         }).catch((err) => {
-                          setError(
-                            err instanceof Error ? err.message : 'Could not start video call',
-                          );
+                          toast.fromError(err, 'Could not start video call');
                         });
                       }}
                     >
@@ -2532,7 +2507,7 @@ export function ChatPage() {
                       mediaKind: room.mediaKind,
                       conversationName: active.name,
                     }).catch((err) => {
-                      setError(err instanceof Error ? err.message : 'Could not join call');
+                      toast.fromError(err, 'Could not join call');
                     });
                   }}
                 >
@@ -2879,12 +2854,6 @@ export function ChatPage() {
               )}
               <div ref={bottomRef} />
             </div>
-
-            {error ? (
-              <p className="border-t border-[#ed4245]/25 bg-[#ed4245]/10 px-4 py-1.5 text-xs font-medium text-[#ed4245]">
-                {error}
-              </p>
-            ) : null}
 
             {(replyTo || editing) && (
               <div className="flex items-center justify-between gap-2 border-t border-ink-600/70 bg-ink-800/90 px-4 py-2">

@@ -7,6 +7,7 @@ import { Select } from '@/components/ui/Select';
 import { UserAvatar } from '@/components/ui/UserAvatar';
 import type { ProjectMember, ProjectRole } from '@/lib/workspace/types';
 import { useWorkspace } from '@/lib/workspace/WorkspaceContext';
+import { useToast } from '@/lib/toast/ToastContext';
 
 const ROLE_OPTIONS = [
   { value: 'member', label: 'Member' },
@@ -16,12 +17,11 @@ const ROLE_OPTIONS = [
 export function ProjectDetailPage() {
   const { projectId = '' } = useParams();
   const { getProject, addMember, updateMemberRole, removeMember } = useWorkspace();
+  const toast = useToast();
   const project = getProject(projectId);
 
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<ProjectRole>('member');
-  const [error, setError] = useState('');
-  const [info, setInfo] = useState('');
   const [memberToRemove, setMemberToRemove] = useState<ProjectMember | null>(null);
   const [removing, setRemoving] = useState(false);
 
@@ -31,17 +31,15 @@ export function ProjectDetailPage() {
 
   async function onAdd(e: FormEvent) {
     e.preventDefault();
-    setError('');
-    setInfo('');
     try {
       const res = await addMember(project!.id, { email, role });
       if (!res.member) {
-        setError('Could not invite. They may already be on the project.');
+        toast.error('Could not invite. They may already be on the project.');
         return;
       }
       setEmail('');
       setRole('member');
-      setInfo(
+      toast.success(
         res.result === 'added'
           ? 'User found — added to the project.'
           : res.emailSent
@@ -51,7 +49,7 @@ export function ProjectDetailPage() {
               : 'Invite created.',
       );
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not add member');
+      toast.fromError(err, 'Could not add member');
     }
   }
 
@@ -110,9 +108,7 @@ export function ProjectDetailPage() {
           />
           <Button type="submit">Invite</Button>
         </form>
-        {error ? <p className="mt-2 text-sm font-semibold text-[#ed4245]">{error}</p> : null}
-        {info ? <p className="mt-2 text-sm font-semibold text-[#57f287]">{info}</p> : null}
-
+        
         <div className="mt-6 space-y-2">
           {project.members.map((member) => (
             <div

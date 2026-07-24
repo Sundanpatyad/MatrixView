@@ -7,6 +7,7 @@ import { assignUserProjects, createOrgUser, type OrgUser } from '@/lib/api/org';
 import { useWorkspace } from '@/lib/workspace/WorkspaceContext';
 import type { ProjectRole } from '@/lib/workspace/types';
 import { cn } from '@/lib/cn';
+import { useToast } from '@/lib/toast/ToastContext';
 
 type Props = {
   onClose: () => void;
@@ -28,6 +29,7 @@ const PROJECT_ROLES = [
 
 export function AddUserModal({ onClose, onSaved, assignTo }: Props) {
   const { projects, refresh } = useWorkspace();
+  const toast = useToast();
   const isAssign = Boolean(assignTo);
 
   const availableProjects = useMemo(() => {
@@ -42,7 +44,6 @@ export function AddUserModal({ onClose, onSaved, assignTo }: Props) {
   const [orgRole, setOrgRole] = useState<'Admin' | 'Manager' | 'Member'>('Member');
   const [projectRole, setProjectRole] = useState<ProjectRole>('member');
   const [selectedProjects, setSelectedProjects] = useState<string[]>([]);
-  const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
   function toggleProject(id: string) {
@@ -53,13 +54,12 @@ export function AddUserModal({ onClose, onSaved, assignTo }: Props) {
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    setError('');
     setSaving(true);
     try {
       let user: OrgUser;
       if (isAssign && assignTo) {
         if (selectedProjects.length === 0) {
-          setError('Select at least one project to assign.');
+          toast.error('Select at least one project to assign.');
           setSaving(false);
           return;
         }
@@ -83,7 +83,7 @@ export function AddUserModal({ onClose, onSaved, assignTo }: Props) {
       onSaved?.(user);
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not save user');
+      toast.fromError(err, 'Could not save user');
     } finally {
       setSaving(false);
     }
@@ -204,8 +204,6 @@ export function AddUserModal({ onClose, onSaved, assignTo }: Props) {
               />
             </div>
           ) : null}
-
-          {error ? <p className="text-sm text-[#ed4245]">{error}</p> : null}
 
           <div className="flex justify-end gap-2 pt-1">
             <Button type="button" size="sm" variant="secondary" onClick={onClose}>

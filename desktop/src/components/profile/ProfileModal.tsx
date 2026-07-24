@@ -11,9 +11,9 @@ import { Input } from '@/components/ui/Input';
 import { UserAvatar } from '@/components/ui/UserAvatar';
 import { useAttendance } from '@/lib/attendance/AttendanceContext';
 import { useAuth } from '@/lib/auth/AuthContext';
-import { ApiError } from '@/lib/api/client';
 import { cn } from '@/lib/cn';
 import { resolveMediaUrl } from '@/lib/mediaUrl';
+import { useToast } from '@/lib/toast/ToastContext';
 import { useWorkspace } from '@/lib/workspace/WorkspaceContext';
 
 type Props = {
@@ -25,6 +25,7 @@ export function ProfileModal({ open, onClose }: Props) {
   const { user, updateProfile, uploadAvatar } = useAuth();
   const { projects } = useWorkspace();
   const { checkedIn, onBreak, elapsedLabel } = useAttendance();
+  const toast = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [name, setName] = useState(user?.name ?? '');
@@ -32,16 +33,12 @@ export function ProfileModal({ open, onClose }: Props) {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open || !user) return;
     setName(user.name);
     setPhone(user.phone ?? '');
     setPendingFile(null);
-    setError(null);
-    setMessage(null);
     setPreviewUrl((prev) => {
       if (prev?.startsWith('blob:')) URL.revokeObjectURL(prev);
       return null;
@@ -85,11 +82,9 @@ export function ProfileModal({ open, onClose }: Props) {
     e.target.value = '';
     if (!file) return;
     if (!file.type.startsWith('image/')) {
-      setError('Please choose an image file');
+      toast.error('Please choose an image file');
       return;
     }
-    setError(null);
-    setMessage(null);
     setPreviewUrl((prev) => {
       if (prev?.startsWith('blob:')) URL.revokeObjectURL(prev);
       return URL.createObjectURL(file);
@@ -109,8 +104,6 @@ export function ProfileModal({ open, onClose }: Props) {
     e.preventDefault();
     if (!user || saving || !name.trim()) return;
     setSaving(true);
-    setError(null);
-    setMessage(null);
     try {
       await updateProfile({ name: name.trim(), phone: phone.trim() });
       if (pendingFile) {
@@ -121,10 +114,10 @@ export function ProfileModal({ open, onClose }: Props) {
         if (prev?.startsWith('blob:')) URL.revokeObjectURL(prev);
         return null;
       });
-      setMessage('Profile saved');
+      toast.success('Profile saved');
       window.setTimeout(() => onClose(), 450);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not save profile');
+      toast.fromError(err, 'Could not save profile');
     } finally {
       setSaving(false);
     }
@@ -264,9 +257,6 @@ export function ProfileModal({ open, onClose }: Props) {
                 {projects.length === 1 ? '' : 's'}
               </p>
             </div>
-
-            {error ? <p className="text-xs font-medium text-[#ed4245]">{error}</p> : null}
-            {message ? <p className="text-xs font-medium text-[#57f287]">{message}</p> : null}
           </div>
 
           <div className="flex items-center justify-end gap-2 border-t border-ink-600 px-4 py-3">

@@ -6,6 +6,7 @@ import { AuthProvider } from '@/lib/auth/AuthContext';
 import { OfflineProvider } from '@/lib/offline/OfflineContext';
 import { WorkspaceProvider } from '@/lib/workspace/WorkspaceContext';
 import { NotificationProvider } from '@/lib/notifications/NotificationContext';
+import { ToastProvider } from '@/lib/toast/ToastContext';
 import App from './App';
 import './styles/globals.css';
 
@@ -22,17 +23,19 @@ document.documentElement.style.colorScheme = initialTheme;
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
-      <AuthProvider>
-        <OfflineProvider>
-          <WorkspaceProvider>
-            <AttendanceProvider>
-              <NotificationProvider>
-                <App />
-              </NotificationProvider>
-            </AttendanceProvider>
-          </WorkspaceProvider>
-        </OfflineProvider>
-      </AuthProvider>
+      <ToastProvider>
+        <AuthProvider>
+          <OfflineProvider>
+            <WorkspaceProvider>
+              <AttendanceProvider>
+                <NotificationProvider>
+                  <App />
+                </NotificationProvider>
+              </AttendanceProvider>
+            </WorkspaceProvider>
+          </OfflineProvider>
+        </AuthProvider>
+      </ToastProvider>
     </BrowserRouter>
   </StrictMode>,
 );
