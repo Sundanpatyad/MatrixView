@@ -1,0 +1,131 @@
+# Build DockX desktop for macOS, Linux, and Windows, then attach
+# installers to a GitHub Release (draft by default).
+#
+# Triggers:
+#   - Push a version tag: git tag v0.1.0 && git push origin v0.1.0
+#   - Manual run from Actions → Desktop Release → Run workflow
+#
+# Repo settings tip: Settings → Actions → General → Workflow permissions
+# → “Read and write permissions” (needed to create releases).
+
+name: Desktop Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      api_url:
+        description: 'VITE_API_URL baked into the desktop build'
+        required: false
+        default: 'https://matrixview-569448299007.asia-south1.run.app'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: desktop-release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  DEFAULT_API_URL: https://matrixview-569448299007.asia-south1.run.app
+
+jobs:
+  publish:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            args: --target aarch64-apple-darwin
+            rust_targets: aarch64-apple-darwin
+          - platform: macos-latest
+            args: --target x86_64-apple-darwin
+            rust_targets: x86_64-apple-darwin
+          - platform: ubuntu-22.04
+            args: ''
+            rust_targets: ''
+          - platform: windows-latest
+            args: ''
+            rust_targets: ''
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Linux dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            xdg-utils
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_targets }}
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './desktop/src-tauri -> target'
+          cache-on-failure: true
+
+      - name: Install frontend dependencies
+        working-directory: desktop
+        run: npm ci
+
+      - name: Resolve release metadata
+        id: meta
+        shell: bash
+        run: |
+          VERSION=$(node -p "require('./desktop/src-tauri/tauri.conf.json').version")
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            TAG="${{ github.ref_name }}"
+          else
+            TAG="v${VERSION}"
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "name=DockX ${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Build Tauri app & upload to GitHub Release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VITE_API_URL: ${{ inputs.api_url || env.DEFAULT_API_URL }}
+          # Avoid AppImage strip failures on newer glibc
+          NO_STRIP: true
+        with:
+          projectPath: desktop
+          tagName: ${{ steps.meta.outputs.tag }}
+          releaseName: ${{ steps.meta.outputs.name }}
+          releaseBody: |
+            DockX desktop builds for this release.
+
+            **Downloads**
+            - **Windows**: `.msi` or `.exe` (NSIS)
+            - **macOS**: `.dmg` (Apple Silicon and Intel)
+            - **Linux**: `.AppImage` and/or `.deb`
+
+            Builds are unsigned unless signing secrets are configured.
+            macOS: right-click → Open on first launch if Gatekeeper blocks the app.
+            Windows: SmartScreen may warn on unsigned installers.
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}
+          includeUpdaterJson: false

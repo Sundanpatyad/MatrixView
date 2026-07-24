@@ -9,7 +9,12 @@ router.use(requireAuth);
 
 function actorFrom(req: AuthedRequest) {
   if (!req.auth) throw new AuthError('Unauthorized', 401);
-  return { sub: req.auth.sub, orgId: req.auth.orgId, role: req.auth.role };
+  return {
+    sub: req.auth.sub,
+    orgId: req.auth.orgId,
+    email: req.auth.email,
+    role: req.auth.role,
+  };
 }
 
 function param(value: string | string[]): string {
@@ -115,12 +120,15 @@ router.get('/activity/today', async (req, res, next) => {
 router.get('/activity/org/today', async (req, res, next) => {
   try {
     const date = typeof req.query.date === 'string' ? req.query.date : undefined;
+    const projectId =
+      typeof req.query.projectId === 'string' ? req.query.projectId : undefined;
     const tzRaw = typeof req.query.tzOffset === 'string' ? Number(req.query.tzOffset) : undefined;
     const tzOffset = Number.isFinite(tzRaw) ? tzRaw : undefined;
     const summary = await activity.getOrgActivityByDate(
       actorFrom(req as AuthedRequest),
       date,
       tzOffset,
+      projectId,
     );
     res.json(summary);
   } catch (err) {

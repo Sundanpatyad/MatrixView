@@ -243,6 +243,12 @@ export function DashboardPage() {
     [projects, user],
   );
 
+  /** Activity tab: only when the selected project is one you admin (or All + admin somewhere) */
+  const canViewActivity = useMemo(() => {
+    if (activeProjectId === 'all') return isProjectAdminAnywhere;
+    return isProjectAdmin(activeProjectId);
+  }, [activeProjectId, isProjectAdmin, isProjectAdminAnywhere]);
+
   const projectSwitchOptions = useMemo(
     () => [
       { value: 'all', label: `All projects (${projects.length})` },
@@ -274,15 +280,15 @@ export function DashboardPage() {
   const backlogBadge = pendingTimeline + scopedBoardUnassigned;
   const tabs = useMemo(
     () =>
-      isProjectAdminAnywhere
+      canViewActivity
         ? [...BASE_TABS, { id: 'activity' as const, label: 'Activity' }]
         : BASE_TABS,
-    [isProjectAdminAnywhere],
+    [canViewActivity],
   );
 
   useEffect(() => {
-    if (!isProjectAdminAnywhere && tab === 'activity') setTab('overview');
-  }, [isProjectAdminAnywhere, tab]);
+    if (!canViewActivity && tab === 'activity') setTab('overview');
+  }, [canViewActivity, tab]);
 
   const loadOrgUsers = useCallback(async () => {
     try {
@@ -588,9 +594,11 @@ export function DashboardPage() {
         </div>
       ) : null}
 
-      {tab === 'activity' && isProjectAdminAnywhere ? (
+      {tab === 'activity' && canViewActivity ? (
         <div className="min-h-0 flex-1 overflow-hidden">
-          <AdminActivityPanel />
+          <AdminActivityPanel
+            projectId={activeProjectId === 'all' ? undefined : activeProjectId}
+          />
         </div>
       ) : null}
 

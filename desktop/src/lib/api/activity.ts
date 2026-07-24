@@ -135,14 +135,19 @@ export type MemberActivity = {
   sessions: ActivitySession[];
 };
 
-export function getOrgActivityByDate(date: string): Promise<{
+export function getOrgActivityByDate(
+  date: string,
+  projectId?: string,
+): Promise<{
   date: string;
   totalTrackedMs: number;
   totalWebsiteMs?: number;
   allApps: AppUsage[];
   allSites?: SiteUsage[];
   members: MemberActivity[];
+  projects?: { id: string; name: string }[];
 }> {
   const q = encodeURIComponent(date);
-  return apiFetch(`/api/activity/org/today?date=${q}&${tzQuery()}`, { auth: true });
+  const projectQ = projectId ? `&projectId=${encodeURIComponent(projectId)}` : '';
+  return apiFetch(`/api/activity/org/today?date=${q}&${tzQuery()}${projectQ}`, { auth: true });
 }

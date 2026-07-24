@@ -10,6 +10,8 @@ import {
   type MemberActivity,
   type SiteUsage,
 } from '@/lib/api/activity';
+import { useAuth } from '@/lib/auth/AuthContext';
+import { useWorkspace } from '@/lib/workspace/WorkspaceContext';
 import { cn } from '@/lib/cn';
 
 function sitesFromMember(m: MemberActivity): SiteUsage[] {
@@ -231,8 +233,13 @@ function UsageList({
   );
 }
 
-export function AdminActivityPanel() {
+export function AdminActivityPanel({ projectId }: { projectId?: string } = {}) {
+  const { user } = useAuth();
+  const { projects } = useWorkspace();
   const [filterDate, setFilterDate] = useState(todayIso);
+  const [filterProjectId, setFilterProjectId] = useState<string | 'all'>(
+    projectId ?? 'all',
+  );
   const [members, setMembers] = useState<MemberActivity[]>([]);
   const [allApps, setAllApps] = useState<AppUsage[]>([]);
   const [allSites, setAllSites] = useState<SiteUsage[]>([]);
@@ -242,10 +249,24 @@ export function AdminActivityPanel() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const load = useCallback(async (date: string) => {
+  const adminProjects = useMemo(() => {
+    if (!user) return [];
+    return projects.filter((p) =>
+      p.members.some(
+        (m) =>
+          m.role === 'admin' &&
+          m.email.toLowerCase() === user.email.toLowerCase(),
+      ),
+    );
+  }, [projects, user]);
+
+  /** Locked to dashboard project when a specific admin project is selected */
+  const scopedProjectId = projectId ?? filterProjectId;
+
+  const load = useCallback(async (date: string, pid: string | 'all') => {
     setError('');
     try {
-      const data = await getOrgActivityByDate(date);
+      const data = await getOrgActivityByDate(date, pid === 'all' ? undefined : pid);
       setMembers(data.members);
       setAllApps(data.allApps);
       setAllSites(data.allSites ?? []);
@@ -263,16 +284,29 @@ export function AdminActivityPanel() {
   }, []);
 
   useEffect(() => {
+    if (projectId) setFilterProjectId(projectId);
+    else setFilterProjectId('all');
+  }, [projectId]);
+
+  useEffect(() => {
     setLoading(true);
     setSelectedSessionId(null);
-    void load(filterDate);
-  }, [filterDate, load]);
+    void load(filterDate, scopedProjectId);
+  }, [filterDate, scopedProjectId, load]);
 
   useEffect(() => {
     if (filterDate !== todayIso()) return;
-    const id = window.setInterval(() => void load(filterDate), 15_000);
+    const id = window.setInterval(() => void load(filterDate, scopedProjectId), 15_000);
     return () => window.clearInterval(id);
-  }, [filterDate, load]);
+  }, [filterDate, scopedProjectId, load]);
+
+  useEffect(() => {
+    if (projectId) return;
+    if (filterProjectId === 'all') return;
+    if (!adminProjects.some((p) => p.id === filterProjectId)) {
+      setFilterProjectId('all');
+    }
+  }, [adminProjects, filterProjectId, projectId]);
 
   const selected = useMemo(
     () => (selectedId === 'all' ? null : members.find((m) => m.userId === selectedId) ?? null),
@@ -335,7 +369,9 @@ export function AdminActivityPanel() {
     ? 'Selected session'
     : selected
       ? selected.name
-      : 'Everyone';
+      : scopedProjectId === 'all'
+        ? 'Your projects'
+        : adminProjects.find((p) => p.id === scopedProjectId)?.name ?? 'Project';
 
   const appSlices = useMemo(() => {
     const sorted = [...detailApps].sort((a, b) => b.durationMs - a.durationMs);
@@ -349,6 +385,16 @@ export function AdminActivityPanel() {
     if (rest > 0) slices.push({ label: 'Other', value: rest, color: '#94a3b8' });
     return slices.filter((s) => s.value > 0);
   }, [detailApps]);
+
+  const projectOptions = useMemo(
+    () => [
+      { value: 'all', label: `All admin projects (${adminProjects.length})` },
+      ...adminProjects.map((p) => ({ value: p.id, label: p.name })),
+    ],
+    [adminProjects],
+  );
+
+  const lockProjectFilter = Boolean(projectId);
 
   const userOptions = useMemo(
     () => [
@@ -389,10 +435,28 @@ export function AdminActivityPanel() {
         <div>
           <h2 className="text-sm font-semibold text-ink-50">Activity</h2>
           <p className="text-[10px] text-ink-400">
-            {formatDateLabel(filterDate)} · each panel scrolls on its own
+            {formatDateLabel(filterDate)} · members of projects you admin
           </p>
         </div>
         <div className="flex w-full flex-wrap items-end gap-2 sm:w-auto">
+          {!lockProjectFilter ? (
+            <div className="min-w-0 w-full flex-1 basis-full sm:basis-auto sm:w-[200px] sm:flex-none">
+              <p className="mb-0.5 text-[10px] font-bold tracking-wide text-ink-400 uppercase">
+                Project
+              </p>
+              <Select
+                size="xs"
+                value={filterProjectId}
+                onChange={(v) => {
+                  setFilterProjectId(v as string | 'all');
+                  setSelectedId('all');
+                  setSelectedSessionId(null);
+                }}
+                options={projectOptions}
+                aria-label="Select project"
+              />
+            </div>
+          ) : null}
           <div className="min-w-0 w-full flex-1 basis-full sm:basis-auto sm:w-[180px] sm:flex-none">
             <p className="mb-0.5 text-[10px] font-bold tracking-wide text-ink-400 uppercase">
               Person

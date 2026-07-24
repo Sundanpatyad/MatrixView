@@ -2,11 +2,12 @@ import { Types } from 'mongoose';
 import { emitPresenceUpdate } from '../../gateway/io.js';
 import { AuthError } from '../auth/errors.js';
 import { User } from '../auth/models/User.js';
+import { Project } from '../workspace/models/Project.js';
 import { isExcludedApp } from './exclude.js';
 import { ActivitySession } from './models/ActivitySession.js';
 import { serializeSession } from './serialize.js';
 
-type Actor = { sub: string; orgId: string; role?: string };
+type Actor = { sub: string; orgId: string; email: string; role?: string };
 
 const MAX_APP_SAMPLE_MS = 120_000;
 const MAX_AWAY_SAMPLE_MS = 12 * 60 * 60 * 1000;
@@ -313,10 +314,14 @@ export async function getTodaySummary(actor: Actor, tzOffsetMinutes?: number) {
   };
 }
 
-function requireOrgAdmin(actor: Actor) {
-  if (actor.role !== 'Admin' && actor.role !== 'Manager') {
-    throw new AuthError('Admin access required', 403, 'FORBIDDEN');
-  }
+/** Projects where the actor is a project admin (not org-level Admin). */
+async function findAdminProjects(actor: Actor) {
+  const email = actor.email.toLowerCase().trim();
+  return Project.find({
+    members: { $elemMatch: { email, role: 'admin' } },
+  })
+    .select('_id name members')
+    .lean();
 }
 
 /**
@@ -436,23 +441,69 @@ export async function getOrgActivityByDate(
   actor: Actor,
   dateStr?: string,
   tzOffsetMinutes?: number,
+  projectId?: string,
 ) {
-  requireOrgAdmin(actor);
+  const allAdminProjects = await findAdminProjects(actor);
+  if (allAdminProjects.length === 0) {
+    throw new AuthError('Project admin access required', 403, 'FORBIDDEN');
+  }
+
+  let adminProjects = allAdminProjects;
+  if (projectId) {
+    if (!Types.ObjectId.isValid(projectId)) {
+      throw new AuthError('Project not found', 404, 'NOT_FOUND');
+    }
+    adminProjects = allAdminProjects.filter((p) => String(p._id) === projectId);
+    if (adminProjects.length === 0) {
+      throw new AuthError('Project admin access required', 403, 'FORBIDDEN');
+    }
+  }
+
+  const memberEmails = new Set<string>();
+  const memberUserIds = new Set<string>();
+  for (const p of adminProjects) {
+    for (const m of p.members ?? []) {
+      const em = String(m.email ?? '')
+        .toLowerCase()
+        .trim();
+      if (em) memberEmails.add(em);
+      if (m.userId) memberUserIds.add(String(m.userId));
+    }
+  }
 
   const { start, end, date } = dayBounds(dateStr, tzOffsetMinutes);
   const isToday = date === dayBounds(undefined, tzOffsetMinutes).date;
 
-  const users = await User.find({
-    orgId: actor.orgId,
-    status: { $in: ['active', 'invited', 'locked'] },
-  })
-    .select('_id name email role avatarUrl')
-    .lean();
+  const orFilters: Record<string, unknown>[] = [];
+  if (memberUserIds.size) {
+    orFilters.push({
+      _id: { $in: [...memberUserIds].map((id) => new Types.ObjectId(id)) },
+    });
+  }
+  if (memberEmails.size) {
+    orFilters.push({ email: { $in: [...memberEmails] } });
+  }
 
-  const sessions = await ActivitySession.find({
-    orgId: actor.orgId,
-    ...sessionsForDayFilter(start, end),
-  }).sort({ startedAt: -1 });
+  const users =
+    orFilters.length === 0
+      ? []
+      : await User.find({
+          orgId: actor.orgId,
+          status: { $in: ['active', 'invited', 'locked'] },
+          $or: orFilters,
+        })
+          .select('_id name email role avatarUrl')
+          .lean();
+
+  const userIds = users.map((u) => u._id);
+  const sessions =
+    userIds.length === 0
+      ? []
+      : await ActivitySession.find({
+          orgId: actor.orgId,
+          userId: { $in: userIds },
+          ...sessionsForDayFilter(start, end),
+        }).sort({ startedAt: -1 });
 
   const members = users.map((u) => {
     const userSessions = sessions.filter((s) => String(s.userId) === String(u._id));
@@ -488,6 +539,10 @@ export async function getOrgActivityByDate(
     allApps,
     allSites,
     members,
+    projects: allAdminProjects.map((p) => ({
+      id: String(p._id),
+      name: p.name,
+    })),
   };
 }
 
