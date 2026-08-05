@@ -63,6 +63,10 @@ const messageSchema = new Schema(
     attachments: { type: [attachmentSchema], default: [] },
     receipts: { type: [receiptSchema], default: [] },
     call: { type: callSchema, default: null },
+    /** True when this message was created via forward. */
+    forwarded: { type: Boolean, default: false },
+    /** Display name of the original sender when forwarded. */
+    forwardedFrom: { type: String, default: null },
     editedAt: { type: Date, default: null },
     deletedAt: { type: Date, default: null },
   },

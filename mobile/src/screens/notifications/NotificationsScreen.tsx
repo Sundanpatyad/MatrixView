@@ -2,30 +2,31 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useMemo, useState } from 'react';
-import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import {
   AppHeader,
+  Avatar,
   EmptyState,
   LoadingView,
   Screen,
-  SegmentedControl,
   useGlassScreenPadding,
 } from '@/components/ui';
+import { MessagePreview } from '@/components/chat/MessagePreview';
 import { useNotifications } from '@/context/NotificationContext';
 import { useToast } from '@/context/ToastContext';
 import type { AppNotification, NotificationType } from '@/lib/api';
 import { formatRelative } from '@/lib/format';
 import type { RootStackParamList } from '@/navigation/types';
-import { radius, useColors } from '@/theme';
+import { useColors } from '@/theme';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type Filter = 'all' | 'unread' | 'tasks' | 'messages' | 'projects';
 
-const ICONS: Record<NotificationType, keyof typeof Ionicons.glyphMap> = {
+const TYPE_ICON: Record<NotificationType, keyof typeof Ionicons.glyphMap> = {
   'task.assigned': 'checkbox-outline',
   'task.commented': 'chatbubble-ellipses-outline',
-  'message.new': 'chatbubbles-outline',
+  'message.new': 'chatbubble-outline',
   'project.added': 'folder-open-outline',
   'project.invited': 'mail-open-outline',
   'team.added': 'people-outline',
@@ -70,6 +71,14 @@ export function NotificationsScreen() {
     }
   }, [filter, items]);
 
+  const filterOptions: Array<{ value: Filter; label: string; count?: number }> = [
+    { value: 'all', label: 'All' },
+    { value: 'unread', label: 'Unread', count: unreadCount },
+    { value: 'tasks', label: 'Tasks' },
+    { value: 'messages', label: 'Messages' },
+    { value: 'projects', label: 'Projects' },
+  ];
+
   const open = async (notification: AppNotification) => {
     if (!notification.readAt) void markRead([notification.id]);
 
@@ -97,6 +106,139 @@ export function NotificationsScreen() {
 
   return (
     <Screen edges={[]}>
+      <FlatList
+        data={filtered}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={[
+          styles.list,
+          { paddingTop: pad.top + 4, paddingBottom: pad.bottom + 24 },
+        ]}
+        showsVerticalScrollIndicator={false}
+        ListHeaderComponent={
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filters}
+            style={styles.filtersScroll}
+          >
+            {filterOptions.map((option) => {
+              const active = filter === option.value;
+              return (
+                <Pressable
+                  key={option.value}
+                  onPress={() => setFilter(option.value)}
+                  style={({ pressed }) => [
+                    styles.chip,
+                    {
+                      backgroundColor: active ? colors.surface : 'transparent',
+                      borderColor: active ? colors.borderStrong : colors.border,
+                    },
+                    pressed && { opacity: 0.75 },
+                  ]}
+                >
+                  <Text style={[styles.chipLabel, { color: active ? colors.text : colors.textSubtle }]}>
+                    {option.label}
+                  </Text>
+                  {option.count !== undefined && option.count > 0 ? (
+                    <View style={[styles.chipCount, { backgroundColor: active ? colors.brandSoft : colors.track }]}>
+                      <Text style={[styles.chipCountText, { color: active ? colors.brand : colors.textMuted }]}>
+                        {option.count}
+                      </Text>
+                    </View>
+                  ) : null}
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        }
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.brand}
+            progressViewOffset={pad.top}
+          />
+        }
+        onEndReachedThreshold={0.4}
+        onEndReached={() => {
+          if (hasMore) void loadMore();
+        }}
+        ItemSeparatorComponent={() => (
+          <View style={[styles.separator, { backgroundColor: colors.border }]} />
+        )}
+        ListEmptyComponent={
+          <EmptyState
+            icon="notifications-off-outline"
+            title={filter === 'unread' ? 'No unread notifications' : 'Nothing here yet'}
+            description="Task assignments, mentions and project updates will show up here."
+          />
+        }
+        renderItem={({ item }) => {
+          const accent = accentFor(item.type, colors);
+          const unread = !item.readAt;
+          const name = item.actorName || item.title;
+
+          return (
+            <Pressable
+              onPress={() => open(item)}
+              style={({ pressed }) => [
+                styles.row,
+                pressed && { backgroundColor: colors.surfaceAlt },
+              ]}
+            >
+              <View style={styles.avatarWrap}>
+                <Avatar name={name} uri={item.actorAvatarUrl} size={42} />
+                <View style={[styles.typeBadge, { backgroundColor: colors.bg, borderColor: colors.bg }]}>
+                  <View style={[styles.typeBadgeInner, { backgroundColor: `${accent}22` }]}>
+                    <Ionicons name={TYPE_ICON[item.type] ?? 'notifications-outline'} size={10} color={accent} />
+                  </View>
+                </View>
+              </View>
+
+              <View style={styles.body}>
+                <View style={styles.topLine}>
+                  <Text
+                    style={[styles.title, { color: colors.text, fontWeight: unread ? '700' : '600' }]}
+                    numberOfLines={1}
+                  >
+                    {item.title}
+                  </Text>
+                  <Text style={[styles.time, { color: unread ? colors.brand : colors.textSubtle }]}>
+                    {formatRelative(item.createdAt)}
+                  </Text>
+                </View>
+
+                {item.body ? (
+                  <MessagePreview
+                    text={item.body}
+                    color={unread ? colors.text : colors.textMuted}
+                    numberOfLines={2}
+                    style={styles.message}
+                  />
+                ) : null}
+              </View>
+
+              {unread ? <View style={[styles.unreadDot, { backgroundColor: colors.brand }]} /> : null}
+
+              <Pressable
+                onPress={async () => {
+                  try {
+                    await remove(item.id);
+                  } catch (error) {
+                    toast.fromError(error, 'Could not dismiss it.');
+                  }
+                }}
+                hitSlop={10}
+                style={styles.dismiss}
+                accessibilityLabel="Dismiss"
+              >
+                <Ionicons name="close" size={16} color={colors.textSubtle} />
+              </Pressable>
+            </Pressable>
+          );
+        }}
+      />
+
       <AppHeader
         floating
         title="Notifications"
@@ -120,144 +262,106 @@ export function NotificationsScreen() {
             : []
         }
       />
-
-      <FlatList
-        data={filtered}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={[
-          styles.list,
-          { paddingTop: pad.top + 8, paddingBottom: pad.bottom + 24 },
-        ]}
-        showsVerticalScrollIndicator={false}
-        ListHeaderComponent={
-          <View style={styles.filters}>
-            <SegmentedControl
-              scrollable
-              value={filter}
-              onChange={setFilter}
-              options={[
-                { value: 'all', label: 'All' },
-                { value: 'unread', label: 'Unread', count: unreadCount },
-                { value: 'tasks', label: 'Tasks' },
-                { value: 'messages', label: 'Messages' },
-                { value: 'projects', label: 'Projects' },
-              ]}
-            />
-          </View>
-        }
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={colors.brand}
-            progressViewOffset={pad.top}
-          />
-        }
-        onEndReachedThreshold={0.4}
-        onEndReached={() => {
-          if (hasMore) void loadMore();
-        }}
-        ListEmptyComponent={
-          <EmptyState
-            icon="notifications-off-outline"
-            title={filter === 'unread' ? 'No unread notifications' : 'Nothing here yet'}
-            description="Task assignments, mentions and project updates will show up here."
-          />
-        }
-        renderItem={({ item }) => {
-          const accent = accentFor(item.type, colors);
-          const unread = !item.readAt;
-          return (
-            <Pressable
-              onPress={() => open(item)}
-              style={({ pressed }) => [
-                styles.row,
-                {
-                  backgroundColor: unread ? colors.brandSoft : colors.surface,
-                  borderColor: unread ? colors.brandBorder : colors.border,
-                },
-                pressed && { opacity: 0.8 },
-              ]}
-            >
-              <View style={[styles.icon, { backgroundColor: `${accent}1f` }]}>
-                <Ionicons name={ICONS[item.type] ?? 'notifications-outline'} size={18} color={accent} />
-              </View>
-
-              <View style={styles.body}>
-                <Text style={[styles.title, { color: colors.text }]} numberOfLines={2}>
-                  {item.title}
-                </Text>
-                {item.body ? (
-                  <Text style={[styles.message, { color: colors.textMuted }]} numberOfLines={2}>
-                    {item.body}
-                  </Text>
-                ) : null}
-                <Text style={[styles.time, { color: colors.textSubtle }]}>
-                  {item.actorName ? `${item.actorName} · ` : ''}
-                  {formatRelative(item.createdAt)}
-                </Text>
-              </View>
-
-              <Pressable
-                onPress={async () => {
-                  try {
-                    await remove(item.id);
-                  } catch (error) {
-                    toast.fromError(error, 'Could not dismiss it.');
-                  }
-                }}
-                hitSlop={10}
-              >
-                <Ionicons name="close" size={17} color={colors.textSubtle} />
-              </Pressable>
-            </Pressable>
-          );
-        }}
-      />
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
+  list: {
+    flexGrow: 1,
+  },
+  filtersScroll: {
+    flexGrow: 0,
+  },
   filters: {
     paddingHorizontal: 16,
     paddingBottom: 10,
+    paddingTop: 4,
+    gap: 8,
+    alignItems: 'center',
   },
-  list: {
-    paddingHorizontal: 16,
-    gap: 9,
-    flexGrow: 1,
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    height: 30,
+    paddingHorizontal: 12,
+    borderRadius: 15,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  chipLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  chipCount: {
+    minWidth: 16,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  chipCountText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  separator: {
+    height: StyleSheet.hairlineWidth,
+    marginLeft: 70,
   },
   row: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 11,
-    padding: 13,
-    borderRadius: radius.md,
-    borderWidth: 1,
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
   },
-  icon: {
-    width: 34,
-    height: 34,
-    borderRadius: 11,
+  avatarWrap: {
+    width: 42,
+    height: 42,
+  },
+  typeBadge: {
+    position: 'absolute',
+    right: -2,
+    bottom: -2,
+    borderRadius: 9,
+    borderWidth: 2,
+  },
+  typeBadgeInner: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
   },
   body: {
     flex: 1,
-    gap: 3,
+    gap: 2,
+    minWidth: 0,
+  },
+  topLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   title: {
+    flex: 1,
     fontSize: 14.5,
-    fontWeight: '600',
-    lineHeight: 20,
+    lineHeight: 19,
   },
   message: {
     fontSize: 13,
-    lineHeight: 18,
+    lineHeight: 17,
   },
   time: {
     fontSize: 11.5,
-    marginTop: 2,
+    fontWeight: '500',
+  },
+  unreadDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  dismiss: {
+    padding: 2,
   },
 });

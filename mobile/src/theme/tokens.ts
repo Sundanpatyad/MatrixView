@@ -85,8 +85,8 @@ export const darkPalette: Palette = {
   skeleton: '#26282c',
   track: '#383a40',
 
-  glassTint: 'rgba(24, 25, 28, 0.55)',
-  glassBorder: 'rgba(255, 255, 255, 0.08)',
+  glassTint: 'rgba(24, 25, 28, 0.48)',
+  glassBorder: 'rgba(255, 255, 255, 0.10)',
   glassHighlight: 'rgba(255, 255, 255, 0.06)',
 };
 
@@ -126,7 +126,7 @@ export const lightPalette: Palette = {
   skeleton: '#e6e8ec',
   track: '#d6d9dc',
 
-  glassTint: 'rgba(255, 255, 255, 0.62)',
+  glassTint: 'rgba(255, 255, 255, 0.55)',
   glassBorder: 'rgba(17, 18, 20, 0.08)',
   glassHighlight: 'rgba(255, 255, 255, 0.55)',
 };

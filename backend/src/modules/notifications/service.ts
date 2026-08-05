@@ -1,5 +1,6 @@
 import { Types } from 'mongoose';
 import { emitToUser } from '../../gateway/io.js';
+import { loadAvatarMap } from '../auth/avatars.js';
 import { AuthError } from '../auth/errors.js';
 import {
   Notification,
@@ -22,6 +23,7 @@ export type SerializedNotification = {
   href: string;
   actorId: string | null;
   actorName: string;
+  actorAvatarUrl: string | null;
   projectId: string | null;
   taskId: string | null;
   conversationId: string | null;
@@ -36,7 +38,10 @@ function oid(id: string) {
   return new Types.ObjectId(id);
 }
 
-export function serializeNotification(doc: NotificationDoc): SerializedNotification {
+export function serializeNotification(
+  doc: NotificationDoc,
+  actorAvatarUrl: string | null = null,
+): SerializedNotification {
   return {
     id: String(doc._id),
     type: doc.type as NotificationType,
@@ -45,6 +50,7 @@ export function serializeNotification(doc: NotificationDoc): SerializedNotificat
     href: doc.href,
     actorId: doc.actorId ? String(doc.actorId) : null,
     actorName: doc.actorName ?? '',
+    actorAvatarUrl,
     projectId: doc.projectId ? String(doc.projectId) : null,
     taskId: doc.taskId ? String(doc.taskId) : null,
     conversationId: doc.conversationId ? String(doc.conversationId) : null,
@@ -100,7 +106,11 @@ export async function createAndEmit(
     readAt: null,
   });
 
-  const notification = serializeNotification(doc as NotificationDoc);
+  const avatars = await loadAvatarMap([input.actorId]);
+  const notification = serializeNotification(
+    doc as NotificationDoc,
+    input.actorId ? avatars.get(input.actorId) ?? null : null,
+  );
   const unreadCount = await countUnread(input.recipientId);
 
   emitToUser(input.recipientId, 'notification:new', { notification });
@@ -138,7 +148,13 @@ export async function listNotifications(
 
   const hasMore = docs.length > limit;
   const page = hasMore ? docs.slice(0, limit) : docs;
-  const notifications = page.map((d) => serializeNotification(d as NotificationDoc));
+  const avatars = await loadAvatarMap(page.map((d) => (d.actorId ? String(d.actorId) : null)));
+  const notifications = page.map((d) =>
+    serializeNotification(
+      d as NotificationDoc,
+      d.actorId ? avatars.get(String(d.actorId)) ?? null : null,
+    ),
+  );
   const nextCursor = hasMore ? notifications[notifications.length - 1]?.id ?? null : null;
   const unreadCount = await countUnread(actor.sub);
 
@@ -148,7 +164,9 @@ export async function listNotifications(
 export async function getNotification(actor: Actor, id: string) {
   const doc = await Notification.findOne({ _id: oid(id), recipientId: oid(actor.sub) });
   if (!doc) throw new AuthError('Notification not found', 404, 'NOT_FOUND');
-  return serializeNotification(doc);
+  const actorId = doc.actorId ? String(doc.actorId) : null;
+  const avatars = await loadAvatarMap([actorId]);
+  return serializeNotification(doc, actorId ? avatars.get(actorId) ?? null : null);
 }
 
 export async function countUnread(userId: string) {

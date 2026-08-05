@@ -160,7 +160,14 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
                 ? {
                     ...conversation,
                     lastMessageAt: message.createdAt,
-                    lastMessagePreview: message.body || (message.attachments.length ? 'Attachment' : ''),
+                    lastMessagePreview:
+                      message.body?.trim() ||
+                      (message.attachments[0]?.kind === 'image'
+                        ? 'Photo'
+                        : message.attachments[0]?.kind === 'video'
+                          ? 'Video'
+                          : message.attachments[0]?.name ||
+                            (message.attachments.length ? 'Attachment' : '')),
                   }
                 : conversation,
             ),
@@ -318,6 +325,13 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       try {
         const { message } = await chatApi.sendMessage(conversationId, input);
         replaceMessage(conversationId, localId, message);
+        const preview =
+          message.body?.trim() ||
+          (message.attachments[0]?.kind === 'image'
+            ? 'Photo'
+            : message.attachments[0]?.kind === 'video'
+              ? 'Video'
+              : message.attachments[0]?.name || (message.attachments.length ? 'Attachment' : ''));
         setConversations((prev) =>
           sortConversations(
             prev.map((conversation) =>
@@ -325,7 +339,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
                 ? {
                     ...conversation,
                     lastMessageAt: message.createdAt,
-                    lastMessagePreview: message.body || (message.attachments.length ? 'Attachment' : ''),
+                    lastMessagePreview: preview,
                   }
                 : conversation,
             ),

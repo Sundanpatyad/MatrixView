@@ -5,11 +5,9 @@ import { Platform, StyleSheet, View, type StyleProp, type ViewStyle } from 'reac
 import { useTheme } from '@/theme';
 
 /**
- * expo-blur only blurs on Android when handed a `blurTarget` ref pointing at a
- * `BlurTargetView` wrapping the content to sample, which would mean threading a
- * ref through every screen and does not work across a Modal boundary. Without
- * it the view is merely translucent, and translucent-without-blur reads as a
- * bug rather than a style, so Android gets an opaque elevated surface instead.
+ * iOS uses real native blur. Android Fabric + dimezisBlurView SIGSEGVs in
+ * RenderThread on this stack, so Android uses BlurView with blurMethod="none"
+ * (tinted translucent material) which still reads as glass over scrolling content.
  */
 export const GLASS_BLUR_SUPPORTED = Platform.OS === 'ios';
 
@@ -41,20 +39,41 @@ export function GlassSurface({
 
   const radiusStyle = radius !== undefined ? { borderRadius: radius, overflow: 'hidden' as const } : null;
 
-  if (!GLASS_BLUR_SUPPORTED) {
+  // Android: translucent material glass (no dimezis capture — that crashes Fabric).
+  if (Platform.OS === 'android') {
     return (
-      <View style={[{ backgroundColor: colors.bgElevated }, radiusStyle, borderStyle, style]}>
+      <BlurView
+        intensity={Math.min(100, intensity + 20)}
+        tint={isDark ? 'dark' : 'light'}
+        blurMethod="none"
+        style={[radiusStyle, borderStyle, style]}
+      >
+        <View
+          style={[
+            styles.tint,
+            {
+              backgroundColor: isDark ? 'rgba(24, 25, 28, 0.72)' : 'rgba(255, 255, 255, 0.72)',
+            },
+            radiusStyle,
+          ]}
+        />
+        {/* Top highlight so the pane reads as glass, not a flat wash. */}
+        <View
+          pointerEvents="none"
+          style={[
+            styles.sheen,
+            {
+              backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.35)',
+            },
+          ]}
+        />
         {children}
-      </View>
+      </BlurView>
     );
   }
 
   return (
-    <BlurView
-      intensity={intensity}
-      tint={isDark ? 'dark' : 'light'}
-      style={[radiusStyle, borderStyle, style]}
-    >
+    <BlurView intensity={intensity} tint={isDark ? 'dark' : 'light'} style={[radiusStyle, borderStyle, style]}>
       <View style={[styles.tint, { backgroundColor: colors.glassTint }, radiusStyle]} />
       {children}
     </BlurView>
@@ -68,5 +87,12 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
+  },
+  sheen: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: StyleSheet.hairlineWidth * 2,
   },
 });

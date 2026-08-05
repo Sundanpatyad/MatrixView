@@ -148,7 +148,7 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     gap: 10,
     height: HEADER_CONTENT_HEIGHT,
   },
@@ -160,11 +160,11 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 20,
-    fontWeight: '700',
-    letterSpacing: -0.3,
+    fontWeight: '600',
+    letterSpacing: 0.15,
   },
   subtitle: {
-    fontSize: 12,
+    fontSize: 13,
     marginTop: 1,
   },
   actions: {

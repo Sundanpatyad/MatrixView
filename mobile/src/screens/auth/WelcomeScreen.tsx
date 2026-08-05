@@ -9,7 +9,6 @@ import {
   StyleSheet,
   Text,
   View,
-  useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -18,178 +17,316 @@ import { useTheme } from '@/theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Welcome'>;
 
-type CardSpec = {
+type OrbitNode = {
   icon: keyof typeof Ionicons.glyphMap;
   colors: readonly [string, string];
-  rotate: string;
-  top: number;
-  left: number;
+  /** Angle in degrees, 0 = top */
+  angle: number;
   size: number;
-  delay: number;
+  radius: number;
 };
 
-const CARDS: CardSpec[] = [
-  { icon: 'grid-outline', colors: ['#5b4bff', '#8b5cf6'], rotate: '-14deg', top: 18, left: 8, size: 118, delay: 0 },
-  { icon: 'chatbubbles-outline', colors: ['#0ea5e9', '#2563eb'], rotate: '10deg', top: 8, left: 118, size: 132, delay: 80 },
-  { icon: 'videocam-outline', colors: ['#f43f5e', '#fb7185'], rotate: '-8deg', top: 42, left: 230, size: 112, delay: 140 },
-  { icon: 'checkmark-done-outline', colors: ['#10b981', '#34d399'], rotate: '16deg', top: 148, left: 36, size: 124, delay: 200 },
-  { icon: 'people-outline', colors: ['#f59e0b', '#f97316'], rotate: '-6deg', top: 156, left: 178, size: 120, delay: 260 },
-  { icon: 'flash-outline', colors: ['#6366f1', '#a855f7'], rotate: '8deg', top: 250, left: 96, size: 108, delay: 320 },
+const ORBIT: OrbitNode[] = [
+  { icon: 'grid-outline', colors: ['#5b4bff', '#8b5cf6'], angle: -95, size: 58, radius: 108 },
+  { icon: 'chatbubbles-outline', colors: ['#0ea5e9', '#2563eb'], angle: -35, size: 64, radius: 118 },
+  { icon: 'videocam-outline', colors: ['#f43f5e', '#fb7185'], angle: 28, size: 56, radius: 112 },
+  { icon: 'checkmark-done-outline', colors: ['#10b981', '#34d399'], angle: 88, size: 60, radius: 116 },
+  { icon: 'people-outline', colors: ['#f59e0b', '#f97316'], angle: 148, size: 54, radius: 108 },
+  { icon: 'flash-outline', colors: ['#6366f1', '#a855f7'], angle: -155, size: 52, radius: 102 },
 ];
 
-function FloatingCard({
-  card,
-  canvasWidth,
+const GUTTER = 24;
+const STAGE = 280;
+
+function OrbitBubble({
+  node,
+  index,
+  spin,
+  appear,
 }: {
-  card: CardSpec;
-  canvasWidth: number;
+  node: OrbitNode;
+  index: number;
+  spin: Animated.Value;
+  appear: Animated.Value;
 }) {
-  const rise = useRef(new Animated.Value(0)).current;
-  const scale = canvasWidth / 390;
+  const pulse = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(rise, {
+        Animated.timing(pulse, {
           toValue: 1,
-          duration: 2800 + card.delay,
+          duration: 2200 + index * 220,
           easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
         }),
-        Animated.timing(rise, {
+        Animated.timing(pulse, {
           toValue: 0,
-          duration: 2800 + card.delay,
+          duration: 2200 + index * 220,
           easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
         }),
       ]),
     );
-    const start = setTimeout(() => loop.start(), card.delay);
+    const start = setTimeout(() => loop.start(), index * 90);
     return () => {
       clearTimeout(start);
       loop.stop();
     };
-  }, [card.delay, rise]);
+  }, [index, pulse]);
+
+  const rad = (node.angle * Math.PI) / 180;
+  const x = Math.sin(rad) * node.radius;
+  const y = -Math.cos(rad) * node.radius;
 
   return (
     <Animated.View
       style={[
-        styles.cardWrap,
+        styles.bubbleWrap,
         {
-          top: card.top * scale,
-          left: card.left * scale,
-          width: card.size * scale,
-          height: card.size * 1.15 * scale,
+          width: node.size,
+          height: node.size,
+          marginLeft: -node.size / 2,
+          marginTop: -node.size / 2,
+          opacity: appear,
           transform: [
-            { rotate: card.rotate },
             {
-              translateY: rise.interpolate({
+              rotate: spin.interpolate({
                 inputRange: [0, 1],
-                outputRange: [0, -8],
+                outputRange: ['0deg', '360deg'],
+              }),
+            },
+            { translateX: x },
+            { translateY: y },
+            {
+              rotate: spin.interpolate({
+                inputRange: [0, 1],
+                outputRange: ['0deg', '-360deg'],
+              }),
+            },
+            {
+              scale: pulse.interpolate({
+                inputRange: [0, 1],
+                outputRange: [1, 1.06],
               }),
             },
           ],
         },
       ]}
     >
-      <LinearGradient colors={[...card.colors]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.card}>
-        <View style={styles.cardSheen} />
-        <Ionicons name={card.icon} size={28 * scale} color="rgba(255,255,255,0.92)" />
+      <LinearGradient
+        colors={[...node.colors]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.bubble}
+      >
+        <View style={styles.bubbleSheen} />
+        <Ionicons name={node.icon} size={node.size * 0.42} color="rgba(255,255,255,0.96)" />
       </LinearGradient>
     </Animated.View>
-  );
-}
-
-function InlineChip({ label, tone }: { label: string; tone: string }) {
-  return (
-    <View style={[styles.inlineChip, { backgroundColor: tone }]}>
-      <Text style={styles.inlineChipText}>{label}</Text>
-    </View>
   );
 }
 
 export function WelcomeScreen({ navigation }: Props) {
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
+  const appear = useRef(new Animated.Value(0)).current;
+  const spin = useRef(new Animated.Value(0)).current;
+  const corePulse = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(appear, {
+      toValue: 1,
+      duration: 700,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+
+    const orbit = Animated.loop(
+      Animated.timing(spin, {
+        toValue: 1,
+        duration: 48000,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      }),
+    );
+    orbit.start();
+
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(corePulse, {
+          toValue: 1,
+          duration: 2400,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+        Animated.timing(corePulse, {
+          toValue: 0,
+          duration: 2400,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    pulse.start();
+
+    return () => {
+      orbit.stop();
+      pulse.stop();
+    };
+  }, [appear, corePulse, spin]);
 
   const canvas = isDark ? '#000000' : '#f4f5f8';
   const primaryBg = isDark ? '#ffffff' : colors.brand;
   const primaryFg = isDark ? '#000000' : '#ffffff';
-  const secondaryBg = isDark ? 'rgba(255,255,255,0.12)' : 'rgba(17,18,20,0.06)';
-  const secondaryFg = colors.text;
+  const secondaryBg = isDark ? 'rgba(255,255,255,0.10)' : 'rgba(17,18,20,0.06)';
+  const secondaryBorder = isDark ? 'rgba(255,255,255,0.12)' : 'rgba(17,18,20,0.08)';
+  const ringColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(17,18,20,0.08)';
+  const ringColorSoft = isDark ? 'rgba(255,255,255,0.04)' : 'rgba(17,18,20,0.04)';
 
   return (
-    <View style={[styles.root, { backgroundColor: canvas, paddingTop: insets.top }]}>
+    <View style={[styles.root, { backgroundColor: canvas }]}>
       <LinearGradient
         colors={
           isDark
-            ? ['rgba(88,101,242,0.28)', 'transparent', '#000000']
-            : ['rgba(88,101,242,0.16)', 'transparent', '#f4f5f8']
+            ? ['rgba(88,101,242,0.38)', 'rgba(88,101,242,0.10)', 'transparent']
+            : ['rgba(88,101,242,0.20)', 'rgba(88,101,242,0.06)', 'transparent']
         }
-        locations={[0, 0.45, 1]}
-        style={StyleSheet.absoluteFill}
+        locations={[0, 0.42, 1]}
+        style={styles.ambient}
+        pointerEvents="none"
       />
 
-      <View style={[styles.collage, { height: Math.min(width * 0.92, 360) }]}>
-        {CARDS.map((card) => (
-          <FloatingCard key={card.icon} card={card} canvasWidth={width} />
-        ))}
-        <LinearGradient
-          colors={[`${canvas}00`, canvas]}
-          style={styles.collageFade}
-          pointerEvents="none"
-        />
-      </View>
+      <View
+        style={[
+          styles.content,
+          {
+            paddingTop: insets.top + 12,
+            paddingBottom: Math.max(insets.bottom, 16) + 8,
+          },
+        ]}
+      >
+        <Animated.View
+          style={[
+            styles.stage,
+            {
+              opacity: appear,
+              transform: [
+                {
+                  scale: appear.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0.92, 1],
+                  }),
+                },
+              ],
+            },
+          ]}
+        >
+          <View style={[styles.ring, styles.ringOuter, { borderColor: ringColorSoft }]} />
+          <View style={[styles.ring, styles.ringInner, { borderColor: ringColor }]} />
 
-      <View style={styles.copy}>
-        <View style={styles.headlineBlock}>
-          <View style={styles.headlineRow}>
-            <Text style={[styles.headline, { color: colors.text }]}>Your </Text>
-            <InlineChip label="DX" tone={colors.brand} />
-            <Text style={[styles.headline, { color: colors.text }]}> world of</Text>
+          <Animated.View
+            style={[
+              styles.coreGlow,
+              {
+                opacity: corePulse.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0.35, 0.7],
+                }),
+                transform: [
+                  {
+                    scale: corePulse.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [1, 1.12],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
+            <LinearGradient
+              colors={['rgba(88,101,242,0.55)', 'rgba(88,101,242,0)']}
+              style={StyleSheet.absoluteFillObject}
+            />
+          </Animated.View>
+
+          <View style={styles.core}>
+            <LinearGradient
+              colors={['#6d78f5', '#5865f2', '#4752c4']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.coreFace}
+            >
+              <View style={styles.coreSheen} />
+              <Text style={styles.coreText}>DX</Text>
+            </LinearGradient>
           </View>
-          <View style={styles.headlineRow}>
-            <Text style={[styles.headline, { color: colors.text }]}>boards, chat & </Text>
-            <InlineChip label="✓" tone="#23a559" />
-            <Text style={[styles.headline, { color: colors.text }]}> tasks</Text>
-          </View>
+
+          {ORBIT.map((node, index) => (
+            <OrbitBubble key={node.icon} node={node} index={index} spin={spin} appear={appear} />
+          ))}
+        </Animated.View>
+
+        <Animated.View
+          style={[
+            styles.copy,
+            {
+              opacity: appear,
+              transform: [
+                {
+                  translateY: appear.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [16, 0],
+                  }),
+                },
+              ],
+            },
+          ]}
+        >
+          <Text style={[styles.kicker, { color: colors.brand }]}>DockX</Text>
+          <Text style={[styles.headline, { color: colors.text }]}>
+            Boards, chat & tasks{'\n'}in one workspace
+          </Text>
+          <Text style={[styles.subhead, { color: colors.textMuted }]}>
+            Run projects, message your team and jump on calls — all in one place.
+          </Text>
+        </Animated.View>
+
+        <View style={styles.actions}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Sign up"
+            onPress={() => navigation.navigate('Register')}
+            style={({ pressed }) => [
+              styles.button,
+              { backgroundColor: primaryBg },
+              pressed && styles.pressed,
+            ]}
+          >
+            <Text style={[styles.buttonLabel, { color: primaryFg }]}>Sign up</Text>
+          </Pressable>
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Log in"
+            onPress={() => navigation.navigate('Login')}
+            style={({ pressed }) => [
+              styles.button,
+              {
+                backgroundColor: secondaryBg,
+                borderWidth: StyleSheet.hairlineWidth,
+                borderColor: secondaryBorder,
+              },
+              pressed && styles.pressed,
+            ]}
+          >
+            <Text style={[styles.buttonLabel, { color: colors.text }]}>I have an account</Text>
+          </Pressable>
+
+          <Text style={[styles.legal, { color: colors.textSubtle }]}>
+            By continuing, you accept our Terms, Privacy Policy, and chat guidelines.
+          </Text>
         </View>
-        <Text style={[styles.subhead, { color: colors.textMuted }]}>
-          Run projects, message your team and jump on calls — all in DockX.
-        </Text>
-      </View>
-
-      <View style={[styles.actions, { paddingBottom: Math.max(insets.bottom, 16) + 8 }]}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Sign up"
-          onPress={() => navigation.navigate('Register')}
-          style={({ pressed }) => [
-            styles.button,
-            { backgroundColor: primaryBg },
-            pressed && styles.pressed,
-          ]}
-        >
-          <Text style={[styles.buttonLabel, { color: primaryFg }]}>Sign up</Text>
-        </Pressable>
-
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Log in"
-          onPress={() => navigation.navigate('Login')}
-          style={({ pressed }) => [
-            styles.button,
-            { backgroundColor: secondaryBg },
-            pressed && styles.pressed,
-          ]}
-        >
-          <Text style={[styles.buttonLabel, { color: secondaryFg }]}>I have an account</Text>
-        </Pressable>
-
-        <Text style={[styles.legal, { color: colors.textSubtle }]}>
-          By continuing, you accept our Terms, Privacy Policy, and chat guidelines.
-        </Text>
       </View>
     </View>
   );
@@ -199,83 +336,125 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
   },
-  collage: {
-    width: '100%',
-    marginTop: 8,
-    overflow: 'hidden',
-  },
-  collageFade: {
+  ambient: {
     position: 'absolute',
+    top: 0,
     left: 0,
     right: 0,
-    bottom: 0,
-    height: 90,
+    height: '55%',
   },
-  cardWrap: {
-    position: 'absolute',
-    borderRadius: 26,
-    shadowColor: '#000',
-    shadowOpacity: 0.35,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 8,
-  },
-  card: {
+  content: {
     flex: 1,
-    borderRadius: 26,
+    paddingHorizontal: GUTTER,
+  },
+  stage: {
+    alignSelf: 'center',
+    width: STAGE,
+    height: STAGE,
+    marginTop: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ring: {
+    position: 'absolute',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 999,
+  },
+  ringOuter: {
+    width: STAGE - 8,
+    height: STAGE - 8,
+  },
+  ringInner: {
+    width: STAGE * 0.58,
+    height: STAGE * 0.58,
+  },
+  coreGlow: {
+    position: 'absolute',
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    overflow: 'hidden',
+  },
+  core: {
+    width: 84,
+    height: 84,
+    borderRadius: 28,
+    shadowColor: '#5865f2',
+    shadowOpacity: 0.55,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 10,
+  },
+  coreFace: {
+    flex: 1,
+    borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
   },
-  cardSheen: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+  coreSheen: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255,255,255,0.12)',
   },
-  copy: {
-    paddingHorizontal: 28,
-    marginTop: 4,
-    gap: 14,
+  coreText: {
+    color: '#ffffff',
+    fontSize: 26,
+    fontWeight: '800',
+    letterSpacing: -0.6,
   },
-  headlineBlock: {
-    gap: 4,
+  bubbleWrap: {
+    position: 'absolute',
+    left: '50%',
+    top: '50%',
   },
-  headlineRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-  },
-  headline: {
-    fontSize: 34,
-    fontWeight: '700',
-    letterSpacing: -0.9,
-    lineHeight: 42,
-  },
-  inlineChip: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+  bubble: {
+    flex: 1,
+    borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
-    marginHorizontal: 2,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOpacity: 0.32,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 7,
   },
-  inlineChipText: {
-    color: '#ffffff',
-    fontSize: 12,
-    fontWeight: '800',
+  bubbleSheen: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+  },
+  copy: {
+    marginTop: 28,
+    alignItems: 'center',
+    gap: 10,
+  },
+  kicker: {
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
+  },
+  headline: {
+    fontSize: 32,
+    fontWeight: '700',
+    letterSpacing: -0.8,
+    lineHeight: 38,
+    textAlign: 'center',
   },
   subhead: {
     fontSize: 15,
-    lineHeight: 21,
-    maxWidth: 340,
+    lineHeight: 22,
+    textAlign: 'center',
+    maxWidth: 300,
   },
   actions: {
     marginTop: 'auto',
-    paddingHorizontal: 24,
     gap: 12,
+    paddingTop: 24,
   },
   button: {
-    height: 56,
-    borderRadius: 28,
+    height: 54,
+    borderRadius: 27,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -284,13 +463,13 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   pressed: {
-    opacity: 0.85,
+    opacity: 0.86,
   },
   legal: {
-    marginTop: 6,
+    marginTop: 4,
     textAlign: 'center',
     fontSize: 11.5,
     lineHeight: 16,
-    paddingHorizontal: 12,
+    paddingHorizontal: 8,
   },
 });

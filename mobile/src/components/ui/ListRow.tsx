@@ -2,11 +2,13 @@ import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { radius, useColors } from '@/theme';
+import { useColors } from '@/theme';
 
 interface ListRowProps {
   icon?: keyof typeof Ionicons.glyphMap;
   iconColor?: string;
+  /** Solid fill behind the icon (WhatsApp-style accent tile). */
+  iconBackground?: string;
   title: string;
   subtitle?: string;
   value?: string;
@@ -20,6 +22,7 @@ interface ListRowProps {
 export function ListRow({
   icon,
   iconColor,
+  iconBackground,
   title,
   subtitle,
   value,
@@ -31,13 +34,15 @@ export function ListRow({
 }: ListRowProps) {
   const colors = useColors();
   const tint = destructive ? colors.danger : colors.text;
+  const tile = iconBackground ?? (destructive ? colors.dangerSoft : colors.surfaceAlt);
+  const glyph = iconColor ?? (destructive ? colors.danger : colors.textMuted);
 
   const content = (
     <>
       {left ??
         (icon ? (
-          <View style={[styles.iconWrap, { backgroundColor: colors.surfaceAlt }]}>
-            <Ionicons name={icon} size={18} color={iconColor ?? (destructive ? colors.danger : colors.textMuted)} />
+          <View style={[styles.iconWrap, { backgroundColor: tile }]}>
+            <Ionicons name={icon} size={20} color={glyph} />
           </View>
         ) : null)}
 
@@ -69,7 +74,11 @@ export function ListRow({
   }
 
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.row, pressed && { opacity: 0.65 }]}>
+    <Pressable
+      onPress={onPress}
+      android_ripple={{ color: colors.surfaceHover }}
+      style={({ pressed }) => [styles.row, pressed && { backgroundColor: colors.surfaceHover }]}
+    >
       {content}
     </Pressable>
   );
@@ -79,14 +88,15 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
+    gap: 14,
+    paddingVertical: 13,
+    paddingHorizontal: 16,
+    minHeight: 56,
   },
   iconWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: radius.sm + 2,
+    width: 36,
+    height: 36,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -94,15 +104,16 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   title: {
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '400',
+    letterSpacing: 0.1,
   },
   subtitle: {
-    fontSize: 12,
+    fontSize: 13,
     marginTop: 2,
-    lineHeight: 17,
+    lineHeight: 18,
   },
   value: {
-    fontSize: 13,
+    fontSize: 14,
   },
 });

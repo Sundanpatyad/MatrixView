@@ -262,6 +262,8 @@ export async function serializeMessage(doc: InstanceType<typeof Message>) {
         : null,
     status: computeDeliveryStatus(String(doc.senderId), memberIds, doc.receipts ?? []),
     receipts,
+    forwarded: Boolean(doc.forwarded),
+    forwardedFrom: doc.forwardedFrom ?? null,
     editedAt: doc.editedAt ? doc.editedAt.toISOString() : null,
     deletedAt: doc.deletedAt ? doc.deletedAt.toISOString() : null,
     createdAt: doc.createdAt.toISOString(),
@@ -665,10 +667,10 @@ export async function sendMessage(
     body ||
     (attachments[0]
       ? attachments[0].kind === 'image'
-        ? '📷 Photo'
+        ? 'Photo'
         : attachments[0].kind === 'video'
-          ? '🎬 Video'
-          : `📎 ${attachments[0].name}`
+          ? 'Video'
+          : attachments[0].name || 'Attachment'
       : '');
 
   conversation.lastMessageAt = new Date();
@@ -762,20 +764,22 @@ export async function forwardMessage(
     replyToId: null,
     attachments,
     receipts: [],
+    forwarded: true,
+    forwardedFrom: sender?.name ?? source.forwardedFrom ?? null,
   });
 
   const preview =
     messageBody ||
     (attachments[0]
       ? attachments[0].kind === 'image'
-        ? '📷 Photo'
+        ? 'Photo'
         : attachments[0].kind === 'video'
-          ? '🎬 Video'
-          : `📎 ${attachments[0].name}`
+          ? 'Video'
+          : attachments[0].name || 'Attachment'
       : forwardLabel);
 
   target.lastMessageAt = new Date();
-  target.lastMessagePreview = `↪ ${preview}`.slice(0, 160);
+  target.lastMessagePreview = `Forwarded: ${preview}`.slice(0, 160);
   await target.save();
 
   const serialized = await serializeMessage(message);

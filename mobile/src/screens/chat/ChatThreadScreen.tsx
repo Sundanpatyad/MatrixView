@@ -21,9 +21,11 @@ import {
   AppHeader,
   Avatar,
   EmptyState,
+  OptionSheet,
   Screen,
   Sheet,
   useFloatingHeaderHeight,
+  type SheetOption,
 } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
 import { useCall } from '@/context/CallContext';
@@ -34,7 +36,7 @@ import { formatDayDivider } from '@/lib/format';
 import { captureImage, pickDocuments, pickImages } from '@/lib/pickers';
 import type { CallMediaKind } from '@/lib/socket/socket';
 import type { RootStackParamList } from '@/navigation/types';
-import { radius, useColors } from '@/theme';
+import { radius, useColors, useTheme } from '@/theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ChatThread'>;
 
@@ -46,6 +48,7 @@ const JOIN_BANNER_HEIGHT = 42;
 export function ChatThreadScreen({ route, navigation }: Props) {
   const { conversationId } = route.params;
   const colors = useColors();
+  const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const toast = useToast();
   const { user } = useAuth();
@@ -63,6 +66,7 @@ export function ChatThreadScreen({ route, navigation }: Props) {
     retry,
     edit,
     remove,
+    forward,
     setTyping,
   } = useChat();
   const { startCall, joinGroupCall, activeRooms, call } = useCall();
@@ -78,10 +82,33 @@ export function ChatThreadScreen({ route, navigation }: Props) {
   const [editing, setEditing] = useState<ChatMessage | null>(null);
   const [attachSheet, setAttachSheet] = useState(false);
   const [actionTarget, setActionTarget] = useState<ChatMessage | null>(null);
+  const [forwardTarget, setForwardTarget] = useState<ChatMessage | null>(null);
+  const [forwarding, setForwarding] = useState(false);
   const [sending, setSending] = useState(false);
 
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isTypingRef = useRef(false);
+  const composerRef = useRef<TextInput>(null);
+
+  const isOwnMessage = (message: ChatMessage | null | undefined) =>
+    Boolean(message && user?.id && String(message.senderId) === String(user.id));
+
+  const canModerateMessage = (message: ChatMessage | null | undefined) =>
+    Boolean(
+      message &&
+        isOwnMessage(message) &&
+        message.type !== 'call' &&
+        !message.deletedAt &&
+        !message.id.startsWith('local-') &&
+        message.localState !== 'sending' &&
+        message.localState !== 'failed',
+    );
+
+  /** Run after the options sheet finishes closing so Alerts / focus work on iOS. */
+  const afterActionSheetClose = (action: () => void) => {
+    setActionTarget(null);
+    setTimeout(action, Platform.OS === 'ios' ? 420 : 280);
+  };
 
   useEffect(() => {
     void openConversation(conversationId);
@@ -174,19 +201,31 @@ export function ChatThreadScreen({ route, navigation }: Props) {
 
   const handleSend = async () => {
     const body = draft.trim();
-    if (!body || sending) return;
+    if (sending) return;
 
     if (editing) {
       const target = editing;
+      if (!body && target.attachments.length === 0) {
+        toast.error('Message cannot be empty.');
+        return;
+      }
       setEditing(null);
       setDraft('');
+      setSending(true);
       try {
         await edit(target.id, body);
+        toast.success('Message updated');
       } catch (error) {
         toast.fromError(error, 'Could not edit the message.');
+        setEditing(target);
+        setDraft(body);
+      } finally {
+        setSending(false);
       }
       return;
     }
+
+    if (!body) return;
 
     setDraft('');
     stopTyping();
@@ -202,20 +241,36 @@ export function ChatThreadScreen({ route, navigation }: Props) {
   };
 
   const sendFiles = async (picker: () => Promise<PickedFile[]>) => {
+    // Closing the sheet Modal and opening the system picker in the same tick
+    // often cancels the picker on both iOS and Android — wait for dismiss first.
     setAttachSheet(false);
+    await new Promise<void>((resolve) => setTimeout(resolve, Platform.OS === 'ios' ? 450 : 300));
+
+    let files: PickedFile[] = [];
     try {
-      const files = await picker();
-      if (!files.length) return;
-      await send(conversationId, { body: draft.trim(), files, replyToId: replyTo?.id });
-      setDraft('');
-      setReplyTo(null);
+      files = await picker();
+    } catch (error) {
+      toast.fromError(error, 'Could not open the file picker.');
+      return;
+    }
+    if (!files.length) return;
+
+    const caption = draft.trim();
+    const replyId = replyTo?.id;
+    setDraft('');
+    setReplyTo(null);
+    setSending(true);
+    try {
+      await send(conversationId, { body: caption, files, replyToId: replyId });
     } catch (error) {
       toast.fromError(error, 'Could not send the attachment.');
+    } finally {
+      setSending(false);
     }
   };
 
   const confirmDelete = (message: ChatMessage) => {
-    Alert.alert('Delete message', 'This removes the message for everyone.', [
+    Alert.alert('Delete message', 'This removes the message for everyone in the chat.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
@@ -223,12 +278,60 @@ export function ChatThreadScreen({ route, navigation }: Props) {
         onPress: async () => {
           try {
             await remove(message.id);
+            toast.success('Message deleted');
           } catch (error) {
             toast.fromError(error, 'Could not delete the message.');
           }
         },
       },
     ]);
+  };
+
+  const beginEdit = (message: ChatMessage) => {
+    setReplyTo(null);
+    setEditing(message);
+    setDraft(message.body ?? '');
+    setTimeout(() => composerRef.current?.focus(), 50);
+  };
+
+  const openMessageActions = (message: ChatMessage) => {
+    if (message.type === 'call' || message.deletedAt || message.localState === 'sending') return;
+    setActionTarget(message);
+  };
+
+  const forwardOptions = useMemo<SheetOption<string>[]>(
+    () =>
+      conversations
+        .filter((entry) => entry.id !== conversationId)
+        .map((entry) => {
+          const peerMember =
+            entry.type === 'dm'
+              ? entry.members.find((member) => member.id !== user?.id) ?? entry.members[0]
+              : undefined;
+          return {
+            value: entry.id,
+            label: entry.type === 'dm' ? peerMember?.name ?? 'Chat' : entry.name || 'Group',
+            description: entry.type === 'group' ? `${entry.members.length} members` : peerMember?.email,
+            icon: entry.type === 'group' ? ('people-outline' as const) : ('person-outline' as const),
+          };
+        }),
+    [conversationId, conversations, user?.id],
+  );
+
+  const handleForward = async (targetConversationId: string) => {
+    if (!forwardTarget) return;
+    const source = forwardTarget;
+    setForwardTarget(null);
+    setForwarding(true);
+    try {
+      await forward(source.id, targetConversationId);
+      toast.success('Message forwarded');
+      navigation.navigate('ChatThread', { conversationId: targetConversationId });
+    } catch (error) {
+      toast.fromError(error, 'Could not forward the message.');
+    } finally {
+      setForwarding(false);
+    }
   };
 
   if (!conversation) {
@@ -247,42 +350,7 @@ export function ChatThreadScreen({ route, navigation }: Props) {
   }
 
   return (
-    <Screen edges={[]}>
-      <AppHeader
-        floating
-        title={title}
-        subtitle={subtitle}
-        showBack
-        left={
-          <Pressable onPress={() => navigation.navigate('ConversationInfo', { conversationId })} hitSlop={8}>
-            <Avatar
-              name={title}
-              uri={conversation.type === 'group' ? conversation.avatarUrl : peer?.avatarUrl}
-              size={36}
-              square={conversation.type === 'group'}
-              online={conversation.type === 'dm' ? online : undefined}
-            />
-          </Pressable>
-        }
-        actions={[
-          {
-            icon: 'call-outline',
-            onPress: () => placeCall('audio'),
-            accessibilityLabel: 'Start voice call',
-          },
-          {
-            icon: 'videocam-outline',
-            onPress: () => placeCall('video'),
-            accessibilityLabel: 'Start video call',
-          },
-          {
-            icon: 'information-circle-outline',
-            onPress: () => navigation.navigate('ConversationInfo', { conversationId }),
-            accessibilityLabel: 'Conversation info',
-          },
-        ]}
-      />
-
+    <Screen edges={[]} blurRoot style={{ backgroundColor: isDark ? '#0b0c0f' : '#eceff5' }}>
       {showJoinBanner && activeRoom ? (
         <Pressable
           onPress={() =>
@@ -323,7 +391,17 @@ export function ChatThreadScreen({ route, navigation }: Props) {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
       >
-        <FlatList
+        <View style={styles.flex}>
+          {rows.length === 0 && !loading ? (
+            <View style={styles.emptyOverlay} pointerEvents="none">
+              <EmptyState
+                icon="chatbubble-outline"
+                title="No messages yet"
+                description={`Say hello to ${title}.`}
+              />
+            </View>
+          ) : null}
+          <FlatList
           data={rows}
           inverted
           keyExtractor={(row) => (row.kind === 'message' ? row.message.id : row.id)}
@@ -341,17 +419,7 @@ export function ChatThreadScreen({ route, navigation }: Props) {
           ListFooterComponent={
             loading ? <ActivityIndicator color={colors.brand} style={styles.loader} /> : null
           }
-          ListEmptyComponent={
-            loading ? null : (
-              <View style={styles.emptyWrap}>
-                <EmptyState
-                  icon="chatbubble-outline"
-                  title="No messages yet"
-                  description={`Say hello to ${title}.`}
-                />
-              </View>
-            )
-          }
+          ListEmptyComponent={null}
           renderItem={({ item }) => {
             if (item.kind === 'divider') {
               return (
@@ -368,25 +436,35 @@ export function ChatThreadScreen({ route, navigation }: Props) {
               <MessageBubble
                 message={item.message}
                 mine={mine}
-                showSender={conversation.type === 'group' ? item.showSender : false}
-                onLongPress={() => setActionTarget(item.message)}
+                showSender={item.showSender}
+                showName={conversation.type === 'group' && item.showSender}
+                onPress={() => openMessageActions(item.message)}
+                onLongPress={() => openMessageActions(item.message)}
                 onRetry={() => void retry(conversationId, item.message.id)}
               />
             );
           }}
         />
+        </View>
 
         <TypingIndicator names={typingNames} />
 
         {replyTo || editing ? (
           <View style={[styles.contextBar, { backgroundColor: colors.surfaceAlt, borderTopColor: colors.border }]}>
-            <View style={[styles.contextAccent, { backgroundColor: colors.brand }]} />
+            <View
+              style={[
+                styles.contextAccent,
+                { backgroundColor: editing ? colors.warning : colors.brand },
+              ]}
+            />
             <View style={styles.flex}>
-              <Text style={[styles.contextTitle, { color: colors.brand }]}>
+              <Text style={[styles.contextTitle, { color: editing ? colors.warning : colors.brand }]}>
                 {editing ? 'Editing message' : `Replying to ${replyTo?.senderName}`}
               </Text>
               <Text style={[styles.contextBody, { color: colors.textSubtle }]} numberOfLines={1}>
-                {editing ? editing.body : replyTo?.body || 'Attachment'}
+                {editing
+                  ? editing.body?.trim() || 'Edit the text below, then tap the checkmark'
+                  : replyTo?.body || 'Attachment'}
               </Text>
             </View>
             <Pressable
@@ -396,6 +474,7 @@ export function ChatThreadScreen({ route, navigation }: Props) {
                 setEditing(null);
               }}
               hitSlop={10}
+              accessibilityLabel="Cancel"
             >
               <Ionicons name="close" size={19} color={colors.textSubtle} />
             </Pressable>
@@ -412,19 +491,24 @@ export function ChatThreadScreen({ route, navigation }: Props) {
             },
           ]}
         >
-          <Pressable onPress={() => setAttachSheet(true)} hitSlop={8} style={styles.composerIcon}>
-            <Ionicons name="add-circle-outline" size={25} color={colors.textSubtle} />
-          </Pressable>
+          {!editing ? (
+            <Pressable onPress={() => setAttachSheet(true)} hitSlop={8} style={styles.composerIcon}>
+              <Ionicons name="add-circle-outline" size={25} color={colors.textSubtle} />
+            </Pressable>
+          ) : null}
 
           <TextInput
+            ref={composerRef}
             style={[styles.input, { color: colors.text, backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
-            placeholder="Message"
+            placeholder={editing ? 'Edit message…' : 'Message'}
             placeholderTextColor={colors.textSubtle}
             value={draft}
             onChangeText={(value) => {
               setDraft(value);
-              if (value) emitTyping();
-              else stopTyping();
+              if (!editing) {
+                if (value) emitTyping();
+                else stopTyping();
+              }
             }}
             onBlur={stopTyping}
             multiline
@@ -432,18 +516,59 @@ export function ChatThreadScreen({ route, navigation }: Props) {
 
           <Pressable
             onPress={handleSend}
-            disabled={!draft.trim()}
-            style={[styles.send, { backgroundColor: draft.trim() ? colors.brand : colors.surfaceHover }]}
-            accessibilityLabel="Send message"
+            disabled={editing ? sending : !draft.trim()}
+            style={[
+              styles.send,
+              {
+                backgroundColor:
+                  editing || draft.trim() ? (editing ? colors.warning : colors.brand) : colors.surfaceHover,
+              },
+            ]}
+            accessibilityLabel={editing ? 'Save edit' : 'Send message'}
           >
             <Ionicons
               name={editing ? 'checkmark' : 'arrow-up'}
               size={20}
-              color={draft.trim() ? '#ffffff' : colors.textSubtle}
+              color={editing || draft.trim() ? '#ffffff' : colors.textSubtle}
             />
           </Pressable>
         </View>
       </KeyboardAvoidingView>
+
+      <AppHeader
+        floating
+        title={title}
+        subtitle={subtitle}
+        showBack
+        left={
+          <Pressable onPress={() => navigation.navigate('ConversationInfo', { conversationId })} hitSlop={8}>
+            <Avatar
+              name={title}
+              uri={conversation.type === 'group' ? conversation.avatarUrl : peer?.avatarUrl}
+              size={36}
+              square={conversation.type === 'group'}
+              online={conversation.type === 'dm' ? online : undefined}
+            />
+          </Pressable>
+        }
+        actions={[
+          {
+            icon: 'call-outline',
+            onPress: () => placeCall('audio'),
+            accessibilityLabel: 'Start voice call',
+          },
+          {
+            icon: 'videocam-outline',
+            onPress: () => placeCall('video'),
+            accessibilityLabel: 'Start video call',
+          },
+          {
+            icon: 'information-circle-outline',
+            onPress: () => navigation.navigate('ConversationInfo', { conversationId }),
+            accessibilityLabel: 'Conversation info',
+          },
+        ]}
+      />
 
       <Sheet visible={attachSheet} onClose={() => setAttachSheet(false)} title="Attach">
         <View style={styles.attachGrid}>
@@ -456,43 +581,86 @@ export function ChatThreadScreen({ route, navigation }: Props) {
       <Sheet
         visible={Boolean(actionTarget)}
         onClose={() => setActionTarget(null)}
-        title="Message"
-        subtitle={actionTarget?.body || 'Attachment'}
+        title="Message options"
+        subtitle={
+          actionTarget?.body?.trim()
+            ? actionTarget.body
+            : actionTarget?.attachments[0]?.name || 'Attachment'
+        }
       >
         <View style={styles.actionList}>
           <ActionRow
             icon="arrow-undo-outline"
             label="Reply"
+            subtitle="Respond in this chat"
             onPress={() => {
-              setReplyTo(actionTarget);
-              setActionTarget(null);
+              const target = actionTarget;
+              afterActionSheetClose(() => {
+                if (!target) return;
+                setEditing(null);
+                setReplyTo(target);
+                composerRef.current?.focus();
+              });
             }}
           />
-          {actionTarget?.senderId === user?.id ? (
+          <ActionRow
+            icon="arrow-redo-outline"
+            label="Forward"
+            subtitle={forwarding ? 'Forwarding…' : 'Send to another chat'}
+            onPress={() => {
+              const target = actionTarget;
+              afterActionSheetClose(() => {
+                if (target) setForwardTarget(target);
+              });
+            }}
+          />
+          {canModerateMessage(actionTarget) ? (
             <>
               <ActionRow
                 icon="create-outline"
                 label="Edit"
+                subtitle="Change the text, then tap the checkmark"
                 onPress={() => {
-                  setEditing(actionTarget);
-                  setDraft(actionTarget?.body ?? '');
-                  setActionTarget(null);
+                  const target = actionTarget;
+                  afterActionSheetClose(() => {
+                    if (target) beginEdit(target);
+                  });
                 }}
               />
               <ActionRow
                 icon="trash-outline"
                 label="Delete"
+                subtitle="Remove for everyone"
                 destructive
                 onPress={() => {
                   const target = actionTarget;
-                  setActionTarget(null);
-                  if (target) confirmDelete(target);
+                  afterActionSheetClose(() => {
+                    if (target) confirmDelete(target);
+                  });
                 }}
               />
             </>
+          ) : actionTarget && !isOwnMessage(actionTarget) ? (
+            <Text style={[styles.actionHint, { color: colors.textSubtle }]}>
+              Only the sender can edit or delete this message.
+            </Text>
           ) : null}
         </View>
       </Sheet>
+
+      <OptionSheet
+        visible={Boolean(forwardTarget)}
+        onClose={() => setForwardTarget(null)}
+        title="Forward to…"
+        subtitle={
+          forwardTarget?.body?.trim()
+            ? forwardTarget.body
+            : forwardTarget?.attachments[0]?.name || 'Attachment'
+        }
+        options={forwardOptions}
+        onSelect={(id) => void handleForward(id)}
+        emptyLabel="No other conversations yet. Start a chat first."
+      />
     </Screen>
   );
 }
@@ -527,16 +695,20 @@ function AttachTile({
 function ActionRow({
   icon,
   label,
+  subtitle,
   onPress,
   destructive = false,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
+  subtitle?: string;
   onPress: () => void;
   destructive?: boolean;
 }) {
   const colors = useColors();
   const tint = destructive ? colors.danger : colors.text;
+  const iconBg = destructive ? colors.dangerSoft : colors.brandSoft;
+  const iconTint = destructive ? colors.danger : colors.brand;
   return (
     <Pressable
       onPress={onPress}
@@ -546,8 +718,16 @@ function ActionRow({
         pressed && { opacity: 0.8 },
       ]}
     >
-      <Ionicons name={icon} size={19} color={tint} />
-      <Text style={[styles.actionLabel, { color: tint }]}>{label}</Text>
+      <View style={[styles.actionIcon, { backgroundColor: iconBg }]}>
+        <Ionicons name={icon} size={18} color={iconTint} />
+      </View>
+      <View style={styles.actionText}>
+        <Text style={[styles.actionLabel, { color: tint }]}>{label}</Text>
+        {subtitle ? (
+          <Text style={[styles.actionSubtitle, { color: colors.textSubtle }]}>{subtitle}</Text>
+        ) : null}
+      </View>
+      <Ionicons name="chevron-forward" size={16} color={colors.textSubtle} />
     </Pressable>
   );
 }
@@ -558,9 +738,11 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     flexGrow: 1,
   },
-  emptyWrap: {
-    flex: 1,
-    transform: [{ scaleY: -1 }],
+  emptyOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1,
   },
   loader: {
     marginVertical: 16,
@@ -681,18 +863,40 @@ const styles = StyleSheet.create({
   },
   actionList: {
     gap: 8,
+    paddingBottom: 4,
   },
   actionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
     borderRadius: radius.md,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  actionIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionText: {
+    flex: 1,
+    gap: 2,
   },
   actionLabel: {
     fontSize: 15,
     fontWeight: '600',
+  },
+  actionSubtitle: {
+    fontSize: 12,
+  },
+  actionHint: {
+    fontSize: 13,
+    lineHeight: 18,
+    paddingHorizontal: 4,
+    paddingVertical: 8,
+    textAlign: 'center',
   },
 });

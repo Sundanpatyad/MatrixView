@@ -4,6 +4,7 @@ export { Badge } from './Badge';
 export { Button, type ButtonSize, type ButtonVariant } from './Button';
 export { Card } from './Card';
 export { EmptyState } from './EmptyState';
+export { BlurTargetRoot, useBlurTargetReady, useBlurTargetRef } from './BlurTargetContext';
 export { GlassSurface } from './GlassSurface';
 export { Input } from './Input';
 export { ListRow } from './ListRow';

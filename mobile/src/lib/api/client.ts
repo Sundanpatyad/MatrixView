@@ -65,33 +65,47 @@ function errorFromPayload(payload: unknown, status: number): ApiError {
   return new ApiError(`Request failed with status ${status}`, status);
 }
 
+function isFormDataBody(body: unknown): body is FormData {
+  if (!body || typeof body !== 'object') return false;
+  // `instanceof` can fail across RN realms; duck-type as a fallback.
+  if (typeof FormData !== 'undefined' && body instanceof FormData) return true;
+  return (
+    (body as { constructor?: { name?: string } }).constructor?.name === 'FormData' &&
+    typeof (body as FormData).append === 'function'
+  );
+}
+
 async function performRequest(path: string, options: ApiRequestOptions, token: string | null): Promise<Response> {
   const { method = 'GET', body, headers = {}, signal, timeoutMs = DEFAULT_TIMEOUT_MS } = options;
-  const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
+  const formData = isFormDataBody(body);
 
   const finalHeaders: Record<string, string> = { Accept: 'application/json', ...headers };
-  if (body !== undefined && !isFormData) {
+  // Never set Content-Type for FormData — fetch must add the multipart boundary.
+  if (body !== undefined && !formData) {
     finalHeaders['Content-Type'] = 'application/json';
   }
   if (token) {
     finalHeaders.Authorization = `Bearer ${token}`;
   }
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-  const onExternalAbort = () => controller.abort();
-  signal?.addEventListener('abort', onExternalAbort);
+  // AbortController + multipart file uploads is flaky on React Native (iOS/Android):
+  // the native layer often surfaces a generic "Network request failed" instead of
+  // completing the upload. Skip abort wiring for FormData and rely on OS timeouts.
+  const controller = formData ? null : new AbortController();
+  const timeout = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+  const onExternalAbort = () => controller?.abort();
+  if (controller) signal?.addEventListener('abort', onExternalAbort);
 
   try {
     return await fetch(`${API_BASE}${path}`, {
       method,
       headers: finalHeaders,
-      body: body === undefined ? undefined : isFormData ? (body as FormData) : JSON.stringify(body),
-      signal: controller.signal,
+      body: body === undefined ? undefined : formData ? (body as FormData) : JSON.stringify(body),
+      signal: controller?.signal ?? signal,
     });
   } finally {
-    clearTimeout(timeout);
-    signal?.removeEventListener('abort', onExternalAbort);
+    if (timeout) clearTimeout(timeout);
+    if (controller) signal?.removeEventListener('abort', onExternalAbort);
   }
 }
 
@@ -105,7 +119,11 @@ export async function apiFetch<T>(path: string, options: ApiRequestOptions = {})
     if (error instanceof Error && error.name === 'AbortError') {
       throw new ApiError('The request timed out. Check your connection and try again.', 0, 'TIMEOUT');
     }
-    throw new ApiError('Cannot reach the server. Check your connection and try again.', 0, 'NETWORK_ERROR');
+    const detail =
+      error instanceof Error && error.message && error.message !== 'Network request failed'
+        ? error.message
+        : 'Cannot reach the server. Check your connection and try again.';
+    throw new ApiError(detail, 0, 'NETWORK_ERROR');
   }
 
   if (response.status === 401 && auth && !skipRefresh) {

@@ -1,3 +1,4 @@
+import { appendUploadFile } from '../pickers';
 import { apiFetch } from './client';
 import type { ChatConversation, ChatMember, ChatMessage, PickedFile } from './types';
 
@@ -33,13 +34,14 @@ export function updateGroup(conversationId: string, name: string) {
   });
 }
 
-export function uploadGroupAvatar(conversationId: string, file: PickedFile) {
+export async function uploadGroupAvatar(conversationId: string, file: PickedFile) {
   const form = new FormData();
-  form.append('avatar', { uri: file.uri, name: file.name, type: file.mimeType } as unknown as Blob);
+  await appendUploadFile(form, 'avatar', file);
   return apiFetch<{ conversation: ChatConversation }>(`/api/chat/conversations/${conversationId}/avatar`, {
     method: 'POST',
     body: form,
     auth: true,
+    timeoutMs: 120000,
   });
 }
 
@@ -73,21 +75,22 @@ export function listMessages(
   );
 }
 
-export function sendMessage(
+export async function sendMessage(
   conversationId: string,
   input: { body: string; replyToId?: string; files?: PickedFile[] },
 ) {
   const form = new FormData();
-  form.append('body', input.body);
+  form.append('body', input.body ?? '');
   if (input.replyToId) form.append('replyToId', input.replyToId);
-  (input.files ?? []).forEach((file) => {
-    form.append('files', { uri: file.uri, name: file.name, type: file.mimeType } as unknown as Blob);
-  });
+  for (const file of input.files ?? []) {
+    await appendUploadFile(form, 'files', file);
+  }
   return apiFetch<{ message: ChatMessage }>(`/api/chat/conversations/${conversationId}/messages`, {
     method: 'POST',
     body: form,
     auth: true,
-    timeoutMs: 90000,
+    // Videos can take a while on a LAN / cellular uplink.
+    timeoutMs: 180000,
   });
 }
 

@@ -145,6 +145,7 @@ export function NewGroupScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   top: {
     paddingHorizontal: 16,
+    paddingTop: 16,
     gap: 12,
     paddingBottom: 10,
   },

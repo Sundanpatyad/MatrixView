@@ -35,7 +35,7 @@ export function SegmentedControl<T extends string>({
           scrollable ? styles.itemScroll : styles.itemFlex,
           {
             backgroundColor: active ? colors.surface : 'transparent',
-            borderColor: active ? colors.border : 'transparent',
+            borderColor: active ? colors.borderStrong : 'transparent',
           },
           pressed && { opacity: 0.75 },
         ]}
@@ -47,8 +47,8 @@ export function SegmentedControl<T extends string>({
           {option.label}
         </Text>
         {option.count !== undefined && option.count > 0 ? (
-          <View style={[styles.count, { backgroundColor: active ? colors.brandSoft : colors.surfaceHover }]}>
-            <Text style={[styles.countText, { color: active ? colors.brand : colors.textSubtle }]}>
+          <View style={[styles.count, { backgroundColor: active ? colors.brandSoft : colors.track }]}>
+            <Text style={[styles.countText, { color: active ? colors.brand : colors.textMuted }]}>
               {option.count}
             </Text>
           </View>
@@ -76,8 +76,8 @@ const styles = StyleSheet.create({
   track: {
     flexDirection: 'row',
     borderRadius: radius.md,
-    padding: 3,
-    gap: 3,
+    padding: 2,
+    gap: 2,
   },
   trackScroll: {
     alignItems: 'center',
@@ -86,24 +86,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    height: 34,
-    borderRadius: radius.sm + 1,
-    borderWidth: 1,
+    gap: 5,
+    height: 28,
+    borderRadius: radius.sm,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   itemFlex: {
     flex: 1,
-    paddingHorizontal: 8,
+    paddingHorizontal: 6,
   },
   itemScroll: {
-    paddingHorizontal: 14,
+    paddingHorizontal: 10,
   },
   label: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
   },
   count: {
-    minWidth: 18,
+    minWidth: 16,
     paddingHorizontal: 5,
     paddingVertical: 1,
     borderRadius: radius.pill,

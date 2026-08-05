@@ -7,8 +7,6 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import {
   AppHeader,
   Avatar,
-  Badge,
-  Card,
   ListRow,
   Screen,
   useGlassScreenPadding,
@@ -16,10 +14,9 @@ import {
 import { useAuth } from '@/context/AuthContext';
 import { useChat } from '@/context/ChatContext';
 import { useToast } from '@/context/ToastContext';
-import { useWorkspace } from '@/context/WorkspaceContext';
 import { pickImages } from '@/lib/pickers';
 import type { RootStackParamList } from '@/navigation/types';
-import { radius, useColors, useTheme } from '@/theme';
+import { useColors, useTheme } from '@/theme';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -28,16 +25,12 @@ export function ProfileScreen() {
   const colors = useColors();
   const { isDark, toggle } = useTheme();
   const toast = useToast();
-  const { user, isAdmin, logout, logoutEverywhere, uploadAvatar } = useAuth();
-  const { projects, tasks } = useWorkspace();
-  const { connected, conversations } = useChat();
+  const { user, logout, logoutEverywhere, uploadAvatar } = useAuth();
+  const { connected } = useChat();
   const pad = useGlassScreenPadding();
 
   const [uploading, setUploading] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
-
-  const myTasks = tasks.filter((task) => task.assigneeId === user?.id || task.assigneeName === user?.name);
-  const openTasks = myTasks.filter((task) => task.status !== 'done').length;
 
   const changeAvatar = async () => {
     try {
@@ -87,59 +80,46 @@ export function ProfileScreen() {
 
   return (
     <Screen edges={[]}>
-      <AppHeader
-        floating
-        title="Profile"
-        actions={[
-          { icon: 'settings-outline', onPress: () => navigation.navigate('Settings'), accessibilityLabel: 'Settings' },
-        ]}
-      />
-
+      {/* BlurView must mount after scroll content so Android can sample it. */}
       <ScrollView
         contentContainerStyle={[
           styles.scroll,
-          { paddingTop: pad.top + 8, paddingBottom: pad.bottom + 32 },
+          { paddingTop: pad.top + 12, paddingBottom: pad.bottom + 40 },
         ]}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.hero}>
-          <Pressable onPress={changeAvatar} disabled={uploading}>
-            <Avatar name={user?.name} uri={user?.avatarUrl} size={92} online={connected} />
+        <Pressable style={styles.hero} onPress={changeAvatar} disabled={uploading}>
+          <View>
+            <Avatar name={user?.name} uri={user?.avatarUrl} size={96} online={connected} />
             <View style={[styles.cameraBadge, { backgroundColor: colors.brand, borderColor: colors.bg }]}>
               <Ionicons name={uploading ? 'hourglass-outline' : 'camera'} size={14} color="#ffffff" />
             </View>
-          </Pressable>
+          </View>
 
           <Text style={[styles.name, { color: colors.text }]}>{user?.name}</Text>
-          <Text style={[styles.email, { color: colors.textSubtle }]}>{user?.email}</Text>
+          <Text style={[styles.meta, { color: colors.textSubtle }]}>{user?.email}</Text>
+          {user?.orgName ? (
+            <Text style={[styles.org, { color: colors.textMuted }]}>
+              {user.orgName}
+              {user.role ? ` · ${user.role}` : ''}
+            </Text>
+          ) : null}
+        </Pressable>
 
-          <View style={styles.badges}>
-            <Badge label={user?.role ?? 'Member'} color={isAdmin ? colors.brand : colors.textSubtle} />
-            <Badge label={user?.orgName ?? 'Workspace'} color={colors.info} />
-            <Badge
-              label={connected ? 'Realtime on' : 'Offline'}
-              color={connected ? colors.success : colors.textSubtle}
-              dot
-            />
-          </View>
-        </View>
-
-        <View style={styles.statsRow}>
-          <Stat label="Projects" value={projects.length} />
-          <Stat label="Open tasks" value={openTasks} />
-          <Stat label="Chats" value={conversations.length} />
-        </View>
-
-        <Card padded={false} style={styles.card}>
+        <Section>
           <ListRow
             icon="person-outline"
+            iconBackground={colors.brandSoft}
+            iconColor={colors.brand}
             title="Edit profile"
-            subtitle="Name, phone number and photo"
+            subtitle="Name, phone and photo"
             onPress={() => navigation.navigate('EditProfile')}
           />
           <Separator />
           <ListRow
-            icon={isDark ? 'moon-outline' : 'sunny-outline'}
+            icon={isDark ? 'moon' : 'sunny'}
+            iconBackground={colors.warningSoft}
+            iconColor={colors.warning}
             title="Appearance"
             value={isDark ? 'Dark' : 'Light'}
             onPress={toggle}
@@ -148,66 +128,75 @@ export function ProfileScreen() {
           <Separator />
           <ListRow
             icon="settings-outline"
+            iconBackground={colors.infoSoft}
+            iconColor={colors.info}
             title="Settings"
             subtitle="Theme, connection and app info"
             onPress={() => navigation.navigate('Settings')}
           />
-        </Card>
+        </Section>
 
-        <Card padded={false} style={styles.card}>
+        <Section>
           <ListRow
             icon="log-out-outline"
             title={signingOut ? 'Signing out…' : 'Sign out'}
-            subtitle="End this session on this device"
             destructive
             onPress={signingOut ? undefined : confirmLogout}
             showChevron={false}
           />
           <Separator />
           <ListRow
-            icon="shield-outline"
+            icon="phone-portrait-outline"
             title="Sign out everywhere"
-            subtitle="Revoke every device, including desktop"
+            subtitle="End sessions on all devices"
             destructive
             onPress={signingOut ? undefined : confirmLogoutAll}
             showChevron={false}
           />
-        </Card>
+        </Section>
 
-        <Text style={[styles.version, { color: colors.textSubtle }]}>DockX Mobile · v1.0.0</Text>
+        <Text style={[styles.version, { color: colors.textSubtle }]}>DockX · v1.0.0</Text>
       </ScrollView>
+
+      <AppHeader
+        floating
+        title="Profile"
+        actions={[
+          { icon: 'settings-outline', onPress: () => navigation.navigate('Settings'), accessibilityLabel: 'Settings' },
+        ]}
+      />
     </Screen>
   );
 }
 
-function Stat({ label, value }: { label: string; value: number }) {
+function Section({ children }: { children: React.ReactNode }) {
   const colors = useColors();
   return (
-    <View style={[styles.stat, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-      <Text style={[styles.statValue, { color: colors.text }]}>{value}</Text>
-      <Text style={[styles.statLabel, { color: colors.textSubtle }]}>{label}</Text>
+    <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      {children}
     </View>
   );
 }
 
 function Separator() {
   const colors = useColors();
-  return <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginLeft: 60 }} />;
+  return <View style={[styles.separator, { backgroundColor: colors.border }]} />;
 }
 
 const styles = StyleSheet.create({
   scroll: {
     paddingHorizontal: 16,
-    gap: 16,
+    gap: 12,
   },
   hero: {
     alignItems: 'center',
-    paddingVertical: 8,
+    paddingTop: 8,
+    paddingBottom: 20,
   },
   cameraBadge: {
     position: 'absolute',
-    right: -2,
-    bottom: -2,
+    right: 0,
+    bottom: 0,
     width: 30,
     height: 30,
     borderRadius: 15,
@@ -217,46 +206,30 @@ const styles = StyleSheet.create({
   },
   name: {
     fontSize: 22,
-    fontWeight: '700',
-    marginTop: 14,
-    letterSpacing: -0.3,
+    fontWeight: '600',
+    marginTop: 16,
+    letterSpacing: 0.15,
   },
-  email: {
-    fontSize: 13.5,
-    marginTop: 3,
+  meta: {
+    fontSize: 14,
+    marginTop: 4,
   },
-  badges: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: 7,
-    marginTop: 12,
+  org: {
+    fontSize: 13,
+    marginTop: 6,
   },
-  statsRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  stat: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 14,
-    borderRadius: radius.md,
-    borderWidth: 1,
-  },
-  statValue: {
-    fontSize: 21,
-    fontWeight: '700',
-  },
-  statLabel: {
-    fontSize: 11.5,
-    marginTop: 3,
-  },
-  card: {
+  section: {
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
   },
+  separator: {
+    height: StyleSheet.hairlineWidth,
+    marginLeft: 66,
+  },
   version: {
-    fontSize: 11.5,
+    fontSize: 12,
     textAlign: 'center',
-    marginTop: 4,
+    marginTop: 8,
   },
 });

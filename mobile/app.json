@@ -23,7 +23,8 @@
         "NSPhotoLibraryUsageDescription": "DockX needs photo library access so you can share images in chats and attach them to tasks.",
         "NSMicrophoneUsageDescription": "DockX uses the microphone to record voice notes.",
         "NSAppTransportSecurity": {
-          "NSAllowsLocalNetworking": true
+          "NSAllowsLocalNetworking": true,
+          "NSAllowsArbitraryLoads": true
         }
       }
     },
@@ -39,6 +40,9 @@
       "permissions": [
         "CAMERA",
         "READ_EXTERNAL_STORAGE",
+        "READ_MEDIA_IMAGES",
+        "READ_MEDIA_VIDEO",
+        "READ_MEDIA_AUDIO",
         "RECORD_AUDIO",
         "MODIFY_AUDIO_SETTINGS",
         "ACCESS_NETWORK_STATE",

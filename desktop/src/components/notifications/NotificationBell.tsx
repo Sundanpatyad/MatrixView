@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { IconBell, IconCheck } from '@/components/ui/Icons';
 import { cn } from '@/lib/cn';
 import type { AppNotification, NotificationType } from '@/lib/api/notifications';
+import { MessagePreviewLabel } from '@/lib/messagePreview';
 import { useNotifications } from '@/lib/notifications/NotificationContext';
 
 function formatRelative(iso: string) {
@@ -99,7 +100,9 @@ export function NotificationRow({
           </span>
         </span>
         {item.body ? (
-          <span className="mt-0.5 line-clamp-2 text-[12px] text-ink-400">{item.body}</span>
+          <span className="mt-0.5 block text-[12px] text-ink-400">
+            <MessagePreviewLabel text={item.body} />
+          </span>
         ) : null}
       </span>
       {unread ? (

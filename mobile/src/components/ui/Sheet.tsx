@@ -1,7 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
+  Animated,
+  Easing,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -16,7 +18,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { radius, useTheme } from '@/theme';
 
-import { GLASS_BLUR_SUPPORTED } from './GlassSurface';
+const BACKDROP_MS = 200;
+const SHEET_MS = 280;
 
 interface SheetProps {
   visible: boolean;
@@ -49,6 +52,61 @@ export function Sheet({
   const maxHeight = Math.round(windowHeight * maxHeightRatio);
   const bottomPad = Math.max(insets.bottom, 12);
 
+  // Keep the Modal mounted through the exit animation so fade/slide can finish.
+  const [mounted, setMounted] = useState(false);
+  const wasVisible = useRef(false);
+  const backdropOpacity = useRef(new Animated.Value(0)).current;
+  const sheetTranslateY = useRef(new Animated.Value(windowHeight)).current;
+
+  useEffect(() => {
+    if (visible) {
+      wasVisible.current = true;
+      setMounted(true);
+      backdropOpacity.setValue(0);
+      sheetTranslateY.setValue(windowHeight);
+
+      const frame = requestAnimationFrame(() => {
+        Animated.parallel([
+          Animated.timing(backdropOpacity, {
+            toValue: 1,
+            duration: BACKDROP_MS,
+            easing: Easing.out(Easing.quad),
+            useNativeDriver: true,
+          }),
+          Animated.timing(sheetTranslateY, {
+            toValue: 0,
+            duration: SHEET_MS,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: true,
+          }),
+        ]).start();
+      });
+
+      return () => cancelAnimationFrame(frame);
+    }
+
+    if (!wasVisible.current) return;
+
+    Animated.parallel([
+      Animated.timing(backdropOpacity, {
+        toValue: 0,
+        duration: BACKDROP_MS,
+        easing: Easing.in(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.timing(sheetTranslateY, {
+        toValue: windowHeight,
+        duration: SHEET_MS,
+        easing: Easing.in(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start(({ finished }) => {
+      if (!finished) return;
+      wasVisible.current = false;
+      setMounted(false);
+    });
+  }, [visible, windowHeight, backdropOpacity, sheetTranslateY]);
+
   const body = scrollable ? (
     <ScrollView
       keyboardShouldPersistTaps="handled"
@@ -65,26 +123,30 @@ export function Sheet({
   );
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose} statusBarTranslucent>
-      <View style={styles.root}>
-        {GLASS_BLUR_SUPPORTED ? (
-          <BlurView intensity={28} tint={isDark ? 'dark' : 'light'} style={styles.fill} />
-        ) : null}
-        {/* Doubles as the scrim, and carries the whole effect where blur cannot. */}
-        <Pressable
-          style={[
-            styles.fill,
-            { backgroundColor: GLASS_BLUR_SUPPORTED ? colors.overlay : colors.overlayStrong },
-          ]}
-          onPress={onClose}
-          accessibilityLabel="Dismiss"
-        />
+    <Modal visible={mounted} animationType="none" transparent onRequestClose={onClose} statusBarTranslucent>
+      <View style={styles.root} pointerEvents="box-none">
+        {/* Backdrop fades in place — never rides the sheet's slide. */}
+        <Animated.View style={[styles.fill, { opacity: backdropOpacity }]} pointerEvents="none">
+          {/* Modal windows cannot sample a BlurTargetView outside them on Android. */}
+          {Platform.OS === 'ios' ? (
+            <BlurView intensity={28} tint={isDark ? 'dark' : 'light'} style={styles.fill} />
+          ) : null}
+          <View
+            style={[
+              styles.fill,
+              { backgroundColor: Platform.OS === 'ios' ? colors.overlay : colors.overlayStrong },
+            ]}
+          />
+        </Animated.View>
+
+        <Pressable style={styles.fill} onPress={onClose} accessibilityLabel="Dismiss" />
 
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           pointerEvents="box-none"
+          style={styles.sheetHost}
         >
-          <View
+          <Animated.View
             style={[
               styles.sheet,
               {
@@ -92,6 +154,7 @@ export function Sheet({
                 borderTopColor: colors.glassBorder,
                 paddingBottom: bottomPad,
                 maxHeight,
+                transform: [{ translateY: sheetTranslateY }],
               },
             ]}
           >
@@ -125,7 +188,7 @@ export function Sheet({
             ) : null}
 
             {body}
-          </View>
+          </Animated.View>
         </KeyboardAvoidingView>
       </View>
     </Modal>
@@ -143,6 +206,9 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
+  },
+  sheetHost: {
+    justifyContent: 'flex-end',
   },
   scroll: {
     flexShrink: 1,

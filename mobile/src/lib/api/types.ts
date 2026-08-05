@@ -199,6 +199,8 @@ export interface ChatMessage {
   status?: 'sent' | 'delivered' | 'read';
   localState?: 'sending' | 'failed' | null;
   receipts?: Array<{ userId: string; deliveredAt: string | null; readAt: string | null }>;
+  forwarded?: boolean;
+  forwardedFrom?: string | null;
   editedAt: string | null;
   deletedAt: string | null;
   createdAt: string;
@@ -220,6 +222,7 @@ export interface AppNotification {
   href: string;
   actorId: string | null;
   actorName: string;
+  actorAvatarUrl?: string | null;
   projectId: string | null;
   taskId: string | null;
   conversationId: string | null;

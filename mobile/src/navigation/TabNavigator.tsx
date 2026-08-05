@@ -26,7 +26,7 @@ const ICONS: Record<keyof TabParamList, { active: keyof typeof Ionicons.glyphMap
   Board: { active: 'grid', inactive: 'grid-outline' },
   Chat: { active: 'chatbubbles', inactive: 'chatbubbles-outline' },
   Alerts: { active: 'notifications', inactive: 'notifications-outline' },
-  Profile: { active: 'person-circle', inactive: 'person-circle-outline' },
+  Profile: { active: 'person', inactive: 'person-outline' },
 };
 
 export function TabNavigator() {
@@ -43,7 +43,6 @@ export function TabNavigator() {
         headerShown: false,
         tabBarActiveTintColor: colors.brand,
         tabBarInactiveTintColor: colors.textSubtle,
-        // Floating over the content is what makes the blur read as glass.
         tabBarBackground: () => <GlassSurface edge="top" style={StyleSheet.absoluteFill} />,
         tabBarStyle: {
           position: 'absolute',

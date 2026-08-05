@@ -5,7 +5,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Avatar } from '@/components/ui';
 import { formatShortDate, isOverdue, titleCase } from '@/lib/format';
 import type { BoardTask } from '@/lib/api';
-import { priorityColor, radius, taskTypeColor, useColors } from '@/theme';
+import { priorityColor, radius, taskTypeColor, useColors, useTheme } from '@/theme';
 
 const TYPE_ICON: Record<string, keyof typeof Ionicons.glyphMap> = {
   task: 'checkbox-outline',
@@ -14,15 +14,26 @@ const TYPE_ICON: Record<string, keyof typeof Ionicons.glyphMap> = {
   time: 'time-outline',
 };
 
+function softFill(hex: string, isDark: boolean): string {
+  const value = hex.replace('#', '');
+  const full = value.length === 3 ? value.split('').map((c) => c + c).join('') : value;
+  const r = parseInt(full.slice(0, 2), 16);
+  const g = parseInt(full.slice(2, 4), 16);
+  const b = parseInt(full.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${isDark ? 0.22 : 0.12})`;
+}
+
 interface TaskCardProps {
   task: BoardTask;
   onPress: () => void;
+  onMove?: () => void;
   projectName?: string;
   compact?: boolean;
 }
 
-export function TaskCard({ task, onPress, projectName, compact = false }: TaskCardProps) {
+export function TaskCard({ task, onPress, onMove, projectName, compact = false }: TaskCardProps) {
   const colors = useColors();
+  const { isDark } = useTheme();
   const typeColor = taskTypeColor[task.type] ?? colors.brand;
   const overdue = isOverdue(task.dueDate) && task.status !== 'done';
 
@@ -36,8 +47,8 @@ export function TaskCard({ task, onPress, projectName, compact = false }: TaskCa
       ]}
     >
       <View style={styles.topRow}>
-        <View style={[styles.typeChip, { backgroundColor: `${typeColor}22` }]}>
-          <Ionicons name={TYPE_ICON[task.type] ?? 'ellipse-outline'} size={12} color={typeColor} />
+        <View style={[styles.typeChip, { backgroundColor: softFill(typeColor, isDark) }]}>
+          <Ionicons name={TYPE_ICON[task.type] ?? 'ellipse-outline'} size={10} color={typeColor} />
           <Text style={[styles.key, { color: typeColor }]}>{task.key}</Text>
         </View>
 
@@ -54,7 +65,16 @@ export function TaskCard({ task, onPress, projectName, compact = false }: TaskCa
       {!compact && task.labels.length > 0 ? (
         <View style={styles.labels}>
           {task.labels.slice(0, 3).map((label) => (
-            <View key={label} style={[styles.label, { backgroundColor: colors.surfaceAlt }]}>
+            <View
+              key={label}
+              style={[
+                styles.label,
+                {
+                  backgroundColor: isDark ? colors.surfaceAlt : colors.surfaceSunken,
+                  borderColor: colors.border,
+                },
+              ]}
+            >
               <Text style={[styles.labelText, { color: colors.textMuted }]}>{label}</Text>
             </View>
           ))}
@@ -63,10 +83,10 @@ export function TaskCard({ task, onPress, projectName, compact = false }: TaskCa
 
       <View style={styles.footer}>
         {task.assigneeName ? (
-          <Avatar name={task.assigneeName} size={22} />
+          <Avatar name={task.assigneeName} size={20} />
         ) : (
           <View style={[styles.unassigned, { borderColor: colors.borderStrong }]}>
-            <Ionicons name="person-outline" size={11} color={colors.textSubtle} />
+            <Ionicons name="person-outline" size={10} color={colors.textSubtle} />
           </View>
         )}
 
@@ -84,25 +104,36 @@ export function TaskCard({ task, onPress, projectName, compact = false }: TaskCa
 
         {task.comments.length > 0 ? (
           <View style={styles.metaGroup}>
-            <Ionicons name="chatbubble-outline" size={12} color={colors.textSubtle} />
+            <Ionicons name="chatbubble-outline" size={11} color={colors.textSubtle} />
             <Text style={[styles.meta, { color: colors.textSubtle }]}>{task.comments.length}</Text>
           </View>
         ) : null}
 
         {task.attachments.length > 0 ? (
           <View style={styles.metaGroup}>
-            <Ionicons name="attach-outline" size={13} color={colors.textSubtle} />
+            <Ionicons name="attach-outline" size={12} color={colors.textSubtle} />
             <Text style={[styles.meta, { color: colors.textSubtle }]}>{task.attachments.length}</Text>
           </View>
         ) : null}
 
         {task.dueDate ? (
           <View style={styles.metaGroup}>
-            <Ionicons name="calendar-outline" size={12} color={overdue ? colors.danger : colors.textSubtle} />
+            <Ionicons name="calendar-outline" size={11} color={overdue ? colors.danger : colors.textSubtle} />
             <Text style={[styles.meta, { color: overdue ? colors.danger : colors.textSubtle }]}>
               {formatShortDate(task.dueDate)}
             </Text>
           </View>
+        ) : null}
+
+        {onMove ? (
+          <Pressable
+            onPress={onMove}
+            hitSlop={8}
+            style={[styles.moveButton, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
+            accessibilityLabel={`Move ${task.key}`}
+          >
+            <Ionicons name="swap-horizontal" size={13} color={colors.textMuted} />
+          </Pressable>
         ) : null}
       </View>
     </Pressable>
@@ -112,82 +143,96 @@ export function TaskCard({ task, onPress, projectName, compact = false }: TaskCa
 const styles = StyleSheet.create({
   card: {
     borderRadius: radius.md,
-    borderWidth: 1,
-    padding: 12,
-    gap: 9,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 11,
+    gap: 8,
   },
   topRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 5,
   },
   typeChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: radius.sm - 2,
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 5,
   },
   key: {
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0.3,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.2,
   },
-  spacer: { flex: 1 },
+  spacer: { flex: 1, minWidth: 4 },
   priorityDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
   priorityText: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '600',
   },
   title: {
-    fontSize: 14.5,
+    fontSize: 14,
     fontWeight: '600',
-    lineHeight: 20,
+    lineHeight: 19,
   },
   labels: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 5,
+    gap: 4,
   },
   label: {
-    paddingHorizontal: 7,
-    paddingVertical: 2,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
     borderRadius: radius.pill,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   labelText: {
-    fontSize: 10.5,
+    fontSize: 10,
     fontWeight: '600',
   },
   footer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 7,
+    gap: 6,
+    marginTop: 1,
   },
   unassigned: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     borderWidth: 1,
     borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'center',
   },
   assignee: {
-    fontSize: 11.5,
-    maxWidth: 110,
+    fontSize: 11,
+    flexShrink: 1,
+    maxWidth: 96,
   },
   metaGroup: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
+    flexShrink: 0,
   },
   meta: {
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: '500',
+  },
+  moveButton: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 2,
+    flexShrink: 0,
   },
 });

@@ -1,4 +1,5 @@
 import { DEVICE_ID, DEVICE_TYPE } from '../config';
+import { appendUploadFile } from '../pickers';
 import { apiFetch } from './client';
 import type { AuthResponse, AuthUser, InvitePreview, PickedFile } from './types';
 
@@ -64,12 +65,13 @@ export function fetchInviteRequest(token: string) {
   return apiFetch<{ invite: InvitePreview }>(`/api/auth/invites/${encodeURIComponent(token)}`);
 }
 
-export function uploadAvatarRequest(file: PickedFile) {
+export async function uploadAvatarRequest(file: PickedFile) {
   const form = new FormData();
-  form.append('avatar', {
-    uri: file.uri,
-    name: file.name,
-    type: file.mimeType,
-  } as unknown as Blob);
-  return apiFetch<{ user: AuthUser }>('/api/auth/me/avatar', { method: 'POST', body: form, auth: true });
+  await appendUploadFile(form, 'avatar', file);
+  return apiFetch<{ user: AuthUser }>('/api/auth/me/avatar', {
+    method: 'POST',
+    body: form,
+    auth: true,
+    timeoutMs: 120000,
+  });
 }

@@ -16,6 +16,7 @@ export type AppNotification = {
   href: string;
   actorId: string | null;
   actorName: string;
+  actorAvatarUrl?: string | null;
   projectId: string | null;
   taskId: string | null;
   conversationId: string | null;

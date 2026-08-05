@@ -1,3 +1,4 @@
+import { appendUploadFile } from '../pickers';
 import { apiFetch } from './client';
 import type {
   BoardTask,
@@ -17,14 +18,10 @@ export interface WorkspaceSnapshot {
   teams: ProjectTeam[];
 }
 
-function appendFiles(form: FormData, files: PickedFile[]) {
-  files.forEach((file) => {
-    form.append('files', {
-      uri: file.uri,
-      name: file.name,
-      type: file.mimeType,
-    } as unknown as Blob);
-  });
+async function appendFiles(form: FormData, files: PickedFile[]) {
+  for (const file of files) {
+    await appendUploadFile(form, 'files', file);
+  }
 }
 
 export function fetchWorkspace() {
@@ -43,13 +40,14 @@ export function deleteProjectRequest(projectId: string) {
   return apiFetch<{ ok: true; projectId: string }>(`/api/projects/${projectId}`, { method: 'DELETE', auth: true });
 }
 
-export function uploadProjectAvatarRequest(projectId: string, file: PickedFile) {
+export async function uploadProjectAvatarRequest(projectId: string, file: PickedFile) {
   const form = new FormData();
-  form.append('avatar', { uri: file.uri, name: file.name, type: file.mimeType } as unknown as Blob);
+  await appendUploadFile(form, 'avatar', file);
   return apiFetch<{ project: Project }>(`/api/projects/${projectId}/avatar`, {
     method: 'POST',
     body: form,
     auth: true,
+    timeoutMs: 120000,
   });
 }
 
@@ -151,26 +149,26 @@ export function listProjectTasksRequest(projectId: string, teamId?: string) {
   return apiFetch<{ tasks: BoardTask[] }>(`/api/projects/${projectId}/tasks${query}`, { auth: true });
 }
 
-export function addCommentRequest(taskId: string, body: string, files: PickedFile[] = []) {
+export async function addCommentRequest(taskId: string, body: string, files: PickedFile[] = []) {
   const form = new FormData();
   form.append('body', body);
-  appendFiles(form, files);
+  await appendFiles(form, files);
   return apiFetch<{ task: BoardTask }>(`/api/tasks/${taskId}/comments`, {
     method: 'POST',
     body: form,
     auth: true,
-    timeoutMs: 60000,
+    timeoutMs: 120000,
   });
 }
 
-export function addTaskAttachmentsRequest(taskId: string, files: PickedFile[]) {
+export async function addTaskAttachmentsRequest(taskId: string, files: PickedFile[]) {
   const form = new FormData();
-  appendFiles(form, files);
+  await appendFiles(form, files);
   return apiFetch<{ task: BoardTask }>(`/api/tasks/${taskId}/attachments`, {
     method: 'POST',
     body: form,
     auth: true,
-    timeoutMs: 60000,
+    timeoutMs: 120000,
   });
 }
 
@@ -216,7 +214,7 @@ export function deleteTeamRequest(teamId: string) {
   return apiFetch<{ ok: true; teamId: string }>(`/api/teams/${teamId}`, { method: 'DELETE', auth: true });
 }
 
-export function createTimelineRequest(
+export async function createTimelineRequest(
   input: {
     projectId: string;
     title: string;
@@ -232,12 +230,12 @@ export function createTimelineRequest(
   Object.entries(input).forEach(([key, value]) => {
     if (value !== undefined && value !== null) form.append(key, String(value));
   });
-  appendFiles(form, files);
+  await appendFiles(form, files);
   return apiFetch<{ item: TimelineItem }>('/api/timeline', {
     method: 'POST',
     body: form,
     auth: true,
-    timeoutMs: 60000,
+    timeoutMs: 120000,
   });
 }
 

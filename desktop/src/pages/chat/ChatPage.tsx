@@ -37,6 +37,7 @@ import { UserAvatar } from '@/components/ui/UserAvatar';
 import { Input } from '@/components/ui/Input';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { cn } from '@/lib/cn';
+import { MessagePreviewLabel } from '@/lib/messagePreview';
 import { resolveMediaUrl } from '@/lib/mediaUrl';
 import {
   addGroupMembers,
@@ -2461,7 +2462,7 @@ export function ChatPage() {
                         liveCall ? 'font-medium text-[#23a559]' : 'text-ink-400',
                       )}
                     >
-                      {preview}
+                      {liveCall ? preview : <MessagePreviewLabel text={preview} />}
                     </span>
                   </span>
                 </button>

@@ -2,14 +2,14 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import React from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { AppHeader, Card, ListRow, Screen } from '@/components/ui';
+import { AppHeader, ListRow, Screen } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
 import { useChat } from '@/context/ChatContext';
 import { useToast } from '@/context/ToastContext';
 import { API_BASE } from '@/lib/config';
 import { ensureSocketConnected } from '@/lib/socket/socket';
 import type { RootStackParamList } from '@/navigation/types';
-import { radius, useColors, useTheme, type ThemePreference } from '@/theme';
+import { useColors, useTheme, type ThemePreference } from '@/theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
 
@@ -48,7 +48,8 @@ export function SettingsScreen({ navigation }: Props) {
       <AppHeader title="Settings" showBack />
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Section title="Appearance">
+        <SectionLabel>Appearance</SectionLabel>
+        <Section>
           <View style={styles.themeRow}>
             {THEME_OPTIONS.map((option) => {
               const active = preference === option.value;
@@ -60,7 +61,7 @@ export function SettingsScreen({ navigation }: Props) {
                     styles.themeChip,
                     {
                       backgroundColor: active ? colors.brandSoft : colors.surfaceAlt,
-                      borderColor: active ? colors.brandBorder : colors.border,
+                      borderColor: active ? colors.brand : 'transparent',
                     },
                   ]}
                 >
@@ -73,80 +74,106 @@ export function SettingsScreen({ navigation }: Props) {
           </View>
         </Section>
 
-        <Section title="Connection">
-          <Card padded={false} style={styles.card}>
-            <ListRow
-              icon={connected ? 'flash' : 'flash-off-outline'}
-              iconColor={connected ? colors.success : colors.warning}
-              title="Realtime"
-              value={connected ? 'Connected' : 'Reconnecting'}
-              showChevron={false}
-            />
-            <Separator />
-            <ListRow icon="server-outline" title="API endpoint" subtitle={API_BASE} showChevron={false} />
-            <Separator />
-            <ListRow
-              icon="refresh-outline"
-              title="Reconnect and sync"
-              subtitle="Force a fresh socket connection and reload data"
-              onPress={async () => {
-                ensureSocketConnected();
-                await refresh();
-                toast.success('Synced');
-              }}
-              showChevron={false}
-            />
-          </Card>
+        <SectionLabel>Connection</SectionLabel>
+        <Section>
+          <ListRow
+            icon={connected ? 'flash' : 'flash-off-outline'}
+            iconBackground={connected ? colors.successSoft : colors.warningSoft}
+            iconColor={connected ? colors.success : colors.warning}
+            title="Realtime"
+            value={connected ? 'Connected' : 'Reconnecting'}
+            showChevron={false}
+          />
+          <Separator />
+          <ListRow
+            icon="server-outline"
+            iconBackground={colors.surfaceAlt}
+            iconColor={colors.textMuted}
+            title="API endpoint"
+            subtitle={API_BASE}
+            showChevron={false}
+          />
+          <Separator />
+          <ListRow
+            icon="refresh-outline"
+            iconBackground={colors.infoSoft}
+            iconColor={colors.info}
+            title="Reconnect and sync"
+            subtitle="Refresh socket and reload data"
+            onPress={async () => {
+              ensureSocketConnected();
+              await refresh();
+              toast.success('Synced');
+            }}
+            showChevron={false}
+          />
         </Section>
 
-        <Section title="Account">
-          <Card padded={false} style={styles.card}>
-            <ListRow
-              icon="person-outline"
-              title={user?.name ?? 'Profile'}
-              subtitle={user?.email}
-              onPress={() => navigation.navigate('EditProfile')}
-            />
-            <Separator />
-            <ListRow icon="business-outline" title="Organisation" value={user?.orgName} showChevron={false} />
-            <Separator />
-            <ListRow icon="ribbon-outline" title="Role" value={user?.role} showChevron={false} />
-          </Card>
+        <SectionLabel>Account</SectionLabel>
+        <Section>
+          <ListRow
+            icon="person-outline"
+            iconBackground={colors.brandSoft}
+            iconColor={colors.brand}
+            title={user?.name ?? 'Profile'}
+            subtitle={user?.email}
+            onPress={() => navigation.navigate('EditProfile')}
+          />
+          <Separator />
+          <ListRow
+            icon="business-outline"
+            iconBackground={colors.surfaceAlt}
+            iconColor={colors.textMuted}
+            title="Organisation"
+            value={user?.orgName}
+            showChevron={false}
+          />
+          <Separator />
+          <ListRow
+            icon="ribbon-outline"
+            iconBackground={colors.surfaceAlt}
+            iconColor={colors.textMuted}
+            title="Role"
+            value={user?.role}
+            showChevron={false}
+          />
         </Section>
 
-        <Section title="Session">
-          <Card padded={false} style={styles.card}>
-            <ListRow
-              icon="log-out-outline"
-              title="Sign out"
-              subtitle="End this session on this device"
-              destructive
-              onPress={() => confirmLogout(false)}
-              showChevron={false}
-            />
-            <Separator />
-            <ListRow
-              icon="shield-outline"
-              title="Sign out everywhere"
-              subtitle="Revoke every device session"
-              destructive
-              onPress={() => confirmLogout(true)}
-              showChevron={false}
-            />
-          </Card>
+        <SectionLabel>Session</SectionLabel>
+        <Section>
+          <ListRow
+            icon="log-out-outline"
+            title="Sign out"
+            destructive
+            onPress={() => confirmLogout(false)}
+            showChevron={false}
+          />
+          <Separator />
+          <ListRow
+            icon="phone-portrait-outline"
+            title="Sign out everywhere"
+            subtitle="Revoke every device session"
+            destructive
+            onPress={() => confirmLogout(true)}
+            showChevron={false}
+          />
         </Section>
 
-        <Text style={[styles.version, { color: colors.textSubtle }]}>DockX Mobile · v1.0.0</Text>
+        <Text style={[styles.version, { color: colors.textSubtle }]}>DockX · v1.0.0</Text>
       </ScrollView>
     </Screen>
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function SectionLabel({ children }: { children: string }) {
+  const colors = useColors();
+  return <Text style={[styles.sectionLabel, { color: colors.textSubtle }]}>{children}</Text>;
+}
+
+function Section({ children }: { children: React.ReactNode }) {
   const colors = useColors();
   return (
-    <View style={styles.section}>
-      <Text style={[styles.sectionTitle, { color: colors.textSubtle }]}>{title.toUpperCase()}</Text>
+    <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       {children}
     </View>
   );
@@ -154,45 +181,52 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 function Separator() {
   const colors = useColors();
-  return <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginLeft: 60 }} />;
+  return <View style={[styles.separator, { backgroundColor: colors.border }]} />;
 }
 
 const styles = StyleSheet.create({
   scroll: {
-    padding: 16,
-    gap: 22,
+    paddingHorizontal: 16,
+    paddingTop: 8,
     paddingBottom: 40,
+    gap: 8,
   },
-  section: {
-    gap: 10,
-  },
-  sectionTitle: {
-    fontSize: 11.5,
-    fontWeight: '800',
-    letterSpacing: 0.7,
+  sectionLabel: {
+    fontSize: 13,
+    fontWeight: '500',
+    marginTop: 12,
+    marginBottom: 2,
     marginLeft: 4,
   },
-  card: {
+  section: {
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
+  },
+  separator: {
+    height: StyleSheet.hairlineWidth,
+    marginLeft: 66,
   },
   themeRow: {
     flexDirection: 'row',
     gap: 8,
+    padding: 12,
   },
   themeChip: {
     flex: 1,
-    height: 44,
+    height: 40,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radius.md,
-    borderWidth: 1,
+    borderRadius: 10,
+    borderWidth: 1.5,
   },
   themeLabel: {
     fontSize: 14,
     fontWeight: '600',
   },
   version: {
-    fontSize: 11.5,
+    fontSize: 12,
     textAlign: 'center',
+    marginTop: 16,
   },
 });

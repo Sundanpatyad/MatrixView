@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, View, type ViewStyle } from 'react-native';
 
-import { radius, useColors } from '@/theme';
+import { radius, useColors, useTheme } from '@/theme';
 
 interface BadgeProps {
   label: string;
@@ -23,15 +23,18 @@ function tint(hex: string, alpha: number): string {
 
 export function Badge({ label, color, solid = false, style, dot = false }: BadgeProps) {
   const colors = useColors();
+  const { isDark } = useTheme();
   const accent = color ?? colors.brand;
+  const softAlpha = isDark ? 0.22 : 0.12;
+  const borderAlpha = isDark ? 0.4 : 0.28;
 
   return (
     <View
       style={[
         styles.badge,
         {
-          backgroundColor: solid ? accent : tint(accent, 0.14),
-          borderColor: solid ? accent : tint(accent, 0.3),
+          backgroundColor: solid ? accent : tint(accent, softAlpha),
+          borderColor: solid ? accent : tint(accent, borderAlpha),
         },
         style,
       ]}
@@ -48,21 +51,21 @@ const styles = StyleSheet.create({
   badge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    gap: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
     borderRadius: radius.pill,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     alignSelf: 'flex-start',
   },
   dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
   },
   text: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
-    letterSpacing: 0.2,
+    letterSpacing: 0.15,
   },
 });

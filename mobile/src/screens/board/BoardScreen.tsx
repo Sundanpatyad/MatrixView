@@ -25,6 +25,15 @@ import { radius, statusAccent, useColors } from '@/theme';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
+function softFill(hex: string, alpha = 0.16): string {
+  const value = hex.replace('#', '');
+  const full = value.length === 3 ? value.split('').map((c) => c + c).join('') : value;
+  const r = parseInt(full.slice(0, 2), 16);
+  const g = parseInt(full.slice(2, 4), 16);
+  const b = parseInt(full.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 export function BoardScreen() {
   const navigation = useNavigation<Nav>();
   const colors = useColors();
@@ -236,8 +245,8 @@ export function BoardScreen() {
                 style={({ pressed }) => [
                   styles.columnChip,
                   {
-                    backgroundColor: active ? `${accent}1f` : colors.surface,
-                    borderColor: active ? accent : colors.border,
+                    backgroundColor: active ? colors.surface : colors.surfaceAlt,
+                    borderColor: active ? colors.borderStrong : colors.border,
                   },
                   pressed && { opacity: 0.75 },
                 ]}
@@ -246,8 +255,13 @@ export function BoardScreen() {
                 <Text style={[styles.columnLabel, { color: active ? colors.text : colors.textMuted }]}>
                   {item.label}
                 </Text>
-                <View style={[styles.columnCount, { backgroundColor: active ? accent : colors.surfaceAlt }]}>
-                  <Text style={[styles.columnCountText, { color: active ? '#ffffff' : colors.textSubtle }]}>
+                <View
+                  style={[
+                    styles.columnCount,
+                    { backgroundColor: active ? softFill(accent) : colors.track },
+                  ]}
+                >
+                  <Text style={[styles.columnCountText, { color: active ? accent : colors.textMuted }]}>
                     {countsByColumn.get(item.id) ?? 0}
                   </Text>
                 </View>
@@ -305,17 +319,11 @@ export function BoardScreen() {
           />
         }
         renderItem={({ item }) => (
-          <View>
-            <TaskCard task={item} onPress={() => navigation.navigate('TaskDetail', { taskId: item.id })} />
-            <Pressable
-              onPress={() => setMoveTarget(item)}
-              hitSlop={8}
-              style={[styles.moveButton, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
-              accessibilityLabel={`Move ${item.key}`}
-            >
-              <Ionicons name="swap-horizontal" size={14} color={colors.textSubtle} />
-            </Pressable>
-          </View>
+          <TaskCard
+            task={item}
+            onPress={() => navigation.navigate('TaskDetail', { taskId: item.id })}
+            onMove={() => setMoveTarget(item)}
+          />
         )}
       />
 
@@ -323,7 +331,11 @@ export function BoardScreen() {
         onPress={() =>
           navigation.navigate('CreateTask', { projectId: project.id, status: activeColumn ?? undefined })
         }
-        style={({ pressed }) => [styles.fab, { backgroundColor: colors.brand }, pressed && { opacity: 0.85 }]}
+        style={({ pressed }) => [
+          styles.fab,
+          { backgroundColor: colors.brand, bottom: tabBarHeight + 16 },
+          pressed && { opacity: 0.85 },
+        ]}
         accessibilityLabel="Create task"
       >
         <Ionicons name="add" size={26} color="#ffffff" />
@@ -382,80 +394,68 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   columnStrip: {
-    gap: 8,
+    gap: 6,
     paddingRight: 4,
   },
   columnChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 7,
-    paddingHorizontal: 12,
-    height: 36,
+    gap: 5,
+    paddingHorizontal: 9,
+    height: 30,
     borderRadius: radius.pill,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   columnDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
   columnLabel: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
   },
   columnCount: {
-    minWidth: 20,
+    minWidth: 16,
     paddingHorizontal: 5,
     paddingVertical: 1,
     borderRadius: radius.pill,
     alignItems: 'center',
   },
   columnCountText: {
-    fontSize: 10.5,
-    fontWeight: '800',
+    fontSize: 10,
+    fontWeight: '700',
   },
   addColumn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    borderWidth: 1,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    borderWidth: StyleSheet.hairlineWidth,
     borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'center',
   },
   teamStrip: {
-    gap: 7,
+    gap: 6,
   },
   teamChip: {
-    paddingHorizontal: 11,
-    height: 28,
+    paddingHorizontal: 9,
+    height: 26,
     justifyContent: 'center',
     borderRadius: radius.pill,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   teamLabel: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
   },
   list: {
     padding: 16,
     gap: 10,
   },
-  moveButton: {
-    position: 'absolute',
-    right: 8,
-    bottom: 8,
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   fab: {
     position: 'absolute',
     right: 18,
-    bottom: 22,
     width: 56,
     height: 56,
     borderRadius: 28,

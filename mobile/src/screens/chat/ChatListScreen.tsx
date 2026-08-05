@@ -13,6 +13,7 @@ import {
   Screen,
   useGlassScreenPadding,
 } from '@/components/ui';
+import { MessagePreview } from '@/components/chat/MessagePreview';
 import { useAuth } from '@/context/AuthContext';
 import { useChat } from '@/context/ChatContext';
 import type { ChatConversation } from '@/lib/api';
@@ -69,24 +70,6 @@ export function ChatListScreen() {
 
   return (
     <Screen edges={[]}>
-      <AppHeader
-        floating
-        title="Chats"
-        subtitle={connected ? 'Connected' : 'Reconnecting…'}
-        actions={[
-          {
-            icon: 'people-outline',
-            onPress: () => navigation.navigate('NewGroup'),
-            accessibilityLabel: 'New group',
-          },
-          {
-            icon: 'create-outline',
-            onPress: () => navigation.navigate('NewChat'),
-            accessibilityLabel: 'New chat',
-          },
-        ]}
-      />
-
       <FlatList
         data={filtered}
         keyExtractor={(conversation) => conversation.id}
@@ -170,12 +153,11 @@ export function ChatListScreen() {
                       {typingLabel}
                     </Text>
                   ) : (
-                    <Text
-                      style={[styles.preview, { color: count ? colors.text : colors.textSubtle }]}
-                      numberOfLines={1}
-                    >
-                      {item.lastMessagePreview || 'No messages yet'}
-                    </Text>
+                    <MessagePreview
+                      text={item.lastMessagePreview || 'No messages yet'}
+                      color={count ? colors.text : colors.textSubtle}
+                      style={[styles.preview, count ? { fontWeight: '600' } : null]}
+                    />
                   )}
 
                   {count > 0 ? (
@@ -188,6 +170,24 @@ export function ChatListScreen() {
             </Pressable>
           );
         }}
+      />
+
+      <AppHeader
+        floating
+        title="Chats"
+        subtitle={connected ? 'Connected' : 'Reconnecting…'}
+        actions={[
+          {
+            icon: 'people-outline',
+            onPress: () => navigation.navigate('NewGroup'),
+            accessibilityLabel: 'New group',
+          },
+          {
+            icon: 'create-outline',
+            onPress: () => navigation.navigate('NewChat'),
+            accessibilityLabel: 'New chat',
+          },
+        ]}
       />
     </Screen>
   );
