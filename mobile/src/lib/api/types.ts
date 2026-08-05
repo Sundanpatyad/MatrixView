@@ -159,6 +159,9 @@ export interface ChatConversation {
   lastMessageAt: string;
   lastMessagePreview: string;
   createdAt: string;
+  muted?: boolean;
+  pinned?: boolean;
+  pinnedAt?: string | null;
 }
 
 export interface ChatAttachment {

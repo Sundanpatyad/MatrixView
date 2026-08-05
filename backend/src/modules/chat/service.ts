@@ -18,6 +18,7 @@ import {
   onlineCounts,
 } from '../../gateway/io.js';
 import { Conversation } from './models/Conversation.js';
+import { ConversationMemberState } from './models/ConversationMemberState.js';
 import { Message } from './models/Message.js';
 import {
   chatHref,
@@ -169,7 +170,92 @@ function computeDeliveryStatus(
   return 'sent';
 }
 
-async function serializeConversation(doc: InstanceType<typeof Conversation>, actorId: string) {
+type MemberPrefs = {
+  muted: boolean;
+  pinned: boolean;
+  pinnedAt: string | null;
+  clearedAt: Date | null;
+  hiddenAt: Date | null;
+};
+
+const DEFAULT_PREFS: MemberPrefs = {
+  muted: false,
+  pinned: false,
+  pinnedAt: null,
+  clearedAt: null,
+  hiddenAt: null,
+};
+
+async function prefsFor(
+  conversationId: string,
+  userId: string,
+): Promise<MemberPrefs> {
+  const state = await ConversationMemberState.findOne({
+    conversationId: oid(conversationId),
+    userId: oid(userId),
+  }).lean();
+  if (!state) return { ...DEFAULT_PREFS };
+  return {
+    muted: Boolean(state.muted),
+    pinned: Boolean(state.pinned),
+    pinnedAt: state.pinnedAt ? state.pinnedAt.toISOString() : null,
+    clearedAt: state.clearedAt ?? null,
+    hiddenAt: state.hiddenAt ?? null,
+  };
+}
+
+async function prefsMapForUser(
+  userId: string,
+  conversationIds: string[],
+): Promise<Map<string, MemberPrefs>> {
+  const map = new Map<string, MemberPrefs>();
+  if (conversationIds.length === 0) return map;
+  const rows = await ConversationMemberState.find({
+    userId: oid(userId),
+    conversationId: { $in: conversationIds.map((id) => oid(id)) },
+  }).lean();
+  for (const state of rows) {
+    map.set(String(state.conversationId), {
+      muted: Boolean(state.muted),
+      pinned: Boolean(state.pinned),
+      pinnedAt: state.pinnedAt ? state.pinnedAt.toISOString() : null,
+      clearedAt: state.clearedAt ?? null,
+      hiddenAt: state.hiddenAt ?? null,
+    });
+  }
+  return map;
+}
+
+async function upsertMemberState(
+  actor: Actor,
+  conversationId: string,
+  patch: Partial<{
+    muted: boolean;
+    pinned: boolean;
+    pinnedAt: Date | null;
+    clearedAt: Date | null;
+    hiddenAt: Date | null;
+  }>,
+) {
+  return ConversationMemberState.findOneAndUpdate(
+    { conversationId: oid(conversationId), userId: oid(actor.sub) },
+    {
+      $set: {
+        ...patch,
+        orgId: oid(actor.orgId),
+        conversationId: oid(conversationId),
+        userId: oid(actor.sub),
+      },
+    },
+    { upsert: true, new: true, setDefaultsOnInsert: true },
+  );
+}
+
+async function serializeConversation(
+  doc: InstanceType<typeof Conversation>,
+  actorId: string,
+  prefs?: MemberPrefs,
+) {
   const members = await usersByIds(doc.memberIds.map(String));
   const memberMap = new Map(members.map((m) => [String(m._id), m]));
   const sortedMembers = doc.memberIds
@@ -183,6 +269,12 @@ async function serializeConversation(doc: InstanceType<typeof Conversation>, act
     title = other?.name ?? 'Direct message';
   }
 
+  const memberPrefs = prefs ?? (await prefsFor(String(doc._id), actorId));
+  const lastMessageAt = doc.lastMessageAt?.toISOString?.() ?? doc.updatedAt.toISOString();
+  const cleared = memberPrefs.clearedAt;
+  const previewCleared =
+    cleared && doc.lastMessageAt && doc.lastMessageAt.getTime() <= cleared.getTime();
+
   return {
     id: String(doc._id),
     type: doc.type as 'dm' | 'group',
@@ -192,10 +284,20 @@ async function serializeConversation(doc: InstanceType<typeof Conversation>, act
     memberIds: doc.memberIds.map(String),
     members: sortedMembers,
     createdBy: String(doc.createdBy),
-    lastMessageAt: doc.lastMessageAt?.toISOString?.() ?? doc.updatedAt.toISOString(),
-    lastMessagePreview: doc.lastMessagePreview ?? '',
+    lastMessageAt,
+    lastMessagePreview: previewCleared ? '' : doc.lastMessagePreview ?? '',
     createdAt: doc.createdAt.toISOString(),
+    muted: memberPrefs.muted,
+    pinned: memberPrefs.pinned,
+    pinnedAt: memberPrefs.pinnedAt,
   };
+}
+
+async function emitConversationUpsert(doc: InstanceType<typeof Conversation>) {
+  for (const memberId of doc.memberIds.map(String)) {
+    const conversation = await serializeConversation(doc, memberId);
+    emitToUser(memberId, 'conversation:upsert', { conversation });
+  }
 }
 
 async function memberIdsForMessage(doc: InstanceType<typeof Message> | { conversationId: Types.ObjectId }) {
@@ -290,9 +392,33 @@ export async function listConversations(actor: Actor) {
     memberIds: oid(actor.sub),
   }).sort({ lastMessageAt: -1 });
 
-  return {
-    conversations: await Promise.all(list.map((c) => serializeConversation(c, actor.sub))),
-  };
+  const prefsById = await prefsMapForUser(
+    actor.sub,
+    list.map((c) => String(c._id)),
+  );
+
+  const visible = list.filter((c) => {
+    const prefs = prefsById.get(String(c._id));
+    if (!prefs?.hiddenAt) return true;
+    const last = c.lastMessageAt?.getTime?.() ?? 0;
+    return last > prefs.hiddenAt.getTime();
+  });
+
+  const conversations = await Promise.all(
+    visible.map((c) =>
+      serializeConversation(c, actor.sub, prefsById.get(String(c._id)) ?? DEFAULT_PREFS),
+    ),
+  );
+
+  conversations.sort((a, b) => {
+    if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+    if (a.pinned && b.pinned) {
+      return new Date(b.pinnedAt ?? 0).getTime() - new Date(a.pinnedAt ?? 0).getTime();
+    }
+    return new Date(b.lastMessageAt ?? 0).getTime() - new Date(a.lastMessageAt ?? 0).getTime();
+  });
+
+  return { conversations };
 }
 
 export async function listChatUsers(actor: Actor) {
@@ -392,11 +518,8 @@ export async function getOrCreateDm(
     lastMessagePreview: '',
   });
 
-  const serialized = await serializeConversation(conversation, actor.sub);
-  for (const memberId of serialized.memberIds) {
-    emitToUser(memberId, 'conversation:upsert', { conversation: serialized });
-  }
-  return { conversation: serialized };
+  await emitConversationUpsert(conversation);
+  return { conversation: await serializeConversation(conversation, actor.sub) };
 }
 
 export async function createGroup(
@@ -423,10 +546,8 @@ export async function createGroup(
     lastMessagePreview: 'Group created',
   });
 
+  await emitConversationUpsert(conversation);
   const serialized = await serializeConversation(conversation, actor.sub);
-  for (const memberId of serialized.memberIds) {
-    emitToUser(memberId, 'conversation:upsert', { conversation: serialized });
-  }
 
   const creator = users.find((u) => String(u._id) === actor.sub);
   const creatorName = creator?.name ?? 'Someone';
@@ -463,12 +584,8 @@ export async function updateGroup(
   if (!name) throw new AuthError('Group name required', 400);
   conversation.name = name;
   await conversation.save();
-  const serialized = await serializeConversation(conversation, actor.sub);
-  emitToConversation(conversationId, 'conversation:upsert', { conversation: serialized });
-  for (const memberId of serialized.memberIds) {
-    emitToUser(memberId, 'conversation:upsert', { conversation: serialized });
-  }
-  return { conversation: serialized };
+  await emitConversationUpsert(conversation);
+  return { conversation: await serializeConversation(conversation, actor.sub) };
 }
 
 export async function updateGroupAvatar(
@@ -486,12 +603,8 @@ export async function updateGroupAvatar(
   if (previousUrl && previousUrl !== avatarUrl) {
     await deleteStoredMedia(previousUrl);
   }
-  const serialized = await serializeConversation(conversation, actor.sub);
-  emitToConversation(conversationId, 'conversation:upsert', { conversation: serialized });
-  for (const memberId of serialized.memberIds) {
-    emitToUser(memberId, 'conversation:upsert', { conversation: serialized });
-  }
-  return { conversation: serialized };
+  await emitConversationUpsert(conversation);
+  return { conversation: await serializeConversation(conversation, actor.sub) };
 }
 
 export async function addGroupMembers(
@@ -515,10 +628,8 @@ export async function addGroupMembers(
     }
   }
   await conversation.save();
+  await emitConversationUpsert(conversation);
   const serialized = await serializeConversation(conversation, actor.sub);
-  for (const memberId of serialized.memberIds) {
-    emitToUser(memberId, 'conversation:upsert', { conversation: serialized });
-  }
 
   if (newlyAdded.length > 0) {
     const actorUser = await User.findById(actor.sub).select('name').lean();
@@ -565,12 +676,9 @@ export async function removeGroupMember(
   }
   conversation.memberIds = next as typeof conversation.memberIds;
   await conversation.save();
-  const serialized = await serializeConversation(conversation, actor.sub);
   emitToUser(userId, 'conversation:removed', { conversationId });
-  for (const memberId of serialized.memberIds) {
-    emitToUser(memberId, 'conversation:upsert', { conversation: serialized });
-  }
-  return { conversation: serialized };
+  await emitConversationUpsert(conversation);
+  return { conversation: await serializeConversation(conversation, actor.sub) };
 }
 
 export async function listMessages(
@@ -579,7 +687,11 @@ export async function listMessages(
   opts?: { after?: string; before?: string; limit?: number },
 ) {
   await requireMember(conversationId, actor);
+  const prefs = await prefsFor(conversationId, actor.sub);
   const filter: Record<string, unknown> = { conversationId: oid(conversationId) };
+  if (prefs.clearedAt) {
+    filter.createdAt = { $gt: prefs.clearedAt };
+  }
   const rawLimit = opts?.limit ?? (opts?.after ? 500 : 40);
   const limit = Math.min(Math.max(rawLimit, 1), 500);
 
@@ -587,7 +699,11 @@ export async function listMessages(
   if (opts?.after) {
     const afterDate = new Date(opts.after);
     if (!Number.isNaN(+afterDate)) {
-      filter.createdAt = { $gt: afterDate };
+      const minAfter =
+        prefs.clearedAt && prefs.clearedAt.getTime() > afterDate.getTime()
+          ? prefs.clearedAt
+          : afterDate;
+      filter.createdAt = { $gt: minAfter };
     }
     const messages = await Message.find(filter).sort({ createdAt: 1 }).limit(limit);
     return {
@@ -678,13 +794,28 @@ export async function sendMessage(
   await conversation.save();
 
   const serialized = await serializeMessage(message);
-  const convSerialized = await serializeConversation(conversation, actor.sub);
+
+  // New activity un-hides the chat for every member who had deleted/hidden it.
+  await ConversationMemberState.updateMany(
+    { conversationId: conversation._id, hiddenAt: { $ne: null } },
+    { $set: { hiddenAt: null } },
+  );
 
   emitToConversation(conversationId, 'message:new', { message: serialized });
   for (const memberId of conversation.memberIds.map(String)) {
     emitToUser(memberId, 'message:new', { message: serialized });
-    emitToUser(memberId, 'conversation:upsert', { conversation: convSerialized });
   }
+  await emitConversationUpsert(conversation);
+
+  const memberIds = conversation.memberIds.map(String).filter((id) => id !== actor.sub);
+  const mutedRows = await ConversationMemberState.find({
+    conversationId: conversation._id,
+    userId: { $in: memberIds.map((id) => oid(id)) },
+    muted: true,
+  })
+    .select('userId')
+    .lean();
+  const mutedSet = new Set(mutedRows.map((row) => String(row.userId)));
 
   const sender = await User.findById(actor.sub).select('name').lean();
   const senderName = sender?.name ?? 'Someone';
@@ -694,9 +825,8 @@ export async function sendMessage(
       : 'a direct message';
   const previewText = (preview || 'New message').slice(0, 140);
   void createAndEmitMany(
-    conversation.memberIds
-      .map(String)
-      .filter((id) => id !== actor.sub)
+    memberIds
+      .filter((id) => !mutedSet.has(id))
       .map((recipientId) => ({
         orgId: actor.orgId,
         recipientId,
@@ -783,13 +913,12 @@ export async function forwardMessage(
   await target.save();
 
   const serialized = await serializeMessage(message);
-  const convSerialized = await serializeConversation(target, actor.sub);
 
   emitToConversation(targetConversationId, 'message:new', { message: serialized });
   for (const memberId of target.memberIds.map(String)) {
     emitToUser(memberId, 'message:new', { message: serialized });
-    emitToUser(memberId, 'conversation:upsert', { conversation: convSerialized });
   }
+  await emitConversationUpsert(target);
 
   const forwarder = await User.findById(actor.sub).select('name').lean();
   const forwarderName = forwarder?.name ?? 'Someone';
@@ -926,13 +1055,12 @@ export async function recordCallHistory(input: {
   await conversation.save();
 
   const serialized = await serializeMessage(message);
-  const convSerialized = await serializeConversation(conversation, input.initiatedBy);
 
   emitToConversation(String(conversation._id), 'message:new', { message: serialized });
   for (const memberId of conversation.memberIds.map(String)) {
     emitToUser(memberId, 'message:new', { message: serialized });
-    emitToUser(memberId, 'conversation:upsert', { conversation: convSerialized });
   }
+  await emitConversationUpsert(conversation);
 
   return serialized;
 }
@@ -1094,6 +1222,124 @@ export async function markMessagesRead(actor: Actor, conversationId: string) {
     updated.push(serialized);
   }
   return updated;
+}
+
+export async function setConversationPinned(
+  actor: Actor,
+  conversationId: string,
+  pinned: boolean,
+) {
+  const conversation = await requireMember(conversationId, actor);
+  await upsertMemberState(actor, conversationId, {
+    pinned,
+    pinnedAt: pinned ? new Date() : null,
+  });
+  return { conversation: await serializeConversation(conversation, actor.sub) };
+}
+
+export async function setConversationMuted(
+  actor: Actor,
+  conversationId: string,
+  muted: boolean,
+) {
+  const conversation = await requireMember(conversationId, actor);
+  await upsertMemberState(actor, conversationId, { muted });
+  return { conversation: await serializeConversation(conversation, actor.sub) };
+}
+
+/** Clear message history for the current user only. */
+export async function clearConversationMessages(actor: Actor, conversationId: string) {
+  const conversation = await requireMember(conversationId, actor);
+  const clearedAt = new Date();
+  await upsertMemberState(actor, conversationId, { clearedAt });
+  return { conversation: await serializeConversation(conversation, actor.sub) };
+}
+
+/**
+ * Remove chat from the current user's list.
+ * Groups: leave the group. DMs: hide until a new message arrives.
+ */
+export async function deleteConversationForMe(actor: Actor, conversationId: string) {
+  const conversation = await requireMember(conversationId, actor);
+
+  if (conversation.type === 'group') {
+    const next = conversation.memberIds.filter((id) => String(id) !== actor.sub);
+    if (next.length < 1) {
+      // Last member leaving — tear the group down (skip admin check).
+      return destroyGroup(conversationId, conversation.memberIds.map(String), conversation.avatarUrl);
+    }
+    conversation.memberIds = next as typeof conversation.memberIds;
+    // If the creator left, transfer ownership to the next member.
+    if (String(conversation.createdBy) === actor.sub) {
+      conversation.createdBy = next[0] as typeof conversation.createdBy;
+    }
+    await conversation.save();
+    emitToUser(actor.sub, 'conversation:removed', { conversationId });
+    await emitConversationUpsert(conversation);
+    return { ok: true as const, removed: true as const };
+  }
+
+  await upsertMemberState(actor, conversationId, {
+    hiddenAt: new Date(),
+    clearedAt: new Date(),
+  });
+  emitToUser(actor.sub, 'conversation:removed', { conversationId });
+  return { ok: true as const, removed: true as const };
+}
+
+async function destroyGroup(
+  conversationId: string,
+  memberIds: string[],
+  avatarUrl?: string | null,
+) {
+  const conversationOid = oid(conversationId);
+  const messages = await Message.find({ conversationId: conversationOid }).lean();
+  const media: StoredMediaRef[] = [];
+  for (const message of messages) {
+    for (const att of message.attachments ?? []) {
+      media.push({
+        url: att.url,
+        provider: att.storageProvider ?? null,
+        storageKey: att.storageKey ?? null,
+        mimeType: att.mimeType ?? null,
+        kind: att.kind ?? null,
+      });
+    }
+  }
+  if (avatarUrl) {
+    media.push({ url: avatarUrl, provider: null, storageKey: null });
+  }
+
+  await Message.deleteMany({ conversationId: conversationOid });
+  await ConversationMemberState.deleteMany({ conversationId: conversationOid });
+  await Conversation.deleteOne({ _id: conversationOid });
+  if (media.length) {
+    await deleteStoredMediaMany(media).catch((err) =>
+      console.error('[chat] deleteGroup media cleanup', err),
+    );
+  }
+
+  for (const memberId of memberIds) {
+    emitToUser(memberId, 'conversation:removed', { conversationId });
+  }
+  return { ok: true as const, removed: true as const };
+}
+
+/** Permanently delete a group (creator/admin only) and all of its messages. */
+export async function deleteGroup(actor: Actor, conversationId: string) {
+  const conversation = await requireMember(conversationId, actor);
+  if (conversation.type !== 'group') {
+    throw new AuthError('Only groups can be deleted', 400);
+  }
+  if (String(conversation.createdBy) !== actor.sub) {
+    throw new AuthError('Only the group admin can delete this group', 403, 'FORBIDDEN');
+  }
+
+  return destroyGroup(
+    conversationId,
+    conversation.memberIds.map(String),
+    conversation.avatarUrl,
+  );
 }
 
 /** Used by activity module — re-export org emit helper availability */

@@ -4,22 +4,67 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import React, { useMemo, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { AppHeader, Button, Input, OptionSheet, Screen, type SheetOption } from '@/components/ui';
+import { AppHeader, Button, Input, OptionSheet, Sheet, type SheetOption, Screen } from '@/components/ui';
 import { useToast } from '@/context/ToastContext';
 import { useWorkspace } from '@/context/WorkspaceContext';
 import type { TaskPriority, TaskType } from '@/lib/api';
 import { formatDate, titleCase, toIsoDate } from '@/lib/format';
 import type { RootStackParamList } from '@/navigation/types';
-import { priorityColor, radius, taskTypeColor, useColors } from '@/theme';
+import { priorityColor, radius, taskTypeColor, useColors, useTheme } from '@/theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CreateTask'>;
 
 const TYPES: TaskType[] = ['task', 'bug', 'story', 'time'];
 const PRIORITIES: TaskPriority[] = ['lowest', 'low', 'medium', 'high', 'highest'];
+const MAX_ESTIMATE_HOURS = 1000;
+
+function startOfToday(): Date {
+  const date = new Date();
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+/** Build a Date whose time components represent a duration (for countdown / time pickers). */
+function dateFromEstimateHours(hours: number): Date {
+  const clamped = Math.max(0, Math.min(MAX_ESTIMATE_HOURS, hours));
+  const totalMinutes = Math.round(clamped * 60);
+  const date = new Date(0);
+  date.setHours(Math.floor(totalMinutes / 60), totalMinutes % 60, 0, 0);
+  return date;
+}
+
+function estimateHoursFromDate(date: Date): number {
+  return Math.round((date.getHours() + date.getMinutes() / 60) * 100) / 100;
+}
+
+function formatEstimateHours(hours: number | null): string {
+  if (hours == null) return 'Not set';
+  const whole = Math.floor(hours);
+  const minutes = Math.round((hours - whole) * 60);
+  if (whole === 0 && minutes === 0) return '0h';
+  if (minutes === 0) return `${whole}h`;
+  if (whole === 0) return `${minutes}m`;
+  return `${whole}h ${minutes}m`;
+}
+
+function validateEstimateHours(hours: number | null): string | null {
+  if (hours == null) return null;
+  if (!Number.isFinite(hours)) return 'Estimate must be a valid number.';
+  if (hours < 0) return 'Estimate cannot be negative.';
+  if (hours > MAX_ESTIMATE_HOURS) return `Estimate cannot exceed ${MAX_ESTIMATE_HOURS} hours.`;
+  return null;
+}
+
+function validateDueDate(date: Date | null): string | null {
+  if (!date) return null;
+  if (Number.isNaN(date.getTime())) return 'Due date is invalid.';
+  if (date.getTime() < startOfToday().getTime()) return 'Due date cannot be in the past.';
+  return null;
+}
 
 export function CreateTaskScreen({ route, navigation }: Props) {
   const { projectId, status } = route.params;
-  const colors = useColors();
+  const { isDark } = useTheme();
   const toast = useToast();
   const { getProject, createTask, updateTask, teamsForProject } = useWorkspace();
 
@@ -32,14 +77,17 @@ export function CreateTaskScreen({ route, navigation }: Props) {
   const [priority, setPriority] = useState<TaskPriority>('medium');
   const [assigneeId, setAssigneeId] = useState('');
   const [teamId, setTeamId] = useState<string | null>(null);
-  const [estimate, setEstimate] = useState('');
+  const [estimateHours, setEstimateHours] = useState<number | null>(null);
   const [dueDate, setDueDate] = useState<Date | null>(null);
 
   const [typeSheet, setTypeSheet] = useState(false);
   const [prioritySheet, setPrioritySheet] = useState(false);
   const [assigneeSheet, setAssigneeSheet] = useState(false);
   const [teamSheet, setTeamSheet] = useState(false);
-  const [showPicker, setShowPicker] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showHoursPicker, setShowHoursPicker] = useState(false);
+  const [draftDate, setDraftDate] = useState(() => startOfToday());
+  const [draftHours, setDraftHours] = useState(() => dateFromEstimateHours(1));
   const [submitting, setSubmitting] = useState(false);
 
   const assignee = project?.members.find((member) => member.id === assigneeId);
@@ -79,8 +127,52 @@ export function CreateTaskScreen({ route, navigation }: Props) {
     [teams],
   );
 
+  const openDatePicker = () => {
+    setDraftDate(dueDate ?? startOfToday());
+    setShowDatePicker(true);
+  };
+
+  const openHoursPicker = () => {
+    setDraftHours(dateFromEstimateHours(estimateHours ?? 1));
+    setShowHoursPicker(true);
+  };
+
+  const commitDate = (date: Date) => {
+    const error = validateDueDate(date);
+    if (error) {
+      toast.error(error);
+      return;
+    }
+    setDueDate(date);
+    setShowDatePicker(false);
+  };
+
+  const commitHours = (date: Date) => {
+    const hours = estimateHoursFromDate(date);
+    const error = validateEstimateHours(hours);
+    if (error) {
+      toast.error(error);
+      return;
+    }
+    setEstimateHours(hours);
+    setShowHoursPicker(false);
+  };
+
   const handleSubmit = async () => {
     if (!title.trim() || submitting) return;
+
+    const dueError = validateDueDate(dueDate);
+    if (dueError) {
+      toast.error(dueError);
+      return;
+    }
+
+    const hoursError = validateEstimateHours(estimateHours);
+    if (hoursError) {
+      toast.error(hoursError);
+      return;
+    }
+
     setSubmitting(true);
     try {
       const task = await createTask(projectId, {
@@ -90,7 +182,7 @@ export function CreateTaskScreen({ route, navigation }: Props) {
         priority,
         assigneeId: assigneeId || undefined,
         assigneeName: assignee?.name || undefined,
-        estimateHours: estimate ? Number(estimate) : undefined,
+        estimateHours: estimateHours ?? undefined,
         dueDate: dueDate ? toIsoDate(dueDate) : undefined,
         teamId: teamId ?? undefined,
       });
@@ -169,16 +261,16 @@ export function CreateTaskScreen({ route, navigation }: Props) {
             label="Due date"
             value={dueDate ? formatDate(dueDate.toISOString()) : 'Not set'}
             icon="calendar-outline"
-            onPress={() => setShowPicker(true)}
+            onPress={openDatePicker}
             onClear={dueDate ? () => setDueDate(null) : undefined}
           />
 
-          <Input
+          <FieldButton
             label="Estimate (hours)"
-            placeholder="0"
-            value={estimate}
-            onChangeText={(value) => setEstimate(value.replace(/[^0-9.]/g, ''))}
-            keyboardType="decimal-pad"
+            value={formatEstimateHours(estimateHours)}
+            icon="time-outline"
+            onPress={openHoursPicker}
+            onClear={estimateHours != null ? () => setEstimateHours(null) : undefined}
           />
 
           <Button
@@ -193,17 +285,75 @@ export function CreateTaskScreen({ route, navigation }: Props) {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {showPicker ? (
+      {/* Android: system date dialog */}
+      {showDatePicker && Platform.OS === 'android' ? (
         <DateTimePicker
-          value={dueDate ?? new Date()}
+          value={draftDate}
           mode="date"
-          display={Platform.OS === 'ios' ? 'inline' : 'default'}
+          display="default"
+          minimumDate={startOfToday()}
           onChange={(event, date) => {
-            if (Platform.OS === 'android') setShowPicker(false);
-            if (event.type === 'set' && date) setDueDate(date);
+            setShowDatePicker(false);
+            if (event.type === 'set' && date) commitDate(date);
           }}
         />
       ) : null}
+
+      {/* iOS: native spinner wheels in a sheet (not the inline calendar) */}
+      <Sheet
+        visible={showDatePicker && Platform.OS === 'ios'}
+        onClose={() => setShowDatePicker(false)}
+        title="Due date"
+        scrollable={false}
+      >
+        <DateTimePicker
+          value={draftDate}
+          mode="date"
+          display="spinner"
+          themeVariant={isDark ? 'dark' : 'light'}
+          minimumDate={startOfToday()}
+          onChange={(_, date) => {
+            if (date) setDraftDate(date);
+          }}
+          style={styles.iosPicker}
+        />
+        <Button label="Set due date" onPress={() => commitDate(draftDate)} fullWidth />
+      </Sheet>
+
+      {/* Android: native time picker used as duration (H:M → hours) */}
+      {showHoursPicker && Platform.OS === 'android' ? (
+        <DateTimePicker
+          value={draftHours}
+          mode="time"
+          display="default"
+          is24Hour
+          onChange={(event, date) => {
+            setShowHoursPicker(false);
+            if (event.type === 'set' && date) commitHours(date);
+          }}
+        />
+      ) : null}
+
+      {/* iOS: native countdown duration picker */}
+      <Sheet
+        visible={showHoursPicker && Platform.OS === 'ios'}
+        onClose={() => setShowHoursPicker(false)}
+        title="Estimate"
+        subtitle="Hours and minutes"
+        scrollable={false}
+      >
+        <DateTimePicker
+          value={draftHours}
+          mode="countdown"
+          display="spinner"
+          themeVariant={isDark ? 'dark' : 'light'}
+          onChange={(_, date) => {
+            if (date) setDraftHours(date);
+          }}
+          style={styles.iosPicker}
+        />
+        <Button label="Set estimate" onPress={() => commitHours(draftHours)} fullWidth />
+      </Sheet>
 
       <OptionSheet
         visible={typeSheet}
@@ -321,5 +471,9 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     fontWeight: '500',
+  },
+  iosPicker: {
+    alignSelf: 'stretch',
+    height: 216,
   },
 });

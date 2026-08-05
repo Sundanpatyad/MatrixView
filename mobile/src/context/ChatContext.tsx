@@ -52,6 +52,11 @@ interface ChatContextValue {
   setGroupAvatar: (conversationId: string, file: PickedFile) => Promise<void>;
   addMembers: (conversationId: string, memberIds: string[]) => Promise<void>;
   removeMember: (conversationId: string, userId: string) => Promise<void>;
+  setPinned: (conversationId: string, pinned: boolean) => Promise<void>;
+  setMuted: (conversationId: string, muted: boolean) => Promise<void>;
+  clearMessages: (conversationId: string) => Promise<void>;
+  deleteChat: (conversationId: string) => Promise<void>;
+  deleteGroup: (conversationId: string) => Promise<void>;
 }
 
 const ChatContext = createContext<ChatContextValue | null>(null);
@@ -59,9 +64,15 @@ const ChatContext = createContext<ChatContextValue | null>(null);
 const PAGE_SIZE = 40;
 
 function sortConversations(list: ChatConversation[]): ChatConversation[] {
-  return list
-    .slice()
-    .sort((a, b) => new Date(b.lastMessageAt ?? 0).getTime() - new Date(a.lastMessageAt ?? 0).getTime());
+  return list.slice().sort((a, b) => {
+    const aPinned = Boolean(a.pinned);
+    const bPinned = Boolean(b.pinned);
+    if (aPinned !== bPinned) return aPinned ? -1 : 1;
+    if (aPinned && bPinned) {
+      return new Date(b.pinnedAt ?? 0).getTime() - new Date(a.pinnedAt ?? 0).getTime();
+    }
+    return new Date(b.lastMessageAt ?? 0).getTime() - new Date(a.lastMessageAt ?? 0).getTime();
+  });
 }
 
 function mergeMessages(existing: ChatMessage[], incoming: ChatMessage[]): ChatMessage[] {
@@ -506,6 +517,69 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     [applyConversation],
   );
 
+  const setPinned = useCallback(
+    async (conversationId: string, pinned: boolean) => {
+      const { conversation } = await chatApi.setConversationPinned(conversationId, pinned);
+      applyConversation(conversation);
+    },
+    [applyConversation],
+  );
+
+  const setMuted = useCallback(
+    async (conversationId: string, muted: boolean) => {
+      const { conversation } = await chatApi.setConversationMuted(conversationId, muted);
+      applyConversation(conversation);
+    },
+    [applyConversation],
+  );
+
+  const clearMessages = useCallback(
+    async (conversationId: string) => {
+      const { conversation } = await chatApi.clearConversationMessages(conversationId);
+      applyConversation(conversation);
+      setMessages((prev) => ({ ...prev, [conversationId]: [] }));
+      setUnread((prev) => {
+        if (!prev[conversationId]) return prev;
+        const next = { ...prev };
+        delete next[conversationId];
+        return next;
+      });
+    },
+    [applyConversation],
+  );
+
+  const dropConversation = useCallback((conversationId: string) => {
+    setConversations((prev) => prev.filter((entry) => entry.id !== conversationId));
+    setMessages((prev) => {
+      if (!(conversationId in prev)) return prev;
+      const next = { ...prev };
+      delete next[conversationId];
+      return next;
+    });
+    setUnread((prev) => {
+      if (!prev[conversationId]) return prev;
+      const next = { ...prev };
+      delete next[conversationId];
+      return next;
+    });
+  }, []);
+
+  const deleteChat = useCallback(
+    async (conversationId: string) => {
+      await chatApi.deleteConversation(conversationId);
+      dropConversation(conversationId);
+    },
+    [dropConversation],
+  );
+
+  const deleteGroup = useCallback(
+    async (conversationId: string) => {
+      await chatApi.deleteGroup(conversationId);
+      dropConversation(conversationId);
+    },
+    [dropConversation],
+  );
+
   const messagesFor = useCallback((conversationId: string) => messages[conversationId] ?? [], [messages]);
   const typingIn = useCallback(
     (conversationId: string) => Object.values(typing[conversationId] ?? {}),
@@ -548,6 +622,11 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       setGroupAvatar,
       addMembers,
       removeMember,
+      setPinned,
+      setMuted,
+      clearMessages,
+      deleteChat,
+      deleteGroup,
     }),
     [
       conversations,
@@ -577,6 +656,11 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       setGroupAvatar,
       addMembers,
       removeMember,
+      setPinned,
+      setMuted,
+      clearMessages,
+      deleteChat,
+      deleteGroup,
     ],
   );
 

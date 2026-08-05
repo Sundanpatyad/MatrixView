@@ -137,6 +137,70 @@ router.delete('/chat/conversations/:id/members/:userId', async (req, res, next) 
   }
 });
 
+router.post('/chat/conversations/:id/pin', async (req, res, next) => {
+  try {
+    const body = z.object({ pinned: z.boolean() }).parse(req.body);
+    const data = await chat.setConversationPinned(
+      actorFrom(req as AuthedRequest),
+      param(req.params.id),
+      body.pinned,
+    );
+    res.json(data);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/chat/conversations/:id/mute', async (req, res, next) => {
+  try {
+    const body = z.object({ muted: z.boolean() }).parse(req.body);
+    const data = await chat.setConversationMuted(
+      actorFrom(req as AuthedRequest),
+      param(req.params.id),
+      body.muted,
+    );
+    res.json(data);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/chat/conversations/:id/clear', async (req, res, next) => {
+  try {
+    const data = await chat.clearConversationMessages(
+      actorFrom(req as AuthedRequest),
+      param(req.params.id),
+    );
+    res.json(data);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete('/chat/conversations/:id', async (req, res, next) => {
+  try {
+    const data = await chat.deleteConversationForMe(
+      actorFrom(req as AuthedRequest),
+      param(req.params.id),
+    );
+    res.json(data);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete('/chat/conversations/:id/group', async (req, res, next) => {
+  try {
+    const data = await chat.deleteGroup(
+      actorFrom(req as AuthedRequest),
+      param(req.params.id),
+    );
+    res.json(data);
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.get('/chat/conversations/:id/messages', async (req, res, next) => {
   try {
     const afterRaw = req.query.after;

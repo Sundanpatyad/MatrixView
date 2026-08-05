@@ -60,6 +60,41 @@ export function removeGroupMember(conversationId: string, userId: string) {
   );
 }
 
+export function setConversationPinned(conversationId: string, pinned: boolean) {
+  return apiFetch<{ conversation: ChatConversation }>(
+    `/api/chat/conversations/${conversationId}/pin`,
+    { method: 'POST', body: { pinned }, auth: true },
+  );
+}
+
+export function setConversationMuted(conversationId: string, muted: boolean) {
+  return apiFetch<{ conversation: ChatConversation }>(
+    `/api/chat/conversations/${conversationId}/mute`,
+    { method: 'POST', body: { muted }, auth: true },
+  );
+}
+
+export function clearConversationMessages(conversationId: string) {
+  return apiFetch<{ conversation: ChatConversation }>(
+    `/api/chat/conversations/${conversationId}/clear`,
+    { method: 'POST', auth: true },
+  );
+}
+
+export function deleteConversation(conversationId: string) {
+  return apiFetch<{ ok: true; removed: true }>(`/api/chat/conversations/${conversationId}`, {
+    method: 'DELETE',
+    auth: true,
+  });
+}
+
+export function deleteGroup(conversationId: string) {
+  return apiFetch<{ ok: true; removed: true }>(
+    `/api/chat/conversations/${conversationId}/group`,
+    { method: 'DELETE', auth: true },
+  );
+}
+
 export function listMessages(
   conversationId: string,
   params: { after?: string; before?: string; limit?: number } = {},

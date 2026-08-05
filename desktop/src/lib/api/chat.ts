@@ -27,6 +27,9 @@ export type ChatConversation = {
   lastMessageAt: string;
   lastMessagePreview: string;
   createdAt: string;
+  muted?: boolean;
+  pinned?: boolean;
+  pinnedAt?: string | null;
 };
 
 export type ChatAttachment = {
