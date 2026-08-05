@@ -4,7 +4,14 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useMemo, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
-import { AppHeader, EmptyState, LoadingView, Screen, SegmentedControl } from '@/components/ui';
+import {
+  AppHeader,
+  EmptyState,
+  LoadingView,
+  Screen,
+  SegmentedControl,
+  useGlassScreenPadding,
+} from '@/components/ui';
 import { useNotifications } from '@/context/NotificationContext';
 import { useToast } from '@/context/ToastContext';
 import type { AppNotification, NotificationType } from '@/lib/api';
@@ -37,6 +44,7 @@ export function NotificationsScreen() {
   const toast = useToast();
   const { items, unreadCount, isLoading, hasMore, refresh, loadMore, markRead, markAllRead, remove } =
     useNotifications();
+  const pad = useGlassScreenPadding();
 
   const [filter, setFilter] = useState<Filter>('all');
   const [refreshing, setRefreshing] = useState(false);
@@ -88,8 +96,9 @@ export function NotificationsScreen() {
   }
 
   return (
-    <Screen>
+    <Screen edges={[]}>
       <AppHeader
+        floating
         title="Notifications"
         subtitle={unreadCount > 0 ? `${unreadCount} unread` : 'You are all caught up'}
         actions={
@@ -112,27 +121,38 @@ export function NotificationsScreen() {
         }
       />
 
-      <View style={styles.filters}>
-        <SegmentedControl
-          scrollable
-          value={filter}
-          onChange={setFilter}
-          options={[
-            { value: 'all', label: 'All' },
-            { value: 'unread', label: 'Unread', count: unreadCount },
-            { value: 'tasks', label: 'Tasks' },
-            { value: 'messages', label: 'Messages' },
-            { value: 'projects', label: 'Projects' },
-          ]}
-        />
-      </View>
-
       <FlatList
         data={filtered}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.list}
+        contentContainerStyle={[
+          styles.list,
+          { paddingTop: pad.top + 8, paddingBottom: pad.bottom + 24 },
+        ]}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.brand} />}
+        ListHeaderComponent={
+          <View style={styles.filters}>
+            <SegmentedControl
+              scrollable
+              value={filter}
+              onChange={setFilter}
+              options={[
+                { value: 'all', label: 'All' },
+                { value: 'unread', label: 'Unread', count: unreadCount },
+                { value: 'tasks', label: 'Tasks' },
+                { value: 'messages', label: 'Messages' },
+                { value: 'projects', label: 'Projects' },
+              ]}
+            />
+          </View>
+        }
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.brand}
+            progressViewOffset={pad.top}
+          />
+        }
         onEndReachedThreshold={0.4}
         onEndReached={() => {
           if (hasMore) void loadMore();
@@ -205,7 +225,6 @@ const styles = StyleSheet.create({
   },
   list: {
     paddingHorizontal: 16,
-    paddingBottom: 24,
     gap: 9,
     flexGrow: 1,
   },

@@ -22,6 +22,8 @@ interface OptionSheetProps<T extends string> {
   options: SheetOption<T>[];
   value?: T | null;
   onSelect: (value: T) => void;
+  /** Shown in place of the list when there is nothing to pick. */
+  emptyLabel?: string;
 }
 
 export function OptionSheet<T extends string>({
@@ -32,48 +34,70 @@ export function OptionSheet<T extends string>({
   options,
   value,
   onSelect,
+  emptyLabel = 'Nothing to choose from yet.',
 }: OptionSheetProps<T>) {
   const colors = useColors();
 
   return (
     <Sheet visible={visible} onClose={onClose} title={title} subtitle={subtitle}>
-      <View style={styles.list}>
-        {options.map((option) => {
-          const active = option.value === value;
-          return (
-            <Pressable
-              key={option.value}
-              onPress={() => {
-                onSelect(option.value);
-                onClose();
-              }}
-              style={({ pressed }) => [
-                styles.row,
-                {
-                  backgroundColor: active ? colors.brandSoft : colors.surfaceAlt,
-                  borderColor: active ? colors.brandBorder : colors.border,
-                },
-                pressed && { opacity: 0.8 },
-              ]}
-            >
-              {option.icon ? (
-                <Ionicons name={option.icon} size={19} color={option.color ?? (active ? colors.brand : colors.textMuted)} />
-              ) : option.color ? (
-                <View style={[styles.dot, { backgroundColor: option.color }]} />
-              ) : null}
+      {options.length === 0 ? (
+        <View style={[styles.empty, { borderColor: colors.border }]}>
+          <Ionicons name="file-tray-outline" size={22} color={colors.textSubtle} />
+          <Text style={[styles.emptyText, { color: colors.textSubtle }]}>{emptyLabel}</Text>
+        </View>
+      ) : (
+        <View style={styles.list}>
+          {options.map((option) => {
+            const active = option.value === value;
+            const accent = option.color ?? colors.brand;
 
-              <View style={styles.text}>
-                <Text style={[styles.label, { color: active ? colors.brand : colors.text }]}>{option.label}</Text>
-                {option.description ? (
-                  <Text style={[styles.description, { color: colors.textSubtle }]}>{option.description}</Text>
-                ) : null}
-              </View>
+            return (
+              <Pressable
+                key={option.value}
+                onPress={() => {
+                  onSelect(option.value);
+                  onClose();
+                }}
+                accessibilityRole="button"
+                accessibilityState={{ selected: active }}
+                style={({ pressed }) => [
+                  styles.row,
+                  {
+                    backgroundColor: active ? colors.brandSoft : colors.surfaceAlt,
+                    borderColor: active ? colors.brandBorder : 'transparent',
+                  },
+                  pressed && { opacity: 0.75 },
+                ]}
+              >
+                {option.icon ? (
+                  <View style={[styles.iconChip, { backgroundColor: active ? colors.brand : colors.bg }]}>
+                    <Ionicons
+                      name={option.icon}
+                      size={17}
+                      color={active ? colors.onBrand : (option.color ?? colors.textMuted)}
+                    />
+                  </View>
+                ) : (
+                  <View style={[styles.dot, { backgroundColor: accent }]} />
+                )}
 
-              {active ? <Ionicons name="checkmark-circle" size={20} color={colors.brand} /> : null}
-            </Pressable>
-          );
-        })}
-      </View>
+                <View style={styles.text}>
+                  <Text style={[styles.label, { color: colors.text }]} numberOfLines={1}>
+                    {option.label}
+                  </Text>
+                  {option.description ? (
+                    <Text style={[styles.description, { color: colors.textSubtle }]} numberOfLines={1}>
+                      {option.description}
+                    </Text>
+                  ) : null}
+                </View>
+
+                {active ? <Ionicons name="checkmark-circle" size={21} color={colors.brand} /> : null}
+              </Pressable>
+            );
+          })}
+        </View>
+      )}
     </Sheet>
   );
 }
@@ -81,20 +105,30 @@ export function OptionSheet<T extends string>({
 const styles = StyleSheet.create({
   list: {
     gap: 8,
+    paddingBottom: 4,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 13,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
     borderRadius: radius.md,
     borderWidth: 1,
+    minHeight: 56,
+  },
+  iconChip: {
+    width: 34,
+    height: 34,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   dot: {
     width: 10,
     height: 10,
     borderRadius: 5,
+    marginHorizontal: 12,
   },
   text: {
     flex: 1,
@@ -106,5 +140,18 @@ const styles = StyleSheet.create({
   description: {
     fontSize: 12,
     marginTop: 2,
+  },
+  empty: {
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 28,
+    paddingHorizontal: 16,
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderStyle: 'dashed',
+  },
+  emptyText: {
+    fontSize: 13.5,
+    textAlign: 'center',
   },
 });

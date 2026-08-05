@@ -14,6 +14,7 @@ import {
   ProgressBar,
   Screen,
   SegmentedControl,
+  useTabBarPadding,
   type SheetOption,
 } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
@@ -42,6 +43,7 @@ export function DashboardScreen() {
     useWorkspace();
   const { unreadCount } = useNotifications();
   const { connected } = useChat();
+  const tabBarHeight = useTabBarPadding();
 
   const [filter, setFilter] = useState<TaskFilter>('mine');
   const [projectSheet, setProjectSheet] = useState(false);
@@ -114,7 +116,15 @@ export function DashboardScreen() {
 
   const projectOptions = useMemo<SheetOption<string>[]>(
     () => [
-      { value: 'all', label: 'All projects', description: `${projects.length} projects`, icon: 'albums-outline' },
+      {
+        value: 'all',
+        label: 'All projects',
+        description:
+          projects.length === 0
+            ? 'Nothing here yet'
+            : `${projects.length} ${projects.length === 1 ? 'project' : 'projects'}`,
+        icon: 'albums-outline',
+      },
       ...projects.map((project) => ({
         value: project.id,
         label: project.name,
@@ -141,7 +151,7 @@ export function DashboardScreen() {
   return (
     <Screen>
       <ScrollView
-        contentContainerStyle={styles.scroll}
+        contentContainerStyle={[styles.scroll, { paddingBottom: tabBarHeight + 32 }]}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.brand} />}
       >
@@ -292,6 +302,7 @@ export function DashboardScreen() {
         visible={projectSheet}
         onClose={() => setProjectSheet(false)}
         title="Filter by project"
+        subtitle="Scope the dashboard to one project."
         options={projectOptions}
         value={activeProjectId}
         onSelect={(value) => setActiveProjectId(value)}
@@ -328,7 +339,6 @@ function StatTile({
 const styles = StyleSheet.create({
   scroll: {
     paddingHorizontal: 16,
-    paddingBottom: 32,
     gap: 16,
   },
   header: {

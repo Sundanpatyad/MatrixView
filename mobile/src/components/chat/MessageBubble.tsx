@@ -1,14 +1,29 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import * as Linking from 'expo-linking';
-import React from 'react';
+import React, { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Avatar } from '@/components/ui';
-import type { ChatMessage } from '@/lib/api';
+import type { ChatAttachment, ChatMessage } from '@/lib/api';
+import { openAttachment } from '@/lib/attachments';
 import { formatBytes, formatSeconds, formatTime } from '@/lib/format';
 import { resolveMediaUrl } from '@/lib/mediaUrl';
 import { radius, useColors } from '@/theme';
+
+const DOCUMENT_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
+  video: 'film-outline',
+  audio: 'musical-notes-outline',
+  document: 'document-text-outline',
+  other: 'attach-outline',
+};
+
+function documentLabel(attachment: ChatAttachment): string {
+  const extension = attachment.name.split('.').pop();
+  if (extension && extension.length <= 4 && extension !== attachment.name) {
+    return `${extension.toUpperCase()} · ${formatBytes(attachment.size)}`;
+  }
+  return formatBytes(attachment.size);
+}
 
 interface MessageBubbleProps {
   message: ChatMessage;
@@ -23,6 +38,61 @@ function StatusTick({ status, tint }: { status?: string; tint: string }) {
   if (status === 'read') return <Ionicons name="checkmark-done" size={14} color="#4fc3f7" />;
   if (status === 'delivered') return <Ionicons name="checkmark-done" size={14} color={tint} />;
   return <Ionicons name="checkmark" size={14} color={tint} />;
+}
+
+function DocumentRow({
+  attachment,
+  mine,
+  textColor,
+  metaColor,
+}: {
+  attachment: ChatAttachment;
+  mine: boolean;
+  textColor: string;
+  metaColor: string;
+}) {
+  const colors = useColors();
+  const [busy, setBusy] = useState(false);
+
+  const handlePress = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await openAttachment(attachment);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const tint = mine ? '#ffffff' : colors.textMuted;
+
+  return (
+    <Pressable
+      onPress={handlePress}
+      accessibilityRole="button"
+      accessibilityLabel={`Open ${attachment.name}`}
+      style={({ pressed }) => [
+        styles.file,
+        { backgroundColor: mine ? 'rgba(0,0,0,0.16)' : colors.surfaceAlt },
+        pressed && { opacity: 0.75 },
+      ]}
+    >
+      <View style={[styles.fileIcon, { backgroundColor: mine ? 'rgba(255,255,255,0.16)' : colors.bg }]}>
+        <Ionicons name={DOCUMENT_ICONS[attachment.kind] ?? 'attach-outline'} size={19} color={tint} />
+      </View>
+      <View style={styles.fileText}>
+        <Text style={[styles.fileName, { color: textColor }]} numberOfLines={1}>
+          {attachment.name}
+        </Text>
+        <Text style={[styles.fileSize, { color: metaColor }]}>{documentLabel(attachment)}</Text>
+      </View>
+      {busy ? (
+        <ActivityIndicator size="small" color={tint} />
+      ) : (
+        <Ionicons name="download-outline" size={18} color={metaColor} />
+      )}
+    </Pressable>
+  );
 }
 
 export function MessageBubble({ message, mine, showSender, onLongPress, onRetry }: MessageBubbleProps) {
@@ -54,11 +124,6 @@ export function MessageBubble({ message, mine, showSender, onLongPress, onRetry 
   const metaColor = mine ? 'rgba(255,255,255,0.72)' : colors.textSubtle;
   const failed = message.localState === 'failed';
   const sending = message.localState === 'sending';
-
-  const openAttachment = (url: string) => {
-    const resolved = resolveMediaUrl(url);
-    if (resolved) Linking.openURL(resolved).catch(() => undefined);
-  };
 
   return (
     <View style={[styles.row, mine ? styles.rowMine : styles.rowTheirs]}>
@@ -113,7 +178,7 @@ export function MessageBubble({ message, mine, showSender, onLongPress, onRetry 
           <>
             {message.attachments.map((attachment) =>
               attachment.kind === 'image' ? (
-                <Pressable key={attachment.id} onPress={() => openAttachment(attachment.url)}>
+                <Pressable key={attachment.id} onPress={() => void openAttachment(attachment)}>
                   <Image
                     source={{ uri: resolveMediaUrl(attachment.url) }}
                     style={styles.image}
@@ -122,32 +187,13 @@ export function MessageBubble({ message, mine, showSender, onLongPress, onRetry 
                   />
                 </Pressable>
               ) : (
-                <Pressable
+                <DocumentRow
                   key={attachment.id}
-                  onPress={() => openAttachment(attachment.url)}
-                  style={[
-                    styles.file,
-                    { backgroundColor: mine ? 'rgba(0,0,0,0.16)' : colors.surfaceAlt },
-                  ]}
-                >
-                  <Ionicons
-                    name={
-                      attachment.kind === 'video'
-                        ? 'videocam-outline'
-                        : attachment.kind === 'audio'
-                          ? 'musical-notes-outline'
-                          : 'document-outline'
-                    }
-                    size={19}
-                    color={mine ? '#ffffff' : colors.textMuted}
-                  />
-                  <View style={styles.fileText}>
-                    <Text style={[styles.fileName, { color: textColor }]} numberOfLines={1}>
-                      {attachment.name}
-                    </Text>
-                    <Text style={[styles.fileSize, { color: metaColor }]}>{formatBytes(attachment.size)}</Text>
-                  </View>
-                </Pressable>
+                  attachment={attachment}
+                  mine={mine}
+                  textColor={textColor}
+                  metaColor={metaColor}
+                />
               ),
             )}
 
@@ -240,6 +286,13 @@ const styles = StyleSheet.create({
     padding: 9,
     borderRadius: radius.sm,
     minWidth: 190,
+  },
+  fileIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   fileText: {
     flex: 1,

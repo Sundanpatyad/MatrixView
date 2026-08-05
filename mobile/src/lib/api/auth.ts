@@ -9,6 +9,15 @@ export function loginRequest(email: string, password: string) {
   });
 }
 
+/** Native Google Sign-In: exchange a Google ID token for DockX session tokens. */
+export function googleLoginRequest(idToken: string) {
+  return apiFetch<AuthResponse>('/api/auth/google', {
+    method: 'POST',
+    body: { idToken, deviceType: DEVICE_TYPE, deviceId: DEVICE_ID },
+    skipRefresh: true,
+  });
+}
+
 export function registerRequest(input: {
   name: string;
   email: string;

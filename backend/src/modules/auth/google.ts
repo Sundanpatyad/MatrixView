@@ -180,13 +180,15 @@ export async function exchangeGoogleCode(
 }
 
 export async function verifyGoogleIdToken(idToken: string): Promise<GoogleProfile> {
-  if (!config.google.clientId) {
+  const audiences = [config.google.clientId, config.google.iosClientId].filter(Boolean);
+  if (!audiences.length) {
     throw new AuthError('Google sign-in is not configured', 503, 'GOOGLE_NOT_CONFIGURED');
   }
-  const client = new OAuth2Client(config.google.clientId);
+  const client = new OAuth2Client(config.google.clientId || audiences[0]);
   const ticket = await client.verifyIdToken({
     idToken,
-    audience: config.google.clientId,
+    // Native iOS tokens are minted for the iOS client; web/desktop use the web client.
+    audience: audiences.length === 1 ? audiences[0] : audiences,
   });
   const payload = ticket.getPayload();
   if (!payload?.sub || !payload.email) {

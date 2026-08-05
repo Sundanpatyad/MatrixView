@@ -16,13 +16,23 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MessageBubble } from '@/components/chat/MessageBubble';
-import { AppHeader, Avatar, EmptyState, Screen, Sheet } from '@/components/ui';
+import { TypingIndicator } from '@/components/chat/TypingIndicator';
+import {
+  AppHeader,
+  Avatar,
+  EmptyState,
+  Screen,
+  Sheet,
+  useFloatingHeaderHeight,
+} from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
+import { useCall } from '@/context/CallContext';
 import { useChat } from '@/context/ChatContext';
 import { useToast } from '@/context/ToastContext';
 import type { ChatMessage, PickedFile } from '@/lib/api';
 import { formatDayDivider } from '@/lib/format';
 import { captureImage, pickDocuments, pickImages } from '@/lib/pickers';
+import type { CallMediaKind } from '@/lib/socket/socket';
 import type { RootStackParamList } from '@/navigation/types';
 import { radius, useColors } from '@/theme';
 
@@ -31,6 +41,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'ChatThread'>;
 type Row = { kind: 'message'; message: ChatMessage; showSender: boolean } | { kind: 'divider'; label: string; id: string };
 
 const TYPING_IDLE_MS = 2200;
+const JOIN_BANNER_HEIGHT = 42;
 
 export function ChatThreadScreen({ route, navigation }: Props) {
   const { conversationId } = route.params;
@@ -54,6 +65,8 @@ export function ChatThreadScreen({ route, navigation }: Props) {
     remove,
     setTyping,
   } = useChat();
+  const { startCall, joinGroupCall, activeRooms, call } = useCall();
+  const headerHeight = useFloatingHeaderHeight();
 
   const conversation = conversations.find((entry) => entry.id === conversationId);
   const messages = messagesFor(conversationId);
@@ -98,6 +111,23 @@ export function ChatThreadScreen({ route, navigation }: Props) {
       : online
         ? 'Online'
         : 'Offline';
+
+  const activeRoom = activeRooms[conversationId];
+  const showJoinBanner = Boolean(activeRoom) && call.phase === 'idle';
+
+  const placeCall = useCallback(
+    (mediaKind: CallMediaKind) => {
+      if (!conversation) return;
+      void startCall({
+        conversationId,
+        mediaKind,
+        isGroup: conversation.type === 'group',
+        title: conversation.type === 'dm' ? peer?.name ?? conversation.name : conversation.name,
+        peerUserId: conversation.type === 'dm' ? peer?.id : null,
+      });
+    },
+    [conversation, conversationId, peer, startCall],
+  );
 
   // The list renders inverted, so rows go newest-first and dividers sit
   // *after* the last message of each day.
@@ -217,8 +247,9 @@ export function ChatThreadScreen({ route, navigation }: Props) {
   }
 
   return (
-    <Screen edges={['top']}>
+    <Screen edges={[]}>
       <AppHeader
+        floating
         title={title}
         subtitle={subtitle}
         showBack
@@ -235,12 +266,57 @@ export function ChatThreadScreen({ route, navigation }: Props) {
         }
         actions={[
           {
+            icon: 'call-outline',
+            onPress: () => placeCall('audio'),
+            accessibilityLabel: 'Start voice call',
+          },
+          {
+            icon: 'videocam-outline',
+            onPress: () => placeCall('video'),
+            accessibilityLabel: 'Start video call',
+          },
+          {
             icon: 'information-circle-outline',
             onPress: () => navigation.navigate('ConversationInfo', { conversationId }),
             accessibilityLabel: 'Conversation info',
           },
         ]}
       />
+
+      {showJoinBanner && activeRoom ? (
+        <Pressable
+          onPress={() =>
+            void joinGroupCall({
+              conversationId,
+              callId: activeRoom.callId,
+              mediaKind: activeRoom.mediaKind,
+              title: conversation.name,
+            })
+          }
+          style={[
+            styles.joinBanner,
+            {
+              top: headerHeight,
+              backgroundColor: colors.successSoft,
+              borderBottomColor: colors.border,
+            },
+          ]}
+        >
+          <Ionicons
+            name={activeRoom.mediaKind === 'video' ? 'videocam' : 'call'}
+            size={18}
+            color={colors.success}
+          />
+          <Text style={[styles.joinText, { color: colors.text }]} numberOfLines={1}>
+            {activeRoom.participantCount > 0
+              ? `Call in progress · ${activeRoom.participantCount} joined`
+              : 'Call in progress'}
+          </Text>
+          <View style={[styles.joinAction, { backgroundColor: colors.success }]}>
+            <Text style={styles.joinActionText}>Join</Text>
+          </View>
+        </Pressable>
+      ) : null}
 
       <KeyboardAvoidingView
         style={styles.flex}
@@ -251,7 +327,11 @@ export function ChatThreadScreen({ route, navigation }: Props) {
           data={rows}
           inverted
           keyExtractor={(row) => (row.kind === 'message' ? row.message.id : row.id)}
-          contentContainerStyle={styles.list}
+          // The list is flipped, so its bottom padding is what clears the header.
+          contentContainerStyle={[
+            styles.list,
+            { paddingBottom: headerHeight + (showJoinBanner ? JOIN_BANNER_HEIGHT : 0) + 8 },
+          ]}
           showsVerticalScrollIndicator={false}
           keyboardDismissMode="interactive"
           onEndReachedThreshold={0.4}
@@ -295,6 +375,8 @@ export function ChatThreadScreen({ route, navigation }: Props) {
             );
           }}
         />
+
+        <TypingIndicator names={typingNames} />
 
         {replyTo || editing ? (
           <View style={[styles.contextBar, { backgroundColor: colors.surfaceAlt, borderTopColor: colors.border }]}>
@@ -494,6 +576,33 @@ const styles = StyleSheet.create({
   },
   dividerText: {
     fontSize: 11.5,
+    fontWeight: '700',
+  },
+  joinBanner: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    zIndex: 20,
+    height: JOIN_BANNER_HEIGHT,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  joinText: {
+    flex: 1,
+    fontSize: 13.5,
+    fontWeight: '600',
+  },
+  joinAction: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: radius.pill,
+  },
+  joinActionText: {
+    color: '#ffffff',
+    fontSize: 12.5,
     fontWeight: '700',
   },
   contextBar: {

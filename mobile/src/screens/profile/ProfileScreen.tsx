@@ -4,7 +4,15 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { AppHeader, Avatar, Badge, Card, ListRow, Screen } from '@/components/ui';
+import {
+  AppHeader,
+  Avatar,
+  Badge,
+  Card,
+  ListRow,
+  Screen,
+  useGlassScreenPadding,
+} from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
 import { useChat } from '@/context/ChatContext';
 import { useToast } from '@/context/ToastContext';
@@ -23,6 +31,7 @@ export function ProfileScreen() {
   const { user, isAdmin, logout, logoutEverywhere, uploadAvatar } = useAuth();
   const { projects, tasks } = useWorkspace();
   const { connected, conversations } = useChat();
+  const pad = useGlassScreenPadding();
 
   const [uploading, setUploading] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
@@ -77,15 +86,22 @@ export function ProfileScreen() {
   };
 
   return (
-    <Screen>
+    <Screen edges={[]}>
       <AppHeader
+        floating
         title="Profile"
         actions={[
           { icon: 'settings-outline', onPress: () => navigation.navigate('Settings'), accessibilityLabel: 'Settings' },
         ]}
       />
 
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[
+          styles.scroll,
+          { paddingTop: pad.top + 8, paddingBottom: pad.bottom + 32 },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.hero}>
           <Pressable onPress={changeAvatar} disabled={uploading}>
             <Avatar name={user?.name} uri={user?.avatarUrl} size={92} online={connected} />
@@ -181,9 +197,8 @@ function Separator() {
 
 const styles = StyleSheet.create({
   scroll: {
-    padding: 16,
+    paddingHorizontal: 16,
     gap: 16,
-    paddingBottom: 32,
   },
   hero: {
     alignItems: 'center',

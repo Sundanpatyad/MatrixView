@@ -1,10 +1,12 @@
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import React, { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { AuthPrimaryButton, AuthSocialGroup } from '@/components/auth/AuthActions';
+import { AuthField } from '@/components/auth/AuthField';
 import { AuthLayout } from '@/components/auth/AuthLayout';
-import { Button, Input } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
+import { useToast } from '@/context/ToastContext';
 import { messageFromError } from '@/lib/api';
 import { API_BASE } from '@/lib/config';
 import type { RootStackParamList } from '@/navigation/types';
@@ -14,12 +16,14 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
 
 export function LoginScreen({ navigation }: Props) {
   const colors = useColors();
-  const { login } = useAuth();
+  const toast = useToast();
+  const { login, loginWithGoogle } = useAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [googleSubmitting, setGoogleSubmitting] = useState(false);
 
   const canSubmit = email.trim().length > 3 && password.length >= 6;
 
@@ -36,10 +40,33 @@ export function LoginScreen({ navigation }: Props) {
     }
   };
 
+  const handleGoogle = async () => {
+    if (googleSubmitting || submitting) return;
+    setGoogleSubmitting(true);
+    setError(null);
+    try {
+      await loginWithGoogle();
+    } catch (err) {
+      toast.fromError(err, 'Google sign-in failed.');
+    } finally {
+      setGoogleSubmitting(false);
+    }
+  };
+
+  const showHelp = () => {
+    Alert.alert(
+      'Need a hand?',
+      `Sign in with Google or the work email your admin invited. This build talks to:\n\n${API_BASE}`,
+      [{ text: 'OK' }],
+    );
+  };
+
   return (
     <AuthLayout
       title="Welcome back"
-      subtitle="Sign in to pick up your boards, chats and tasks where you left off."
+      subtitle="Enter the email associated with your DockX account"
+      onBack={() => navigation.navigate('Welcome')}
+      onHelp={showHelp}
       footer={
         <View style={styles.footerRow}>
           <Text style={[styles.footerText, { color: colors.textMuted }]}>New to DockX?</Text>
@@ -49,48 +76,67 @@ export function LoginScreen({ navigation }: Props) {
         </View>
       }
     >
-      <Input
-        label="Work email"
-        placeholder="you@company.com"
-        icon="mail-outline"
+      <AuthField
+        placeholder="Enter your email"
         value={email}
         onChangeText={setEmail}
         autoCapitalize="none"
         autoComplete="email"
         keyboardType="email-address"
         returnKeyType="next"
+        textContentType="emailAddress"
+        autoCorrect={false}
       />
 
-      <Input
-        label="Password"
+      <AuthField
         placeholder="Enter your password"
-        icon="lock-closed-outline"
         value={password}
         onChangeText={setPassword}
         password
         autoComplete="password"
         returnKeyType="go"
+        textContentType="password"
         onSubmitEditing={handleSubmit}
         error={error}
       />
 
-      <Button
-        label="Sign in"
+      <Pressable
+        onPress={() =>
+          Alert.alert(
+            'Reset password',
+            'Password reset is not available in the mobile app yet. Ask your workspace admin, or use the desktop app.',
+            [{ text: 'OK' }],
+          )
+        }
+        hitSlop={6}
+        style={styles.linkWrap}
+      >
+        <Text style={[styles.link, { color: colors.brand }]}>Lost access to my email</Text>
+      </Pressable>
+
+      <AuthPrimaryButton
+        label="Continue"
         onPress={handleSubmit}
         loading={submitting}
-        disabled={!canSubmit}
-        size="lg"
-        fullWidth
+        disabled={!canSubmit || googleSubmitting}
       />
 
-      <Text style={[styles.endpoint, { color: colors.textSubtle }]} numberOfLines={1}>
-        Connected to {API_BASE}
-      </Text>
+      <AuthSocialGroup onGoogle={handleGoogle} loading={googleSubmitting} />
     </AuthLayout>
   );
 }
 
 const styles = StyleSheet.create({
+  linkWrap: {
+    alignSelf: 'flex-start',
+    marginTop: -2,
+    marginBottom: 2,
+    paddingVertical: 2,
+  },
+  link: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
   footerRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -102,10 +148,5 @@ const styles = StyleSheet.create({
   footerLink: {
     fontSize: 14,
     fontWeight: '700',
-  },
-  endpoint: {
-    fontSize: 11,
-    textAlign: 'center',
-    marginTop: -4,
   },
 });

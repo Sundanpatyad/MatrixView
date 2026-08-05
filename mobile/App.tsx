@@ -3,7 +3,9 @@ import React from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { CallOverlay } from '@/components/calls/CallOverlay';
 import { AuthProvider } from '@/context/AuthContext';
+import { CallProvider } from '@/context/CallContext';
 import { ChatProvider } from '@/context/ChatContext';
 import { NotificationProvider } from '@/context/NotificationContext';
 import { ToastProvider } from '@/context/ToastContext';
@@ -26,8 +28,12 @@ export default function App() {
               <WorkspaceProvider>
                 <ChatProvider>
                   <NotificationProvider>
-                    <ThemedStatusBar />
-                    <RootNavigator />
+                    {/* Calls live above the navigator so they survive screen changes. */}
+                    <CallProvider>
+                      <ThemedStatusBar />
+                      <RootNavigator />
+                      <CallOverlay />
+                    </CallProvider>
                   </NotificationProvider>
                 </ChatProvider>
               </WorkspaceProvider>

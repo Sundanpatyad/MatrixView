@@ -8,6 +8,7 @@ import {
   type PickedFile,
   type PresenceUser,
 } from '@/lib/api';
+import { attachmentKindOf } from '@/lib/attachments';
 import { patchSocketHandlers, socketActions } from '@/lib/socket/socket';
 
 import { useAuth } from './AuthContext';
@@ -122,6 +123,18 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     }
     void refresh();
   }, [isAuthenticated, refresh, reset]);
+
+  /**
+   * Typing updates are room-scoped (`conversation:{id}`). Stay joined to every
+   * conversation so the chat list and open thread both receive live indicators,
+   * matching the desktop client's group subscriptions.
+   */
+  useEffect(() => {
+    if (!connected || !isAuthenticated) return;
+    conversations.forEach((conversation) => {
+      socketActions.joinConversation(conversation.id);
+    });
+  }, [connected, conversations, isAuthenticated]);
 
   useEffect(() => {
     patchSocketHandlers({
@@ -266,7 +279,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     if (activeConversationRef.current === conversationId) {
       activeConversationRef.current = null;
     }
-    socketActions.leaveConversation(conversationId);
+    // Keep the socket room so typing/read events still arrive for the list.
+    void conversationId;
   }, []);
 
   const loadOlderMessages = useCallback(
@@ -345,7 +359,16 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         type: 'text',
         body: input.body,
         replyTo: null,
-        attachments: [],
+        // Showing the picked files right away means an upload never looks like
+        // an empty bubble; the server response replaces these with real URLs.
+        attachments: (input.files ?? []).map((file, index) => ({
+          id: `${localId}-att-${index}`,
+          name: file.name,
+          size: file.size ?? 0,
+          mimeType: file.mimeType,
+          url: file.uri,
+          kind: attachmentKindOf(file.mimeType),
+        })),
         status: 'sent',
         localState: 'sending',
         editedAt: null,

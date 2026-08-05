@@ -2,18 +2,22 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import React, { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { AuthPrimaryButton, AuthSocialGroup } from '@/components/auth/AuthActions';
+import { AuthField } from '@/components/auth/AuthField';
 import { AuthLayout } from '@/components/auth/AuthLayout';
-import { Button, Input } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
+import { useToast } from '@/context/ToastContext';
 import { authApi, messageFromError, type InvitePreview } from '@/lib/api';
 import type { RootStackParamList } from '@/navigation/types';
-import { radius, useColors } from '@/theme';
+import { useColors, useTheme } from '@/theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Register'>;
 
 export function RegisterScreen({ navigation, route }: Props) {
   const colors = useColors();
-  const { register } = useAuth();
+  const { isDark } = useTheme();
+  const toast = useToast();
+  const { register, loginWithGoogle } = useAuth();
   const inviteToken = route.params?.inviteToken;
 
   const [invite, setInvite] = useState<InvitePreview | null>(null);
@@ -23,6 +27,7 @@ export function RegisterScreen({ navigation, route }: Props) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [googleSubmitting, setGoogleSubmitting] = useState(false);
 
   useEffect(() => {
     if (!inviteToken) return;
@@ -64,13 +69,32 @@ export function RegisterScreen({ navigation, route }: Props) {
     }
   };
 
+  const handleGoogle = async () => {
+    if (googleSubmitting || submitting || invite) return;
+    setGoogleSubmitting(true);
+    setError(null);
+    try {
+      await loginWithGoogle();
+    } catch (err) {
+      toast.fromError(err, 'Google sign-in failed.');
+    } finally {
+      setGoogleSubmitting(false);
+    }
+  };
+
+  const bannerFill = isDark ? 'rgba(88, 101, 242, 0.16)' : 'rgba(88, 101, 242, 0.10)';
+
   return (
     <AuthLayout
-      title={invite ? `Join ${invite.orgName}` : 'Create your workspace'}
+      title={invite ? `Join ${invite.orgName}` : 'Create your account'}
       subtitle={
         invite
           ? `You were invited to ${invite.projectName} as ${invite.role}. Set a password to get started.`
-          : 'Set up an account to run projects, boards and team chat in one place.'
+          : 'Set up DockX for boards, chat and tasks in one place.'
+      }
+      onBack={() => navigation.navigate('Welcome')}
+      onHelp={() =>
+        toast.info('Use a work email. Organisation is optional — we can derive it from your domain.')
       }
       footer={
         <View style={styles.footerRow}>
@@ -82,67 +106,65 @@ export function RegisterScreen({ navigation, route }: Props) {
       }
     >
       {invite ? (
-        <View style={[styles.inviteBanner, { backgroundColor: colors.brandSoft, borderColor: colors.brandBorder }]}>
+        <View style={[styles.inviteBanner, { backgroundColor: bannerFill }]}>
           <Text style={[styles.inviteText, { color: colors.brand }]}>
             Invitation to {invite.projectName} · {invite.orgName}
           </Text>
         </View>
       ) : null}
 
-      <Input
-        label="Full name"
-        placeholder="Riya Sharma"
-        icon="person-outline"
+      <AuthField
+        placeholder="Full name"
         value={name}
         onChangeText={setName}
         autoCapitalize="words"
         autoComplete="name"
+        textContentType="name"
+        returnKeyType="next"
       />
 
-      <Input
-        label="Work email"
-        placeholder="you@company.com"
-        icon="mail-outline"
+      <AuthField
+        placeholder="Work email"
         value={email}
         onChangeText={setEmail}
         autoCapitalize="none"
         keyboardType="email-address"
         autoComplete="email"
+        textContentType="emailAddress"
+        autoCorrect={false}
         editable={!invite}
+        returnKeyType="next"
       />
 
       {!invite ? (
-        <Input
-          label="Organisation"
-          placeholder="Acme Inc."
-          icon="business-outline"
+        <AuthField
+          placeholder="Organisation (optional)"
           value={orgName}
           onChangeText={setOrgName}
           autoCapitalize="words"
-          hint="Leave blank to use your email domain."
+          returnKeyType="next"
         />
       ) : null}
 
-      <Input
-        label="Password"
-        placeholder="At least 8 characters"
-        icon="lock-closed-outline"
+      <AuthField
+        placeholder="Password · at least 8 characters"
         value={password}
         onChangeText={setPassword}
         password
         returnKeyType="go"
+        textContentType="newPassword"
         onSubmitEditing={handleSubmit}
         error={error}
       />
 
-      <Button
-        label={invite ? 'Join workspace' : 'Create account'}
+      <AuthPrimaryButton
+        label={invite ? 'Join workspace' : 'Continue'}
         onPress={handleSubmit}
         loading={submitting}
-        disabled={!canSubmit}
-        size="lg"
-        fullWidth
+        disabled={!canSubmit || googleSubmitting}
       />
+
+      {!invite ? <AuthSocialGroup onGoogle={handleGoogle} loading={googleSubmitting} /> : null}
     </AuthLayout>
   );
 }
@@ -161,9 +183,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   inviteBanner: {
-    padding: 12,
-    borderRadius: radius.md,
-    borderWidth: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 18,
   },
   inviteText: {
     fontSize: 13,

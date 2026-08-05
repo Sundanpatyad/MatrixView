@@ -30,6 +30,7 @@ import {
   IconVideo,
   IconX,
 } from '@/components/ui/Icons';
+import { TypingIndicator } from '@/components/chat/TypingIndicator';
 import { Button } from '@/components/ui/Button';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { UserAvatar } from '@/components/ui/UserAvatar';
@@ -61,7 +62,6 @@ import {
   emitTypingStop,
   getChatSocket,
   joinConversation,
-  leaveConversation,
   patchChatSocketHandlers,
   requestPresenceSnapshot,
   type PresenceUser,
@@ -1421,6 +1421,8 @@ export function ChatPage() {
   const messagesRef = useRef<ChatMessage[]>([]);
   const typingTimerRef = useRef<number | null>(null);
   const isTypingRef = useRef(false);
+  /** Clears stale remote typing if a peer disconnects without sending stop. */
+  const remoteTypingTimersRef = useRef<Record<string, number>>({});
   /** In-memory thread cache for instant chat switches (backed by SQLite). */
   const threadCacheRef = useRef<Map<string, ChatMessage[]>>(new Map());
 
@@ -1731,12 +1733,28 @@ export function ChatPage() {
       onTyping: (update) => {
         if (update.conversationId !== activeIdRef.current) return;
         if (update.userId === meId) return;
+        const key = update.userId;
+        if (remoteTypingTimersRef.current[key]) {
+          window.clearTimeout(remoteTypingTimersRef.current[key]);
+          delete remoteTypingTimersRef.current[key];
+        }
         setTypingUsers((prev) => {
           const next = { ...prev };
-          if (update.typing) next[update.userId] = update.userName || 'Someone';
-          else delete next[update.userId];
+          if (update.typing) next[key] = update.userName || 'Someone';
+          else delete next[key];
           return next;
         });
+        if (update.typing) {
+          remoteTypingTimersRef.current[key] = window.setTimeout(() => {
+            setTypingUsers((prev) => {
+              if (!(key in prev)) return prev;
+              const next = { ...prev };
+              delete next[key];
+              return next;
+            });
+            delete remoteTypingTimersRef.current[key];
+          }, 6000);
+        }
       },
       onConversationUpsert: (conversation) => {
         upsertConversationQuiet(conversation);
@@ -1850,7 +1868,6 @@ export function ChatPage() {
 
     return () => {
       cancelled = true;
-      leaveConversation(prevId);
       if (isTypingRef.current) {
         emitTypingStop(prevId);
         isTypingRef.current = false;
@@ -1858,13 +1875,22 @@ export function ChatPage() {
     };
   }, [activeId, meId, online]);
 
-  // Subscribe to every group conversation so all members receive live call:room updates
+  // Stay joined to every conversation so typing + call:room events arrive even
+  // when that thread is not the active one (matches mobile). Do not leave on
+  // thread switch — that would drop indicators for the chat you just left.
   useEffect(() => {
     if (!online || !socketReady) return;
     for (const c of conversations) {
-      if (c.type === 'group') joinConversation(c.id);
+      joinConversation(c.id);
     }
   }, [conversations, online, socketReady]);
+
+  // Reset the local typing roster when switching threads.
+  useEffect(() => {
+    setTypingUsers({});
+    Object.values(remoteTypingTimersRef.current).forEach((timer) => window.clearTimeout(timer));
+    remoteTypingTimersRef.current = {};
+  }, [activeId]);
 
   // Position at latest messages before paint — no visible smooth-scroll jump.
   useLayoutEffect(() => {
@@ -1886,8 +1912,16 @@ export function ChatPage() {
     setActiveId(c.id);
   }
 
-  function notifyTyping() {
+  function notifyTyping(nextDraft: string) {
     if (!activeId || editing) return;
+    if (!nextDraft.trim()) {
+      if (typingTimerRef.current) window.clearTimeout(typingTimerRef.current);
+      if (isTypingRef.current) {
+        emitTypingStop(activeId);
+        isTypingRef.current = false;
+      }
+      return;
+    }
     if (!isTypingRef.current) {
       isTypingRef.current = true;
       emitTypingStart(activeId);
@@ -3060,6 +3094,8 @@ export function ChatPage() {
               <div ref={bottomRef} />
             </div>
 
+            <TypingIndicator names={Object.values(typingUsers)} />
+
             {(replyTo || editing) && (
               <div className="flex items-center justify-between gap-2 border-t border-ink-600/70 bg-ink-800/90 px-4 py-2">
                 <div className="min-w-0 border-l-2 border-brand-500 pl-2.5 text-xs text-ink-200">
@@ -3268,8 +3304,9 @@ export function ChatPage() {
               <textarea
                 value={draft}
                 onChange={(e) => {
-                  setDraft(e.target.value);
-                  notifyTyping();
+                  const value = e.target.value;
+                  setDraft(value);
+                  notifyTyping(value);
                 }}
                 rows={1}
                 placeholder={editing ? 'Edit message…' : 'Message…'}

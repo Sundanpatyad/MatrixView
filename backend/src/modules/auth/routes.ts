@@ -214,10 +214,8 @@ router.post('/google/exchange', async (req, res, next) => {
 
 router.post('/google', async (req, res, next) => {
   try {
-    const { verifyGoogleIdToken, googleConfigured } = await import('./google.js');
-    if (!googleConfigured()) {
-      throw new AuthError('Google sign-in is not configured', 503, 'GOOGLE_NOT_CONFIGURED');
-    }
+    const { verifyGoogleIdToken } = await import('./google.js');
+    // ID-token login only needs client ID(s) for audience checks — no client secret.
     const body = z
       .object({
         idToken: z.string().min(20),

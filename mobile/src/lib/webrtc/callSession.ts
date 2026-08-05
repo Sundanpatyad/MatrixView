@@ -84,6 +84,8 @@ export class CallSession {
   private state: CallState = idleCallState();
   private peers = new Map<string, PeerSlot>();
   private localStream: RTCMediaStream | null = null;
+  /** Candidates that beat their peer's offer, keyed by sender. */
+  private earlyIce = new Map<string, IceCandidatePayload[]>();
 
   constructor(
     private readonly onState: (state: CallState) => void,
@@ -255,6 +257,7 @@ export class CallSession {
       }
     });
     this.peers.clear();
+    this.earlyIce.clear();
 
     this.localStream?.getTracks().forEach((track) => {
       try {
@@ -284,8 +287,9 @@ export class CallSession {
       makingOffer: false,
       connected: false,
       sharing: false,
-      pendingIce: [],
+      pendingIce: this.earlyIce.get(userId) ?? [],
     };
+    this.earlyIce.delete(userId);
 
     this.localStream?.getTracks().forEach((track) => {
       try {
@@ -347,7 +351,12 @@ export class CallSession {
       const offer = await slot.pc.createOffer({});
       await slot.pc.setLocalDescription(offer);
       const local = slot.pc.localDescription;
-      if (local) this.signals.sendOffer(slot.userId, { type: local.type, sdp: local.sdp });
+      if (local) {
+        this.signals.sendOffer(slot.userId, {
+          type: local.type ?? undefined,
+          sdp: local.sdp ?? undefined,
+        });
+      }
     } catch {
       /* the peer will retry via its own offer */
     } finally {
@@ -376,7 +385,12 @@ export class CallSession {
       await slot.pc.setLocalDescription(answer);
 
       const local = slot.pc.localDescription;
-      if (local) this.signals.sendAnswer(fromUserId, { type: local.type, sdp: local.sdp });
+      if (local) {
+        this.signals.sendAnswer(fromUserId, {
+          type: local.type ?? undefined,
+          sdp: local.sdp ?? undefined,
+        });
+      }
     } catch {
       /* renegotiation will be retried by the offering side */
     }
@@ -397,8 +411,15 @@ export class CallSession {
 
   async onRemoteIce(fromUserId: string, candidate: IceCandidatePayload) {
     const webrtc = getWebRTC();
+    if (!webrtc) return;
+
     const slot = this.peers.get(fromUserId);
-    if (!webrtc || !slot) return;
+    if (!slot) {
+      const queued = this.earlyIce.get(fromUserId) ?? [];
+      queued.push(candidate);
+      this.earlyIce.set(fromUserId, queued);
+      return;
+    }
 
     if (!slot.pc.remoteDescription) {
       slot.pendingIce.push(candidate);
@@ -427,6 +448,7 @@ export class CallSession {
   }
 
   removePeer(userId: string) {
+    this.earlyIce.delete(userId);
     const slot = this.peers.get(userId);
     if (!slot) return;
     try {

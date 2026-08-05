@@ -63,6 +63,11 @@ export const config = {
   google: {
     clientId: process.env.GOOGLE_CLIENT_ID ?? '',
     clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? '',
+    /**
+     * iOS OAuth client ID (from the Google Cloud iOS plist). ID tokens from
+     * native Google Sign-In may use this as `aud` instead of the web client.
+     */
+    iosClientId: process.env.GOOGLE_IOS_CLIENT_ID ?? '',
     /** Must match an authorized redirect URI in Google Cloud Console */
     redirectUri: (
       process.env.GOOGLE_REDIRECT_URI ??

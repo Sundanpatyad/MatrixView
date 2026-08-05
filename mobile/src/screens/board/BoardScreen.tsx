@@ -14,6 +14,7 @@ import {
   OptionSheet,
   Screen,
   Sheet,
+  useTabBarPadding,
   type SheetOption,
 } from '@/components/ui';
 import { useToast } from '@/context/ToastContext';
@@ -28,6 +29,7 @@ export function BoardScreen() {
   const navigation = useNavigation<Nav>();
   const colors = useColors();
   const toast = useToast();
+  const tabBarHeight = useTabBarPadding();
   const {
     projects,
     tasks,
@@ -288,7 +290,7 @@ export function BoardScreen() {
       <FlatList
         data={columnTasks}
         keyExtractor={(task) => task.id}
-        contentContainerStyle={styles.list}
+        contentContainerStyle={[styles.list, { paddingBottom: tabBarHeight + 24 }]}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.brand} />}
         ListEmptyComponent={
@@ -334,6 +336,7 @@ export function BoardScreen() {
         options={projectOptions}
         value={project.id}
         onSelect={setActiveProjectId}
+        emptyLabel="You are not a member of any project yet."
       />
 
       <OptionSheet
@@ -436,7 +439,6 @@ const styles = StyleSheet.create({
   },
   list: {
     padding: 16,
-    paddingBottom: 96,
     gap: 10,
   },
   moveButton: {

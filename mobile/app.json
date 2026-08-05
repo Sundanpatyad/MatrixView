@@ -13,6 +13,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "dev.dockx.mobile",
+      "appleTeamId": "KZKUS3ASDC",
       "infoPlist": {
         "UIBackgroundModes": [
           "audio",
@@ -75,6 +76,12 @@
           "android": {
             "usesCleartextTraffic": true
           }
+        }
+      ],
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.569448299007-1gm4uv3qh7e78m2g3bod169dm93hkoi5"
         }
       ]
     ]

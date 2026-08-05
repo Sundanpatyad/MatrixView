@@ -9,6 +9,7 @@ export type TabParamList = {
 };
 
 export type RootStackParamList = {
+  Welcome: undefined;
   Login: undefined;
   Register: { inviteToken?: string } | undefined;
 

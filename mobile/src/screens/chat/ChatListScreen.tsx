@@ -4,7 +4,15 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useMemo, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
-import { AppHeader, Avatar, EmptyState, Input, LoadingView, Screen } from '@/components/ui';
+import {
+  AppHeader,
+  Avatar,
+  EmptyState,
+  Input,
+  LoadingView,
+  Screen,
+  useGlassScreenPadding,
+} from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
 import { useChat } from '@/context/ChatContext';
 import type { ChatConversation } from '@/lib/api';
@@ -18,7 +26,8 @@ export function ChatListScreen() {
   const navigation = useNavigation<Nav>();
   const colors = useColors();
   const { user } = useAuth();
-  const { conversations, unread, presence, isLoading, connected, refresh } = useChat();
+  const { conversations, unread, presence, isLoading, connected, refresh, typingIn } = useChat();
+  const pad = useGlassScreenPadding();
 
   const [search, setSearch] = useState('');
   const [refreshing, setRefreshing] = useState(false);
@@ -59,8 +68,9 @@ export function ChatListScreen() {
   }
 
   return (
-    <Screen>
+    <Screen edges={[]}>
       <AppHeader
+        floating
         title="Chats"
         subtitle={connected ? 'Connected' : 'Reconnecting…'}
         actions={[
@@ -77,22 +87,33 @@ export function ChatListScreen() {
         ]}
       />
 
-      <View style={styles.searchWrap}>
-        <Input
-          placeholder="Search people and conversations"
-          icon="search-outline"
-          value={search}
-          onChangeText={setSearch}
-          autoCapitalize="none"
-        />
-      </View>
-
       <FlatList
         data={filtered}
         keyExtractor={(conversation) => conversation.id}
-        contentContainerStyle={styles.list}
+        contentContainerStyle={[
+          styles.list,
+          { paddingTop: pad.top + 8, paddingBottom: pad.bottom + 24 },
+        ]}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.brand} />}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.brand}
+            progressViewOffset={pad.top}
+          />
+        }
+        ListHeaderComponent={
+          <View style={styles.searchWrap}>
+            <Input
+              placeholder="Search people and conversations"
+              icon="search-outline"
+              value={search}
+              onChangeText={setSearch}
+              autoCapitalize="none"
+            />
+          </View>
+        }
         ItemSeparatorComponent={() => <View style={[styles.separator, { backgroundColor: colors.border }]} />}
         ListEmptyComponent={
           <EmptyState
@@ -110,6 +131,12 @@ export function ChatListScreen() {
           const count = unread[item.id] ?? 0;
           const online = peer ? presence[peer.id]?.online ?? false : undefined;
           const title = item.type === 'dm' ? peer?.name ?? item.name : item.name;
+          const typing = typingIn(item.id);
+          const typingLabel = typing.length
+            ? item.type === 'group'
+              ? `${typing[0]} is typing…`
+              : 'typing…'
+            : null;
 
           return (
             <Pressable
@@ -135,15 +162,21 @@ export function ChatListScreen() {
                 </View>
 
                 <View style={styles.rowBottom}>
-                  {item.type === 'group' ? (
+                  {item.type === 'group' && !typingLabel ? (
                     <Ionicons name="people" size={13} color={colors.textSubtle} style={styles.groupIcon} />
                   ) : null}
-                  <Text
-                    style={[styles.preview, { color: count ? colors.text : colors.textSubtle }]}
-                    numberOfLines={1}
-                  >
-                    {item.lastMessagePreview || 'No messages yet'}
-                  </Text>
+                  {typingLabel ? (
+                    <Text style={[styles.preview, styles.typing, { color: colors.success }]} numberOfLines={1}>
+                      {typingLabel}
+                    </Text>
+                  ) : (
+                    <Text
+                      style={[styles.preview, { color: count ? colors.text : colors.textSubtle }]}
+                      numberOfLines={1}
+                    >
+                      {item.lastMessagePreview || 'No messages yet'}
+                    </Text>
+                  )}
 
                   {count > 0 ? (
                     <View style={[styles.badge, { backgroundColor: colors.brand }]}>
@@ -166,7 +199,6 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   list: {
-    paddingBottom: 24,
     flexGrow: 1,
   },
   separator: {
@@ -209,6 +241,10 @@ const styles = StyleSheet.create({
   preview: {
     flex: 1,
     fontSize: 13.5,
+  },
+  typing: {
+    fontWeight: '600',
+    fontStyle: 'italic',
   },
   badge: {
     minWidth: 20,

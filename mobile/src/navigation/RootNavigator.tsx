@@ -7,6 +7,7 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { useAuth } from '@/context/AuthContext';
 import { LoginScreen } from '@/screens/auth/LoginScreen';
 import { RegisterScreen } from '@/screens/auth/RegisterScreen';
+import { WelcomeScreen } from '@/screens/auth/WelcomeScreen';
 import { CreateTaskScreen } from '@/screens/board/CreateTaskScreen';
 import { ManageTeamsScreen } from '@/screens/board/ManageTeamsScreen';
 import { ProjectMembersScreen } from '@/screens/board/ProjectMembersScreen';
@@ -112,8 +113,13 @@ export function RootNavigator() {
           </Stack.Group>
         ) : (
           <Stack.Group screenOptions={{ animation: 'fade' }}>
-            <Stack.Screen name="Login" component={LoginScreen} />
-            <Stack.Screen name="Register" component={RegisterScreen} />
+            <Stack.Screen name="Welcome" component={WelcomeScreen} />
+            <Stack.Screen name="Login" component={LoginScreen} options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen
+              name="Register"
+              component={RegisterScreen}
+              options={{ animation: 'slide_from_right' }}
+            />
           </Stack.Group>
         )}
       </Stack.Navigator>

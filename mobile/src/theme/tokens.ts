@@ -32,6 +32,8 @@ export interface Palette {
   infoSoft: string;
 
   overlay: string;
+  /** Scrim for platforms where the backdrop cannot be blurred. */
+  overlayStrong: string;
   skeleton: string;
   track: string;
 
@@ -77,7 +79,9 @@ export const darkPalette: Palette = {
   info: '#00a8fc',
   infoSoft: 'rgba(0, 168, 252, 0.16)',
 
-  overlay: 'rgba(0, 0, 0, 0.65)',
+  // Paired with a blurred backdrop, so lighter than a standalone scrim.
+  overlay: 'rgba(0, 0, 0, 0.45)',
+  overlayStrong: 'rgba(0, 0, 0, 0.68)',
   skeleton: '#26282c',
   track: '#383a40',
 
@@ -117,7 +121,8 @@ export const lightPalette: Palette = {
   info: '#0083c4',
   infoSoft: 'rgba(0, 168, 252, 0.12)',
 
-  overlay: 'rgba(17, 18, 20, 0.45)',
+  overlay: 'rgba(17, 18, 20, 0.28)',
+  overlayStrong: 'rgba(17, 18, 20, 0.48)',
   skeleton: '#e6e8ec',
   track: '#d6d9dc',
 

@@ -5,10 +5,13 @@ import { Platform, StyleSheet, View, type StyleProp, type ViewStyle } from 'reac
 import { useTheme } from '@/theme';
 
 /**
- * Android renders a plain translucent view unless a blur method is requested,
- * and the SDK 31+ variant avoids the known jank on older devices.
+ * expo-blur only blurs on Android when handed a `blurTarget` ref pointing at a
+ * `BlurTargetView` wrapping the content to sample, which would mean threading a
+ * ref through every screen and does not work across a Modal boundary. Without
+ * it the view is merely translucent, and translucent-without-blur reads as a
+ * bug rather than a style, so Android gets an opaque elevated surface instead.
  */
-const ANDROID_BLUR_METHOD = 'dimezisBlurViewSdk31Plus' as const;
+export const GLASS_BLUR_SUPPORTED = Platform.OS === 'ios';
 
 type GlassEdge = 'top' | 'bottom' | 'all' | 'none';
 
@@ -36,24 +39,23 @@ export function GlassSurface({
     borderColor: colors.glassBorder,
   };
 
+  const radiusStyle = radius !== undefined ? { borderRadius: radius, overflow: 'hidden' as const } : null;
+
+  if (!GLASS_BLUR_SUPPORTED) {
+    return (
+      <View style={[{ backgroundColor: colors.bgElevated }, radiusStyle, borderStyle, style]}>
+        {children}
+      </View>
+    );
+  }
+
   return (
     <BlurView
       intensity={intensity}
       tint={isDark ? 'dark' : 'light'}
-      blurMethod={Platform.OS === 'android' ? ANDROID_BLUR_METHOD : undefined}
-      style={[
-        radius !== undefined ? { borderRadius: radius, overflow: 'hidden' } : null,
-        borderStyle,
-        style,
-      ]}
+      style={[radiusStyle, borderStyle, style]}
     >
-      <View
-        style={[
-          styles.tint,
-          { backgroundColor: colors.glassTint },
-          radius !== undefined ? { borderRadius: radius } : null,
-        ]}
-      />
+      <View style={[styles.tint, { backgroundColor: colors.glassTint }, radiusStyle]} />
       {children}
     </BlurView>
   );

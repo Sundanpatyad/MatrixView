@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import { AppState, type AppStateStatus } from 'react-native';
 
 import { authApi, configureApiAuth, type AuthResponse, type AuthUser, type PickedFile } from '@/lib/api';
+import { GoogleSignInCancelledError, signInWithGoogleNative } from '@/lib/auth/googleSignIn';
 import { connectSocket, disconnectSocket, ensureSocketConnected } from '@/lib/socket/socket';
 import { clearSession, loadSession, saveSession, saveUser } from '@/lib/storage/authStorage';
 
@@ -11,6 +12,7 @@ interface AuthContextValue {
   isBootstrapping: boolean;
   isAdmin: boolean;
   login: (email: string, password: string) => Promise<void>;
+  loginWithGoogle: () => Promise<void>;
   register: (input: {
     name: string;
     email: string;
@@ -150,6 +152,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [applySession],
   );
 
+  const loginWithGoogle = useCallback(async () => {
+    try {
+      const idToken = await signInWithGoogleNative();
+      const payload = await authApi.googleLoginRequest(idToken);
+      await applySession(payload);
+    } catch (error) {
+      if (error instanceof GoogleSignInCancelledError) return;
+      throw error;
+    }
+  }, [applySession]);
+
   const register = useCallback(
     async (input: { name: string; email: string; password: string; orgName?: string; inviteToken?: string }) => {
       const payload = await authApi.registerRequest({
@@ -206,6 +219,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isBootstrapping,
       isAdmin: (user?.role ?? '').toLowerCase() === 'admin',
       login,
+      loginWithGoogle,
       register,
       logout,
       logoutEverywhere,
@@ -213,7 +227,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       uploadAvatar,
       refreshUser,
     }),
-    [user, isBootstrapping, login, register, logout, logoutEverywhere, updateProfile, uploadAvatar, refreshUser],
+    [
+      user,
+      isBootstrapping,
+      login,
+      loginWithGoogle,
+      register,
+      logout,
+      logoutEverywhere,
+      updateProfile,
+      uploadAvatar,
+      refreshUser,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
