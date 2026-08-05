@@ -60,4 +60,13 @@ export const config = {
     apiKey: process.env.CLOUDINARY_API_KEY ?? '',
     apiSecret: process.env.CLOUDINARY_API_SECRET ?? '',
   },
+  google: {
+    clientId: process.env.GOOGLE_CLIENT_ID ?? '',
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? '',
+    /** Must match an authorized redirect URI in Google Cloud Console */
+    redirectUri: (
+      process.env.GOOGLE_REDIRECT_URI ??
+      `http://localhost:${process.env.PORT ?? 4000}/api/auth/google/callback`
+    ).replace(/\/$/, ''),
+  },
 };

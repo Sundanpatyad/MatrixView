@@ -72,6 +72,7 @@ import {
   chatSendQueue,
   persistOptimisticLocal,
 } from '@/lib/chat/sendQueue';
+import { isMediaPermissionError } from '@/lib/media/permissions';
 import { useToast } from '@/lib/toast/ToastContext';
 import {
   appendMessageSorted,
@@ -274,21 +275,34 @@ function MessageTicks({
 
 function MediaPreviewModal({
   att,
+  items,
+  index = 0,
   onClose,
+  onIndexChange,
 }: {
   att: ChatAttachment;
+  items?: ChatAttachment[];
+  index?: number;
   onClose: () => void;
+  onIndexChange?: (next: number) => void;
 }) {
-  const src = resolveMediaUrl(att.url);
-  const pdf = isPdfAttachment(att);
+  const gallery = items && items.length > 1 ? items : null;
+  const current = gallery ? gallery[Math.min(Math.max(index, 0), gallery.length - 1)]! : att;
+  const src = resolveMediaUrl(current.url);
+  const pdf = isPdfAttachment(current);
+  const canPrev = Boolean(gallery && index > 0);
+  const canNext = Boolean(gallery && index < gallery.length - 1);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
+      if (!gallery || !onIndexChange) return;
+      if (e.key === 'ArrowLeft' && canPrev) onIndexChange(index - 1);
+      if (e.key === 'ArrowRight' && canNext) onIndexChange(index + 1);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, [onClose, gallery, onIndexChange, canPrev, canNext, index]);
 
   return createPortal(
     <div className="fixed inset-0 z-[11000] flex items-center justify-center p-3 sm:p-6">
@@ -301,22 +315,23 @@ function MediaPreviewModal({
       <div
         role="dialog"
         aria-modal="true"
-        aria-label={att.name}
-        className="relative z-10 flex max-h-[min(92vh,900px)] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-ink-600 bg-ink-900 shadow-2xl"
+        aria-label={current.name}
+        className="relative z-10 flex max-h-[min(92vh,900px)] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-ink-600 bg-ink-900"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between gap-3 border-b border-ink-600 px-4 py-3">
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-ink-50">{att.name}</p>
+            <p className="truncate text-sm font-semibold text-ink-50">{current.name}</p>
             <p className="text-[11px] text-ink-400">
-              {att.kind === 'image'
+              {current.kind === 'image'
                 ? 'Image'
-                : att.kind === 'video'
+                : current.kind === 'video'
                   ? 'Video'
                   : pdf
                     ? 'PDF'
                     : 'File'}
-              {att.size ? ` · ${formatBytes(att.size)}` : ''}
+              {current.size ? ` · ${formatBytes(current.size)}` : ''}
+              {gallery ? ` · ${index + 1}/${gallery.length}` : ''}
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-1">
@@ -338,15 +353,38 @@ function MediaPreviewModal({
             </button>
           </div>
         </div>
-        <div className="flex min-h-0 flex-1 items-center justify-center bg-ink-950/80 p-3 sm:p-4">
-          {att.kind === 'image' ? (
+        <div className="relative flex min-h-0 flex-1 items-center justify-center bg-ink-950/80 p-3 sm:p-4">
+          {gallery && onIndexChange ? (
+            <>
+              <button
+                type="button"
+                disabled={!canPrev}
+                aria-label="Previous"
+                onClick={() => onIndexChange(index - 1)}
+                className="absolute top-1/2 left-2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white transition hover:bg-black/70 disabled:opacity-30"
+              >
+                <IconChevronLeft className="h-5 w-5" />
+              </button>
+              <button
+                type="button"
+                disabled={!canNext}
+                aria-label="Next"
+                onClick={() => onIndexChange(index + 1)}
+                className="absolute top-1/2 right-2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white transition hover:bg-black/70 disabled:opacity-30"
+              >
+                <IconChevronLeft className="h-5 w-5 rotate-180" />
+              </button>
+            </>
+          ) : null}
+          {current.kind === 'image' ? (
             <img
               src={src}
-              alt={att.name}
+              alt={current.name}
               className="max-h-[min(78vh,820px)] max-w-full rounded-lg object-contain"
             />
-          ) : att.kind === 'video' ? (
+          ) : current.kind === 'video' ? (
             <video
+              key={current.id}
               src={src}
               controls
               autoPlay
@@ -356,7 +394,11 @@ function MediaPreviewModal({
               <track kind="captions" />
             </video>
           ) : pdf ? (
-            <iframe title={att.name} src={src} className="h-[min(78vh,820px)] w-full rounded-lg bg-white" />
+            <iframe
+              title={current.name}
+              src={src}
+              className="h-[min(78vh,820px)] w-full rounded-lg bg-white"
+            />
           ) : (
             <a
               href={src}
@@ -388,8 +430,8 @@ function VoiceNotePlayer({
   return (
     <div
       className={cn(
-        'min-w-[160px] max-w-[220px] rounded-xl px-2.5 py-2',
-        mine ? 'bg-black/15' : 'border border-ink-600 bg-ink-900/80',
+        'w-full min-w-[148px] max-w-full rounded-xl px-2.5 py-2',
+        mine ? 'bg-black/15' : 'border border-ink-600/70 bg-ink-900/70',
       )}
     >
       <div
@@ -432,6 +474,141 @@ function VoiceNotePlayer({
   );
 }
 
+function MediaTile({
+  att,
+  className,
+  onPreview,
+  overflowCount,
+}: {
+  att: ChatAttachment;
+  className?: string;
+  onPreview: () => void;
+  overflowCount?: number;
+}) {
+  const src = resolveMediaUrl(att.url);
+  const isVideo = att.kind === 'video';
+
+  return (
+    <button
+      type="button"
+      data-chat-media
+      onClick={onPreview}
+      title={isVideo ? 'Preview video' : 'Preview image'}
+      className={cn(
+        'group/media relative block overflow-hidden bg-black/25 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/70',
+        className,
+      )}
+    >
+      {isVideo ? (
+        <video
+          src={src}
+          muted
+          playsInline
+          preload="metadata"
+          className="h-full w-full object-cover"
+        >
+          <track kind="captions" />
+        </video>
+      ) : (
+        <img
+          src={src}
+          alt={att.name}
+          loading="lazy"
+          className="h-full w-full object-cover transition duration-200 group-hover/media:brightness-[0.96]"
+        />
+      )}
+      {isVideo && !overflowCount ? (
+        <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/25 transition group-hover/media:bg-black/35">
+          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-black/55 text-white ring-1 ring-white/20 sm:h-10 sm:w-10">
+            <IconVideo className="h-4 w-4" />
+          </span>
+        </span>
+      ) : null}
+      {overflowCount && overflowCount > 0 ? (
+        <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/55 text-lg font-semibold tracking-tight text-white sm:text-xl">
+          +{overflowCount}
+        </span>
+      ) : null}
+    </button>
+  );
+}
+
+/** WhatsApp-style album — fluid width for mobile. */
+function MediaAlbum({
+  items,
+  onPreview,
+}: {
+  items: ChatAttachment[];
+  onPreview: (att: ChatAttachment, index: number) => void;
+}) {
+  const count = items.length;
+  if (count === 0) return null;
+
+  if (count === 1) {
+    const att = items[0]!;
+    return (
+      <div className="w-full overflow-hidden rounded-[14px]">
+        <MediaTile
+          att={att}
+          className="aspect-square max-h-[min(68vw,280px)] w-full rounded-[14px] sm:max-h-[280px]"
+          onPreview={() => onPreview(att, 0)}
+        />
+      </div>
+    );
+  }
+
+  if (count === 2) {
+    return (
+      <div className="grid w-full grid-cols-2 gap-0.5 overflow-hidden rounded-[14px]">
+        {items.map((att, i) => (
+          <MediaTile
+            key={att.id}
+            att={att}
+            className="aspect-[4/5] max-h-[200px] w-full sm:h-[180px] sm:max-h-none sm:aspect-auto"
+            onPreview={() => onPreview(att, i)}
+          />
+        ))}
+      </div>
+    );
+  }
+
+  if (count === 3) {
+    return (
+      <div className="grid w-full grid-cols-2 gap-0.5 overflow-hidden rounded-[14px]">
+        <MediaTile
+          att={items[0]!}
+          className="col-span-2 aspect-[16/10] max-h-[168px] w-full sm:h-[160px] sm:max-h-none sm:aspect-auto"
+          onPreview={() => onPreview(items[0]!, 0)}
+        />
+        {items.slice(1).map((att, i) => (
+          <MediaTile
+            key={att.id}
+            att={att}
+            className="aspect-square max-h-[132px] w-full sm:h-[120px] sm:max-h-none sm:aspect-auto"
+            onPreview={() => onPreview(att, i + 1)}
+          />
+        ))}
+      </div>
+    );
+  }
+
+  const visible = items.slice(0, 4);
+  const overflow = count - 4;
+  return (
+    <div className="grid w-full grid-cols-2 gap-0.5 overflow-hidden rounded-[14px]">
+      {visible.map((att, i) => (
+        <MediaTile
+          key={att.id}
+          att={att}
+          className="aspect-square max-h-[148px] w-full sm:h-[136px] sm:max-h-none sm:aspect-auto"
+          overflowCount={i === 3 && overflow > 0 ? overflow : undefined}
+          onPreview={() => onPreview(att, i)}
+        />
+      ))}
+    </div>
+  );
+}
+
 function AttachmentBlock({
   att,
   mine,
@@ -442,46 +619,13 @@ function AttachmentBlock({
   onPreview: (att: ChatAttachment) => void;
 }) {
   const src = resolveMediaUrl(att.url);
-  if (att.kind === 'image') {
+  if (att.kind === 'image' || att.kind === 'video') {
     return (
-      <button
-        type="button"
-        onClick={() => onPreview(att)}
-        className="group/media relative block w-[min(100%,16rem)] overflow-hidden rounded-xl bg-black/20 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
-        title="Preview image"
-      >
-        <img
-          src={src}
-          alt={att.name}
-          loading="lazy"
-          className="max-h-56 w-full object-cover transition duration-200 group-hover/media:brightness-95"
-        />
-      </button>
-    );
-  }
-  if (att.kind === 'video') {
-    return (
-      <button
-        type="button"
-        onClick={() => onPreview(att)}
-        className="group/media relative block w-[min(100%,16rem)] overflow-hidden rounded-xl bg-ink-950 text-left ring-1 ring-black/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 dark:ring-white/10"
-        title="Preview video"
-      >
-        <video
-          src={src}
-          muted
-          playsInline
-          preload="metadata"
-          className="max-h-56 w-full bg-black object-cover"
-        >
-          <track kind="captions" />
-        </video>
-        <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/35 transition group-hover/media:bg-black/45">
-          <span className="flex h-11 w-11 items-center justify-center rounded-full bg-black/60 text-white shadow-lg ring-1 ring-white/20">
-            <IconVideo className="h-5 w-5" />
-          </span>
-        </span>
-      </button>
+      <MediaTile
+        att={att}
+        className="aspect-video w-full rounded-xl"
+        onPreview={() => onPreview(att)}
+      />
     );
   }
   if (att.kind === 'audio') {
@@ -494,20 +638,20 @@ function AttachmentBlock({
         type="button"
         onClick={() => (pdf ? onPreview(att) : window.open(src, '_blank', 'noopener,noreferrer'))}
         className={cn(
-          'flex w-[min(100%,15rem)] items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-xs transition',
+          'flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-xs transition',
           mine
             ? 'bg-black/15 text-white hover:bg-black/25'
-            : 'border border-ink-600 bg-ink-900/70 text-ink-100 hover:bg-ink-900',
+            : 'border border-ink-600/70 bg-ink-900/60 text-ink-100 hover:bg-ink-900',
         )}
         title={pdf ? 'Preview PDF' : 'Open file'}
       >
         <span
           className={cn(
-            'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[10px] font-bold uppercase tracking-wide',
+            'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[10px] font-bold tracking-wide uppercase',
             pdf
               ? mine
                 ? 'bg-white/15 text-white'
-                : 'bg-[#ed4245]/10 text-[#c03537] dark:text-[#ed4245]'
+                : 'bg-[#ed4245]/10 text-[#ed4245]'
               : mine
                 ? 'bg-white/15 text-white'
                 : 'bg-ink-700 text-ink-200',
@@ -517,7 +661,7 @@ function AttachmentBlock({
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate font-medium">{att.name}</span>
-          <span className={cn('mt-0.5 block text-[11px]', mine ? 'text-white/65' : 'text-ink-300')}>
+          <span className={cn('mt-0.5 block text-[11px]', mine ? 'text-white/65' : 'text-ink-400')}>
             {pdf ? 'Tap to preview' : 'Document'}
             {att.size ? ` · ${formatBytes(att.size)}` : ''}
           </span>
@@ -1230,7 +1374,10 @@ export function ChatPage() {
   const deepLinkConversationId = searchParams.get('c');
   const [draft, setDraft] = useState('');
   const [files, setFiles] = useState<File[]>([]);
-  const [mediaPreview, setMediaPreview] = useState<ChatAttachment | null>(null);
+  const [mediaPreview, setMediaPreview] = useState<{
+    items: ChatAttachment[];
+    index: number;
+  } | null>(null);
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
   const [editing, setEditing] = useState<ChatMessage | null>(null);
   /** Skeleton only when there is no local cache yet (first open). */
@@ -2116,11 +2263,11 @@ export function ChatPage() {
       {/* Sidebar — full width on mobile until a chat is opened */}
       <aside
         className={cn(
-          'flex w-full shrink-0 flex-col border-r border-ink-600/80 bg-ink-800 md:w-[300px]',
+          'flex w-full shrink-0 flex-col border-r border-ink-600/70 bg-ink-800 md:w-[320px]',
           activeId ? 'hidden md:flex' : 'flex',
         )}
       >
-        <div className="shrink-0 px-3 pt-3 pb-2">
+        <div className="shrink-0 border-b border-ink-700/60 px-3.5 pt-3.5 pb-3">
           <div className="flex items-center justify-between gap-2">
             <div className="flex min-w-0 items-center gap-2">
               <h1 className="text-[15px] font-semibold tracking-tight text-ink-50">Messages</h1>
@@ -2155,12 +2302,12 @@ export function ChatPage() {
                 </button>
               ) : null}
             </div>
-            <div className="flex shrink-0 items-center gap-0.5">
+            <div className="flex shrink-0 items-center gap-1">
               <button
                 type="button"
                 title="New direct message"
                 onClick={() => setModal('dm')}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-ink-300 transition hover:bg-ink-700 hover:text-ink-50"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-transparent text-ink-300 transition hover:border-ink-600 hover:bg-ink-900/60 hover:text-ink-50"
               >
                 <IconPlus className="h-4 w-4" />
               </button>
@@ -2168,24 +2315,24 @@ export function ChatPage() {
                 type="button"
                 title="New team chat"
                 onClick={() => setModal('group')}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-ink-300 transition hover:bg-ink-700 hover:text-ink-50"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-transparent text-ink-300 transition hover:border-ink-600 hover:bg-ink-900/60 hover:text-ink-50"
               >
                 <IconUsers className="h-4 w-4" />
               </button>
             </div>
           </div>
 
-          <div className="relative mt-2.5">
+          <div className="relative mt-3">
             <IconSearch className="pointer-events-none absolute top-1/2 left-3 h-3.5 w-3.5 -translate-y-1/2 text-ink-400" />
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search"
-              className="h-9 w-full rounded-lg border-0 bg-ink-900/70 pr-3 pl-9 text-sm text-ink-50 outline-none placeholder:text-ink-400 ring-1 ring-ink-600/60 transition focus:bg-ink-900 focus:ring-brand-500/50"
+              placeholder="Search conversations…"
+              className="h-9 w-full rounded-lg border border-ink-600/70 bg-ink-900/55 pr-3 pl-9 text-sm text-ink-50 outline-none placeholder:text-ink-400 transition focus:border-brand-500/50 focus:bg-ink-900"
             />
           </div>
 
-          <div className="mt-2.5 flex rounded-lg bg-ink-900/60 p-0.5">
+          <div className="mt-3 flex gap-0.5 rounded-lg border border-ink-600/60 bg-ink-900/50 p-0.5">
             {(
               [
                 { id: 'all', label: 'All' },
@@ -2198,10 +2345,10 @@ export function ChatPage() {
                 type="button"
                 onClick={() => setListFilter(f.id)}
                 className={cn(
-                  'h-7 flex-1 rounded-md text-[12px] font-medium transition-colors',
+                  'h-7 flex-1 rounded-md text-[12px] font-semibold tracking-wide transition-[color,background-color,transform] duration-150 active:scale-[0.98]',
                   listFilter === f.id
-                    ? 'bg-ink-700 text-ink-50 shadow-sm'
-                    : 'text-ink-400 hover:text-ink-200',
+                    ? 'bg-brand-500 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.14)]'
+                    : 'text-ink-400 hover:bg-ink-800 hover:text-ink-100',
                 )}
               >
                 {f.label}
@@ -2210,7 +2357,7 @@ export function ChatPage() {
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-1.5 pb-2">
+        <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
           {showListSkeleton ? (
             <ChatListSkeleton />
           ) : filtered.length === 0 ? (
@@ -2251,8 +2398,8 @@ export function ChatPage() {
                   className={cn(
                     'flex w-full items-center gap-3 rounded-xl px-2.5 py-2.5 text-left transition-colors',
                     selected
-                      ? 'bg-ink-700/90'
-                      : 'hover:bg-ink-700/50',
+                      ? 'bg-brand-500/12 ring-1 ring-brand-500/25'
+                      : 'hover:bg-ink-900/55',
                   )}
                 >
                   <span className="relative shrink-0">
@@ -2266,7 +2413,7 @@ export function ChatPage() {
                       <span className="truncate text-[13px] font-semibold text-ink-50">
                         {c.name}
                       </span>
-                      <span className="shrink-0 text-[10px] tabular-nums text-ink-400">
+                      <span className="shrink-0 text-[11px] tabular-nums text-ink-400">
                         {liveCall ? (
                           <span className="font-semibold text-[#23a559]">Live</span>
                         ) : (
@@ -2293,32 +2440,32 @@ export function ChatPage() {
       {/* Thread — full screen on mobile when a chat is selected */}
       <section
         className={cn(
-          'min-w-0 flex-1 flex-col bg-ink-700',
+          'min-w-0 flex-1 flex-col bg-ink-900',
           activeId ? 'flex' : 'hidden md:flex',
         )}
       >
         {!active ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
-            <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-ink-800 text-ink-400">
+            <span className="flex h-14 w-14 items-center justify-center rounded-2xl border border-ink-600/70 bg-ink-800 text-ink-400">
               <IconUsers className="h-7 w-7" />
             </span>
             <div>
-              <p className="text-sm font-semibold text-ink-100">Select a conversation</p>
-              <p className="mt-1 max-w-xs text-xs text-ink-400">
+              <p className="text-sm font-semibold text-ink-50">Select a conversation</p>
+              <p className="mt-1 max-w-xs text-[13px] text-ink-400">
                 Pick a chat from the left, or start a new direct or team conversation.
               </p>
             </div>
           </div>
         ) : (
           <>
-            <header className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-ink-600/70 bg-ink-800/80 px-2 backdrop-blur-sm sm:px-4">
+            <header className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-ink-600/70 bg-ink-800 px-2 sm:px-4">
               <div className="flex min-w-0 items-center gap-2.5">
                 <button
                   type="button"
                   aria-label="Back to chats"
                   title="Back to chats"
                   onClick={() => setActiveId(null)}
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-ink-300 transition hover:bg-ink-700 hover:text-ink-50 md:hidden"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-transparent text-ink-300 transition hover:border-ink-600 hover:bg-ink-900/60 hover:text-ink-50 md:hidden"
                 >
                   <IconChevronLeft className="h-5 w-5" />
                 </button>
@@ -2332,8 +2479,10 @@ export function ChatPage() {
                   ) : null}
                 </span>
                 <div className="min-w-0">
-                  <p className="truncate text-[14px] font-semibold text-ink-50">{active.name}</p>
-                  <p className="truncate text-[11px] text-ink-400">
+                  <p className="truncate text-[14px] font-semibold tracking-tight text-ink-50">
+                    {active.name}
+                  </p>
+                  <p className="truncate text-[12px] text-ink-400">
                     {typingLabel ? (
                       <span className="font-medium text-brand-300">{typingLabel}</span>
                     ) : active.type === 'group' ? (
@@ -2360,7 +2509,7 @@ export function ChatPage() {
                   </p>
                 </div>
               </div>
-              <div className="flex shrink-0 items-center gap-0.5">
+              <div className="flex shrink-0 items-center gap-1">
                 {active.type === 'dm' || active.type === 'group' ? (
                   <>
                     <button
@@ -2383,7 +2532,7 @@ export function ChatPage() {
                         (active.type === 'dm' &&
                           !(peerPresence && 'online' in peerPresence && peerPresence.online))
                       }
-                      className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-ink-300 transition hover:bg-ink-700 hover:text-ink-50 disabled:cursor-not-allowed disabled:opacity-35"
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-ink-600/70 bg-ink-900/40 text-ink-300 transition hover:border-brand-500/40 hover:bg-ink-900 hover:text-ink-50 disabled:cursor-not-allowed disabled:opacity-35"
                       onClick={() => {
                         if (active.type === 'group') {
                           void startCall({
@@ -2392,7 +2541,9 @@ export function ChatPage() {
                             mediaKind: 'audio',
                             isGroup: true,
                           }).catch((err) => {
-                            toast.fromError(err, 'Could not start call');
+                            if (!isMediaPermissionError(err)) {
+                              toast.fromError(err, 'Could not start call');
+                            }
                           });
                           return;
                         }
@@ -2404,7 +2555,9 @@ export function ChatPage() {
                           peerName: active.name,
                           mediaKind: 'audio',
                         }).catch((err) => {
-                          toast.fromError(err, 'Could not start call');
+                          if (!isMediaPermissionError(err)) {
+                            toast.fromError(err, 'Could not start call');
+                          }
                         });
                       }}
                     >
@@ -2430,7 +2583,7 @@ export function ChatPage() {
                         (active.type === 'dm' &&
                           !(peerPresence && 'online' in peerPresence && peerPresence.online))
                       }
-                      className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-ink-300 transition hover:bg-ink-700 hover:text-ink-50 disabled:cursor-not-allowed disabled:opacity-35"
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-ink-600/70 bg-ink-900/40 text-ink-300 transition hover:border-brand-500/40 hover:bg-ink-900 hover:text-ink-50 disabled:cursor-not-allowed disabled:opacity-35"
                       onClick={() => {
                         if (active.type === 'group') {
                           void startCall({
@@ -2439,7 +2592,9 @@ export function ChatPage() {
                             mediaKind: 'video',
                             isGroup: true,
                           }).catch((err) => {
-                            toast.fromError(err, 'Could not start video call');
+                            if (!isMediaPermissionError(err)) {
+                              toast.fromError(err, 'Could not start video call');
+                            }
                           });
                           return;
                         }
@@ -2451,7 +2606,9 @@ export function ChatPage() {
                           peerName: active.name,
                           mediaKind: 'video',
                         }).catch((err) => {
-                          toast.fromError(err, 'Could not start video call');
+                          if (!isMediaPermissionError(err)) {
+                            toast.fromError(err, 'Could not start video call');
+                          }
                         });
                       }}
                     >
@@ -2464,7 +2621,7 @@ export function ChatPage() {
                     type="button"
                     title="Manage group"
                     onClick={() => setModal('manage')}
-                    className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-ink-300 transition hover:bg-ink-700 hover:text-ink-50"
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-ink-600/70 bg-ink-900/40 text-ink-300 transition hover:border-brand-500/40 hover:bg-ink-900 hover:text-ink-50"
                   >
                     <IconUsers className="h-4 w-4" />
                   </button>
@@ -2475,9 +2632,9 @@ export function ChatPage() {
             {active.type === 'group' &&
             activeRooms[active.id] &&
             !(call.phase !== 'idle' && call.conversationId === active.id) ? (
-              <div className="flex flex-col gap-2 border-b border-ink-600/70 bg-[#23a559]/10 px-4 py-2.5 sm:flex-row sm:items-center sm:gap-3">
+              <div className="flex flex-col gap-2 border-b border-[#23a559]/25 bg-[#23a559]/10 px-4 py-2.5 sm:flex-row sm:items-center sm:gap-3">
                 <div className="flex min-w-0 flex-1 items-center gap-3">
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#23a559]/20 text-[#23a559]">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#23a559]/20 text-[#23a559]">
                     <IconPhone className="h-3.5 w-3.5" />
                   </span>
                   <div className="min-w-0 flex-1">
@@ -2507,7 +2664,9 @@ export function ChatPage() {
                       mediaKind: room.mediaKind,
                       conversationName: active.name,
                     }).catch((err) => {
-                      toast.fromError(err, 'Could not join call');
+                      if (!isMediaPermissionError(err)) {
+                        toast.fromError(err, 'Could not join call');
+                      }
                     });
                   }}
                 >
@@ -2519,7 +2678,7 @@ export function ChatPage() {
             <div
               ref={threadScrollRef}
               onScroll={onThreadScroll}
-              className="flex-1 space-y-0.5 overflow-y-auto px-3 py-4 sm:px-5"
+              className="flex-1 space-y-0.5 overflow-y-auto px-2.5 py-4 sm:px-5 sm:py-5"
             >
               {loadingOlder ? (
                 <div className="flex justify-center py-1">
@@ -2574,8 +2733,8 @@ export function ChatPage() {
                     return (
                       <div key={msg.id}>
                         {showDay ? (
-                          <div className="my-4 flex justify-center">
-                            <span className="rounded-full bg-ink-800/90 px-2.5 py-1 text-[10px] font-semibold tracking-wide text-ink-300 uppercase">
+                          <div className="my-5 flex justify-center">
+                            <span className="rounded-full border border-ink-600/60 bg-ink-800/80 px-3 py-1 text-[10px] font-semibold tracking-[0.14em] text-ink-400 uppercase">
                               {formatDay(msg.createdAt)}
                             </span>
                           </div>
@@ -2583,10 +2742,10 @@ export function ChatPage() {
                         <div className="my-3 flex justify-center">
                           <div
                             className={cn(
-                              'inline-flex max-w-[90%] items-center gap-2 rounded-full px-3 py-1.5 text-xs',
+                              'inline-flex max-w-[90%] items-center gap-2 rounded-full border px-3 py-1.5 text-xs',
                               missed
-                                ? 'bg-[#ed4245]/10 text-[#c03537] dark:text-[#ed4245]'
-                                : 'bg-ink-800/80 text-ink-300',
+                                ? 'border-[#ed4245]/25 bg-[#ed4245]/10 text-[#ed4245]'
+                                : 'border-ink-600/60 bg-ink-800/70 text-ink-300',
                             )}
                           >
                             {missed ? (
@@ -2604,29 +2763,40 @@ export function ChatPage() {
                     );
                   }
 
-                  const hasVisualMedia =
-                    !deleted &&
-                    msg.attachments.some((a) => a.kind === 'image' || a.kind === 'video');
+                  const visualMedia = deleted
+                    ? []
+                    : msg.attachments.filter((a) => a.kind === 'image' || a.kind === 'video');
+                  const otherAttachments = deleted
+                    ? []
+                    : msg.attachments.filter((a) => a.kind !== 'image' && a.kind !== 'video');
+                  const hasVisualMedia = visualMedia.length > 0;
+                  const hasCaption = !!(msg.body ?? '').trim();
                   const textOnly =
                     !deleted &&
-                    !!(msg.body ?? '').trim() &&
+                    hasCaption &&
                     msg.attachments.length === 0 &&
                     !msg.replyTo;
                   const mediaOnly =
                     hasVisualMedia &&
-                    !(msg.body ?? '').trim() &&
+                    !hasCaption &&
                     !msg.replyTo &&
-                    msg.attachments.length > 0;
+                    otherAttachments.length === 0;
 
                   const meta = (
                     <span
                       className={cn(
-                        'inline-flex shrink-0 items-center gap-1 text-[10px] leading-none',
-                        mine ? 'text-white/65' : 'text-ink-400',
-                        textOnly && 'ml-2 translate-y-0.5',
+                        'inline-flex shrink-0 items-center gap-1 text-[10px] leading-none tabular-nums',
+                        mediaOnly
+                          ? 'text-white/95'
+                          : mine
+                            ? 'text-white/60'
+                            : 'text-ink-400',
+                        textOnly && 'ml-2 translate-y-px',
                       )}
                     >
-                      {msg.editedAt && !deleted ? <span>edited</span> : null}
+                      {msg.editedAt && !deleted ? (
+                        <span className="normal-case opacity-80">edited</span>
+                      ) : null}
                       <span>{formatTime(msg.createdAt)}</span>
                       {!deleted ? (
                         <MessageTicks
@@ -2643,17 +2813,17 @@ export function ChatPage() {
                   );
 
                   return (
-                    <div key={msg.id} className={cn(sameSenderAsPrev ? 'mt-0.5' : 'mt-3')}>
+                    <div key={msg.id} className={cn(sameSenderAsPrev ? 'mt-0.5' : 'mt-2.5 sm:mt-3')}>
                       {showDay ? (
-                        <div className="my-4 flex justify-center">
-                          <span className="rounded-full bg-ink-800/90 px-2.5 py-1 text-[10px] font-semibold tracking-wide text-ink-300 uppercase">
+                        <div className="my-4 flex justify-center sm:my-5">
+                          <span className="rounded-full border border-ink-600/50 bg-ink-800/70 px-2.5 py-1 text-[10px] font-semibold tracking-[0.12em] text-ink-400 uppercase">
                             {formatDay(msg.createdAt)}
                           </span>
                         </div>
                       ) : null}
                       <div
                         className={cn(
-                          'group flex items-end gap-2',
+                          'group flex items-end gap-1.5 sm:gap-2',
                           mine ? 'justify-end' : 'justify-start',
                         )}
                       >
@@ -2667,13 +2837,23 @@ export function ChatPage() {
                               }
                               seed={msg.senderId}
                               size="sm"
-                              className="mb-0.5"
+                              className="mb-0.5 !h-7 !w-7 !text-[10px] sm:!h-8 sm:!w-8"
                             />
                           ) : (
-                            <span className="mb-0.5 inline-block h-6 w-6 shrink-0" aria-hidden />
+                            <span
+                              className="mb-0.5 inline-block h-7 w-7 shrink-0 sm:h-8 sm:w-8"
+                              aria-hidden
+                            />
                           )
                         ) : null}
-                        <div className="relative w-max max-w-[min(88%,22rem)] sm:max-w-[min(78%,22rem)]">
+                        <div
+                          className={cn(
+                            'relative min-w-0',
+                            hasVisualMedia
+                              ? 'w-[min(calc(100vw-4.75rem),280px)] sm:w-[280px]'
+                              : 'max-w-[min(calc(100vw-4.75rem),20rem)] sm:max-w-[min(72%,22rem)]',
+                          )}
+                        >
                           <div
                             role="button"
                             tabIndex={deleted ? -1 : 0}
@@ -2697,32 +2877,33 @@ export function ChatPage() {
                               openMessageActions(msg.id);
                             }}
                             className={cn(
-                              'relative overflow-hidden outline-none',
-                              mediaOnly ? 'p-1' : 'px-3 py-2',
+                              'relative outline-none transition-[background-color,box-shadow] duration-150',
+                              hasVisualMedia ? 'p-1' : 'px-3 py-2 sm:px-3.5 sm:py-2.5',
                               mine
                                 ? cn(
                                     'bg-brand-500 text-white',
+                                    'shadow-[inset_0_1px_0_rgba(255,255,255,0.14)]',
                                     sameSenderAsPrev
                                       ? 'rounded-2xl rounded-tr-md'
                                       : 'rounded-2xl rounded-br-md',
                                     sameSenderAsNext && 'rounded-br-2xl',
                                   )
                                 : cn(
-                                    'bg-ink-800 text-ink-50',
+                                    'border border-ink-600/40 bg-ink-800 text-ink-50',
                                     sameSenderAsPrev
                                       ? 'rounded-2xl rounded-tl-md'
                                       : 'rounded-2xl rounded-bl-md',
                                     sameSenderAsNext && 'rounded-bl-2xl',
                                   ),
                               deleted && 'opacity-70',
-                              actionMsgId === msg.id && 'ring-2 ring-brand-400/40',
+                              actionMsgId === msg.id && 'ring-2 ring-brand-400/35',
                             )}
                           >
                           {!mine && active.type === 'group' && !sameSenderAsPrev ? (
                             <p
                               className={cn(
-                                'mb-0.5 text-[11px] font-semibold text-brand-300',
-                                mediaOnly && 'px-1.5 pt-0.5',
+                                'mb-1 text-[11px] font-semibold tracking-wide text-brand-300',
+                                hasVisualMedia && 'px-1 pt-0.5',
                               )}
                             >
                               {msg.senderName}
@@ -2732,14 +2913,15 @@ export function ChatPage() {
                           {msg.replyTo ? (
                             <div
                               className={cn(
-                                'mb-1 rounded-lg border-l-2 px-2 py-1 text-[11px]',
+                                'mb-1.5 rounded-lg border-l-2 px-2 py-1 text-[11px] leading-snug',
+                                hasVisualMedia && 'mx-0.5',
                                 mine
-                                  ? 'border-white/50 bg-black/15 text-white/90'
-                                  : 'border-brand-500 bg-ink-900 text-ink-200',
+                                  ? 'border-white/45 bg-black/15 text-white/90'
+                                  : 'border-brand-400/80 bg-ink-900/70 text-ink-200',
                               )}
                             >
                               <p className="font-semibold">{msg.replyTo.senderName}</p>
-                              <p className="truncate">
+                              <p className="truncate opacity-90">
                                 {msg.replyTo.deleted
                                   ? 'Message deleted'
                                   : msg.replyTo.body || 'Attachment'}
@@ -2748,37 +2930,58 @@ export function ChatPage() {
                           ) : null}
 
                           {deleted ? (
-                            <p className="text-sm italic opacity-80">This message was deleted</p>
+                            <p className="px-1 py-0.5 text-[13px] italic opacity-80 sm:text-sm">
+                              This message was deleted
+                            </p>
                           ) : (
                             <>
-                              {msg.attachments.length > 0 ? (
+                              {hasVisualMedia ? (
+                                <div className="relative overflow-hidden rounded-[12px]">
+                                  <MediaAlbum
+                                    items={visualMedia}
+                                    onPreview={(_att, index) =>
+                                      setMediaPreview({ items: visualMedia, index })
+                                    }
+                                  />
+                                  {mediaOnly ? (
+                                    <div className="pointer-events-none absolute right-1.5 bottom-1.5 rounded-md bg-black/40 px-1.5 py-0.5 backdrop-blur-[2px]">
+                                      {meta}
+                                    </div>
+                                  ) : null}
+                                </div>
+                              ) : null}
+
+                              {otherAttachments.length > 0 ? (
                                 <div
                                   className={cn(
-                                    (msg.body ?? '').trim() ? 'mb-1.5 space-y-1.5' : 'space-y-1.5',
+                                    'space-y-1.5',
+                                    hasVisualMedia && 'mt-1',
+                                    hasCaption && 'mb-1',
                                   )}
                                 >
-                                  {msg.attachments.map((att) => (
+                                  {otherAttachments.map((att) => (
                                     <AttachmentBlock
                                       key={att.id}
                                       att={att}
                                       mine={mine}
-                                      onPreview={setMediaPreview}
+                                      onPreview={(a) => setMediaPreview({ items: [a], index: 0 })}
                                     />
                                   ))}
                                 </div>
                               ) : null}
+
                               {textOnly ? (
-                                <div className="flex items-end">
-                                  <p className="whitespace-pre-wrap break-words text-sm leading-snug">
+                                <div className="flex items-end gap-1">
+                                  <p className="min-w-0 whitespace-pre-wrap break-words text-[13px] leading-relaxed sm:text-[13.5px]">
                                     {msg.body}
                                   </p>
                                   {meta}
                                 </div>
-                              ) : msg.body ? (
+                              ) : hasCaption ? (
                                 <p
                                   className={cn(
-                                    'whitespace-pre-wrap break-words text-sm leading-snug',
-                                    mediaOnly && 'px-1.5 pt-1',
+                                    'whitespace-pre-wrap break-words text-[13px] leading-relaxed sm:text-[13.5px]',
+                                    hasVisualMedia && 'mt-1.5 px-1',
                                   )}
                                 >
                                   {msg.body}
@@ -2787,29 +2990,31 @@ export function ChatPage() {
                             </>
                           )}
 
-                          {!textOnly || deleted ? (
+                          {!textOnly && !mediaOnly ? (
                             <div
                               className={cn(
                                 'flex items-center justify-end',
-                                mediaOnly ? 'mt-1 px-1 pb-0.5' : 'mt-1',
+                                hasVisualMedia || hasCaption ? 'mt-1 px-0.5' : 'mt-0.5',
                               )}
                             >
                               {meta}
                             </div>
+                          ) : deleted ? (
+                            <div className="mt-1 flex items-center justify-end">{meta}</div>
                           ) : null}
                           </div>
 
                           {!deleted ? (
                             <div
                               className={cn(
-                                'absolute -top-3 z-20 hidden md:block',
+                                'absolute -top-2.5 z-20 hidden sm:block',
                                 'opacity-0 pointer-events-none transition-opacity group-hover:opacity-100 group-hover:pointer-events-auto',
                                 (actionMsgId === msg.id || menuMsgId === msg.id) &&
                                   'opacity-100 pointer-events-auto',
-                                mine ? 'right-0' : 'left-0',
+                                mine ? 'right-1' : 'left-1',
                               )}
                             >
-                              <div className="flex items-center gap-0.5 rounded-lg border border-ink-600/80 bg-ink-800/95 p-0.5 text-ink-300 shadow-lg backdrop-blur">
+                              <div className="flex items-center gap-0.5 rounded-lg border border-ink-600/70 bg-ink-800/95 p-0.5 text-ink-300 backdrop-blur-sm">
                                 <button
                                   type="button"
                                   title="Reply"
@@ -2955,9 +3160,9 @@ export function ChatPage() {
 
             <form
               onSubmit={onSend}
-              className="border-t border-ink-600/70 bg-ink-800/90 px-2.5 py-2.5 sm:px-4 sm:py-3"
+              className="border-t border-ink-600/70 bg-ink-800 px-2.5 py-3 sm:px-4"
             >
-              <div className="flex items-end gap-1.5 rounded-2xl bg-ink-900/70 p-1 ring-1 ring-ink-600/50 focus-within:ring-brand-500/40">
+              <div className="flex items-end gap-1.5 rounded-2xl border border-ink-600/60 bg-ink-900/70 p-1.5 transition focus-within:border-brand-500/45">
               <input
                 ref={photoInputRef}
                 type="file"
@@ -3008,14 +3213,14 @@ export function ChatPage() {
                     title="Attach"
                     onClick={() => setAttachMenuOpen((o) => !o)}
                     className={cn(
-                      'rounded-xl p-2 text-ink-400 transition hover:bg-ink-700 hover:text-ink-100',
-                      attachMenuOpen && 'bg-ink-700 text-ink-50',
+                      'rounded-xl p-2 text-ink-400 transition hover:bg-ink-800 hover:text-ink-100',
+                      attachMenuOpen && 'bg-ink-800 text-ink-50',
                     )}
                   >
                     <IconPaperclip className="h-5 w-5" />
                   </button>
                   {attachMenuOpen ? (
-                    <div className="absolute bottom-full left-0 z-30 mb-2 w-48 overflow-hidden rounded-xl border border-ink-600 bg-ink-800 py-1 shadow-xl">
+                    <div className="absolute bottom-full left-0 z-30 mb-2 w-48 overflow-hidden rounded-xl border border-ink-600 bg-ink-800 py-1">
                       <button
                         type="button"
                         onClick={() => openAttachPicker('photo')}
@@ -3067,8 +3272,8 @@ export function ChatPage() {
                   notifyTyping();
                 }}
                 rows={1}
-                placeholder={editing ? 'Edit message…' : 'Message'}
-                className="max-h-28 min-h-[40px] flex-1 resize-none border-0 bg-transparent px-1 py-2.5 text-sm text-ink-50 outline-none placeholder:text-ink-400"
+                placeholder={editing ? 'Edit message…' : 'Message…'}
+                className="max-h-28 min-h-[40px] flex-1 resize-none border-0 bg-transparent px-1.5 py-2.5 text-[13.5px] leading-relaxed text-ink-50 outline-none placeholder:text-ink-400"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
@@ -3181,7 +3386,15 @@ export function ChatPage() {
       ) : null}
 
       {mediaPreview ? (
-        <MediaPreviewModal att={mediaPreview} onClose={() => setMediaPreview(null)} />
+        <MediaPreviewModal
+          att={mediaPreview.items[mediaPreview.index]!}
+          items={mediaPreview.items}
+          index={mediaPreview.index}
+          onClose={() => setMediaPreview(null)}
+          onIndexChange={(next) =>
+            setMediaPreview((cur) => (cur ? { ...cur, index: next } : cur))
+          }
+        />
       ) : null}
 
       {/* Mobile message actions sheet */}

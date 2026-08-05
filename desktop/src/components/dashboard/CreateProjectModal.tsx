@@ -63,7 +63,7 @@ export function CreateProjectModal({ onClose, onCreated }: Props) {
   const preview = resolveMediaUrl(previewUrl);
 
   return createPortal(
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/55 p-4">
+    <div className="dockx-modal-layer fixed inset-0 z-[9999] flex items-center justify-center bg-black/55 p-4">
       <button type="button" className="absolute inset-0" onClick={onClose} aria-label="Close" />
       <div
         role="dialog"

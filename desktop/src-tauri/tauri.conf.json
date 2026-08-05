@@ -30,6 +30,11 @@
   "plugins": {
     "sql": {
       "preload": ["sqlite:dockx.db"]
+    },
+    "deep-link": {
+      "desktop": {
+        "schemes": ["dockx"]
+      }
     }
   },
   "bundle": {
@@ -44,6 +49,9 @@
     ],
     "android": {
       "debugApplicationIdSuffix": ".debug"
+    },
+    "macOS": {
+      "infoPlist": "Info.plist"
     }
   }
 }

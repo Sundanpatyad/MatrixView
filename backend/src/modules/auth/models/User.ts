@@ -7,7 +7,9 @@ const userSchema = new Schema(
     name: { type: String, required: true, trim: true },
     phone: { type: String, default: '', trim: true },
     avatarUrl: { type: String, default: null },
-    passwordHash: { type: String, required: true },
+    /** Optional for Google-only accounts */
+    passwordHash: { type: String, required: false, default: null },
+    googleId: { type: String, default: null, index: true, sparse: true },
     role: {
       type: String,
       enum: ['Admin', 'Manager', 'Member'],

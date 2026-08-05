@@ -137,12 +137,23 @@ export class GroupCallSession {
 
   private async ensureMedia() {
     if (this.localStream) return this.localStream;
+    const { mediaConstraints } = await import('@/lib/media/permissions');
     const wantVideo = this.state.mediaKind === 'video';
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: true,
-      // Prefer device-native aspect (esp. portrait on phones) — avoid forced 16:9 crop.
-      video: wantVideo ? { facingMode: 'user' } : false,
-    });
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia(
+        mediaConstraints(wantVideo ? 'video' : 'audio'),
+      );
+    } catch (err) {
+      const overconstrained =
+        err instanceof DOMException &&
+        (err.name === 'OverconstrainedError' || err.name === 'ConstraintNotSatisfiedError');
+      if (overconstrained && wantVideo) {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+      } else {
+        throw err;
+      }
+    }
     // Keep tracks enabled so remotes actually receive media after join races.
     stream.getAudioTracks().forEach((t) => {
       t.enabled = !this.state.muted;
@@ -297,7 +308,11 @@ export class GroupCallSession {
       await this.ensureMedia();
     } catch {
       const need = mediaKind === 'video' ? 'Camera and microphone' : 'Microphone';
-      this.setState({ ...idleState(), error: `${need} permission is required for calls` });
+      this.setState({
+        ...idleState(),
+        mediaKind,
+        error: `${need} permission is required for calls`,
+      });
       throw new Error(`${need} permission denied`);
     }
     return callId;

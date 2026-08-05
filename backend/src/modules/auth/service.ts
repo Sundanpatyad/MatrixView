@@ -209,6 +209,14 @@ export async function login(input: {
     );
   }
 
+  if (!user.passwordHash) {
+    throw new AuthError(
+      'This account uses Google sign-in. Continue with Google instead.',
+      401,
+      'USE_GOOGLE',
+    );
+  }
+
   const ok = await verifyPassword(input.password, user.passwordHash);
   if (!ok) {
     user.failedLoginAttempts = (user.failedLoginAttempts ?? 0) + 1;
@@ -225,6 +233,71 @@ export async function login(input: {
   user.failedLoginAttempts = 0;
   user.lockedUntil = null;
   await user.save();
+
+  try {
+    const { claimPendingProjectInvites } = await import('../workspace/service.js');
+    await claimPendingProjectInvites(user);
+  } catch (err) {
+    console.error('[auth] claim pending invites failed', err);
+  }
+
+  return issueSession(user, {
+    deviceType: input.deviceType ?? 'web',
+    deviceId: input.deviceId,
+    ip: input.ip,
+    userAgent: input.userAgent,
+  });
+}
+
+/** Find-or-create a user from a verified Google profile, then issue a session. */
+export async function loginWithGoogle(input: {
+  googleId: string;
+  email: string;
+  name: string;
+  avatarUrl?: string | null;
+  deviceType?: DeviceType;
+  deviceId?: string;
+  ip?: string;
+  userAgent?: string;
+}): Promise<AuthResult> {
+  const email = input.email.toLowerCase().trim();
+  let user =
+    (await User.findOne({ googleId: input.googleId })) ||
+    (await User.findOne({ email }));
+
+  if (user) {
+    if (user.status === 'disabled') {
+      throw new AuthError('Account is disabled', 403, 'ACCOUNT_DISABLED');
+    }
+    if (!user.googleId) {
+      user.googleId = input.googleId;
+    }
+    if (!user.avatarUrl && input.avatarUrl) {
+      user.avatarUrl = input.avatarUrl;
+    }
+    if (user.status === 'locked') user.status = 'active';
+    user.failedLoginAttempts = 0;
+    user.lockedUntil = null;
+    await user.save();
+  } else {
+    const displayName = input.name.trim() || email.split('@')[0] || 'User';
+    const orgName = `${displayName}'s Workspace`;
+    let slug = slugify(orgName);
+    const clash = await Organization.findOne({ slug });
+    if (clash) slug = `${slug}-${crypto.randomBytes(2).toString('hex')}`;
+
+    const org = await Organization.create({ name: orgName, slug });
+    user = await User.create({
+      orgId: org._id,
+      email,
+      name: displayName,
+      avatarUrl: input.avatarUrl ?? null,
+      passwordHash: null,
+      googleId: input.googleId,
+      role: 'Admin',
+      status: 'active',
+    });
+  }
 
   try {
     const { claimPendingProjectInvites } = await import('../workspace/service.js');

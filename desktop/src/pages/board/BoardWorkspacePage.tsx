@@ -7,7 +7,7 @@ import {
   type FormEvent,
   type KeyboardEvent,
 } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CreateTaskModal } from '@/components/board/CreateTaskModal';
 import { ManageTeamsModal } from '@/components/board/ManageTeamsModal';
 import { MemberBoardPicker } from '@/components/board/MemberBoardPicker';
@@ -53,6 +53,7 @@ function isMemberBoardTask(
 
 export function BoardWorkspacePage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const {
     projects,
@@ -437,22 +438,76 @@ export function BoardWorkspacePage() {
     setDropTarget(null);
   }
 
+  // Soft empty board — no selects/panels/overlays that can trap navigation.
+  if (projects.length === 0) {
+    return (
+      <div className="flex h-full min-h-0 flex-col">
+        <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-ink-600 bg-ink-800 px-3 py-2.5 sm:px-4">
+          {!checkedIn ? (
+            <Button size="sm" onClick={() => void checkIn()}>
+              Check in
+            </Button>
+          ) : (
+            <>
+              <Button size="sm" variant="secondary" onClick={toggleBreak}>
+                {onBreak ? 'End break' : 'Break'}
+              </Button>
+              <Button size="sm" variant="danger" onClick={() => void checkOut()}>
+                Check out
+              </Button>
+            </>
+          )}
+          <Button size="sm" onClick={() => setShowCreateProject(true)}>
+            New project
+          </Button>
+        </div>
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
+          <p className="text-sm font-semibold text-ink-50">No project yet</p>
+          <p className="max-w-sm text-xs leading-relaxed text-ink-400">
+            Create a project for boards and tasks. Dashboard and Chat work without one — use the
+            sidebar or the links below anytime.
+          </p>
+          <div className="mt-2 flex flex-wrap items-center justify-center gap-2">
+            <Button size="sm" onClick={() => setShowCreateProject(true)}>
+              New project
+            </Button>
+            <Button size="sm" variant="secondary" onClick={() => navigate('/')}>
+              Dashboard
+            </Button>
+            <Button size="sm" variant="secondary" onClick={() => navigate('/chat')}>
+              Chat
+            </Button>
+          </div>
+        </div>
+        {showCreateProject ? (
+          <CreateProjectModal
+            onClose={() => setShowCreateProject(false)}
+            onCreated={(id) => {
+              selectProject(id);
+              setShowCreateProject(false);
+            }}
+          />
+        ) : null}
+      </div>
+    );
+  }
+
   return (
     <div className="relative flex h-full min-h-0 overflow-hidden">
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Toolbar */}
-        <div className="flex shrink-0 flex-wrap items-center gap-1.5 border-b border-ink-600 bg-ink-800 px-3 py-1.5 sm:px-4">
-          <div className="flex items-center gap-1 rounded-lg border border-ink-600 bg-ink-900/80 p-0.5">
+        <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-ink-600 bg-ink-800 px-3 py-2.5 sm:px-4">
+          <div className="flex items-center gap-1.5">
             {!checkedIn ? (
-              <Button size="xs" onClick={() => void checkIn()}>
+              <Button size="sm" onClick={() => void checkIn()}>
                 Check in
               </Button>
             ) : (
               <>
-                <Button size="xs" variant="ghost" onClick={toggleBreak}>
+                <Button size="sm" variant="secondary" onClick={toggleBreak}>
                   {onBreak ? 'End break' : 'Break'}
                 </Button>
-                <Button size="xs" variant="danger" onClick={() => void checkOut()}>
+                <Button size="sm" variant="danger" onClick={() => void checkOut()}>
                   <span className="sm:hidden">Out</span>
                   <span className="hidden sm:inline">Check out</span>
                 </Button>
@@ -460,11 +515,13 @@ export function BoardWorkspacePage() {
             )}
           </div>
 
-          <div className="flex flex-wrap items-center gap-1 rounded-lg border border-ink-600 bg-ink-900/80 p-0.5">
+          <div className="hidden h-5 w-px bg-ink-600 sm:block" aria-hidden />
+
+          <div className="flex flex-wrap items-center gap-1.5">
             {canManageProject ? (
               <Button
-                size="xs"
-                variant="ghost"
+                size="sm"
+                variant="secondary"
                 disabled={!project}
                 onClick={() => setShowInvite(true)}
               >
@@ -472,18 +529,18 @@ export function BoardWorkspacePage() {
               </Button>
             ) : null}
             <Button
-              size="xs"
-              variant="ghost"
+              size="sm"
+              variant="secondary"
               disabled={!project}
               onClick={() => setShowTeams(true)}
             >
               Teams
             </Button>
-            <Button size="xs" variant="ghost" onClick={() => setShowCreateProject(true)}>
+            <Button size="sm" variant="secondary" onClick={() => setShowCreateProject(true)}>
               <span className="sm:hidden">New</span>
               <span className="hidden sm:inline">New project</span>
             </Button>
-            <Button size="xs" disabled={!project} onClick={() => setShowCreateTask(true)}>
+            <Button size="sm" disabled={!project} onClick={() => setShowCreateTask(true)}>
               <span className="sm:hidden">Task</span>
               <span className="hidden sm:inline">New task</span>
             </Button>
@@ -491,7 +548,7 @@ export function BoardWorkspacePage() {
               addingColumn ? (
                 <form
                   onSubmit={(e) => void onAddColumn(e)}
-                  className="flex max-w-full flex-wrap items-center gap-1 pl-1"
+                  className="flex max-w-full flex-wrap items-center gap-1.5"
                 >
                   <input
                     ref={addColumnInputRef}
@@ -505,18 +562,18 @@ export function BoardWorkspacePage() {
                     }}
                     placeholder="Column name"
                     disabled={columnBusy}
-                    className="h-7 w-28 rounded-md border border-ink-600 bg-ink-800 px-2 text-xs outline-none focus:border-brand-500 sm:w-36"
+                    className="h-8 w-28 rounded-md border border-ink-600 bg-ink-900 px-2.5 text-xs text-ink-50 outline-none focus:border-brand-500 sm:w-36"
                   />
                   <Button
                     type="submit"
-                    size="xs"
+                    size="sm"
                     disabled={columnBusy || !newColumnName.trim()}
                   >
                     Add
                   </Button>
                   <Button
                     type="button"
-                    size="xs"
+                    size="sm"
                     variant="ghost"
                     disabled={columnBusy}
                     onClick={() => {
@@ -529,8 +586,8 @@ export function BoardWorkspacePage() {
                 </form>
               ) : (
                 <Button
-                  size="xs"
-                  variant="ghost"
+                  size="sm"
+                  variant="secondary"
                   disabled={!project || columnBusy}
                   onClick={() => setAddingColumn(true)}
                   className="hidden sm:inline-flex"
@@ -541,9 +598,9 @@ export function BoardWorkspacePage() {
             ) : null}
           </div>
 
-          <div className="ml-auto flex items-center gap-1.5">
+          <div className="ml-auto flex items-center gap-2">
             <Button
-              size="xs"
+              size="sm"
               variant="secondary"
               disabled={!project}
               onClick={() => setMembersPanelOpen(true)}
@@ -552,24 +609,26 @@ export function BoardWorkspacePage() {
               <IconUsers className="h-3.5 w-3.5" />
               Members
             </Button>
-            <div className="hidden items-center gap-1.5 rounded-md border border-ink-600 bg-ink-900 px-2 py-1 sm:flex">
+            <div className="hidden h-8 items-center gap-2 rounded-md border border-ink-600 bg-ink-900/80 px-2.5 sm:flex">
               <span
                 className={cn(
                   'h-1.5 w-1.5 rounded-full',
-                  !checkedIn ? 'bg-ink-300' : onBreak ? 'bg-[#f0b232]' : 'bg-[#23a559]',
+                  !checkedIn ? 'bg-ink-400' : onBreak ? 'bg-[#f0b232]' : 'bg-[#23a559]',
                 )}
               />
-              <span className="text-[11px] font-semibold tabular-nums text-ink-100">
+              <span className="text-[11px] font-semibold tracking-wide text-ink-300 uppercase">
+                {!checkedIn ? 'Out' : onBreak ? 'Break' : 'In'}
+              </span>
+              <span className="text-xs font-semibold tabular-nums text-ink-50">
                 {checkedIn ? elapsedLabel : '00:00:00'}
               </span>
             </div>
           </div>
         </div>
 
-        {/* Compact chrome — fixed; board below fills remaining viewport */}
-        <div className="shrink-0 border-b border-ink-600 bg-ink-800 px-3 py-1.5 sm:px-4">
-            {/* Single compact row: avatar + switcher + viewing + members */}
-            <div className="mb-1.5 flex items-center gap-2">
+        {/* Project chrome + filters — hide filters until a project exists */}
+        <div className="shrink-0 border-b border-ink-600 bg-ink-800 px-3 py-2.5 sm:px-4">
+            <div className={cn('flex items-center gap-2.5', project && 'mb-2.5')}>
               {project ? (
                 <ProjectAvatar
                   name={project.name}
@@ -606,8 +665,8 @@ export function BoardWorkspacePage() {
                   className="max-w-full"
                 />
                 {boardLabel ? (
-                  <p className="truncate text-[10px] text-ink-400">
-                    Viewing <span className="text-ink-200">{boardLabel}</span>
+                  <p className="mt-0.5 truncate text-[12px] text-ink-400">
+                    Viewing <span className="font-medium text-ink-200">{boardLabel}</span>
                   </p>
                 ) : null}
               </div>
@@ -620,92 +679,102 @@ export function BoardWorkspacePage() {
               </div>
             </div>
 
-            {/* Filters — one horizontal strip (scrolls on narrow screens) */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {hasTeams ? (
-                <div className="w-[120px] shrink-0">
+            {project ? (
+              <div className="flex items-center gap-2 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {hasTeams ? (
+                  <div className="w-[132px] shrink-0">
+                    <Select
+                      size="sm"
+                      value={teamFilter}
+                      onChange={(v) => setTeamFilter(v as TeamFilter)}
+                      options={[
+                        { value: 'all', label: 'All teams' },
+                        { value: 'global', label: 'Project-wide' },
+                        ...projectTeams.map((t) => ({ value: t.id, label: t.name })),
+                      ]}
+                      aria-label="Filter by team"
+                    />
+                  </div>
+                ) : null}
+                <label className="relative min-w-[160px] flex-1 sm:max-w-[220px]">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    className="pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-ink-400"
+                    aria-hidden
+                  >
+                    <circle cx="11" cy="11" r="7" />
+                    <path d="m20 20-3.5-3.5" />
+                  </svg>
+                  <input
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="Search tasks…"
+                    className="h-8 w-full rounded-md border border-ink-600 bg-ink-900 pr-2.5 pl-8 text-xs text-ink-50 outline-none placeholder:text-ink-400 focus:border-brand-500"
+                  />
+                </label>
+                <div className="w-[100px] shrink-0">
                   <Select
-                    size="xs"
-                    value={teamFilter}
-                    onChange={(v) => setTeamFilter(v as TeamFilter)}
+                    size="sm"
+                    value={typeFilter}
+                    onChange={(v) => setTypeFilter(v as TaskType | 'all')}
                     options={[
-                      { value: 'all', label: 'All teams' },
-                      { value: 'global', label: 'Project-wide' },
-                      ...projectTeams.map((t) => ({ value: t.id, label: t.name })),
+                      { value: 'all', label: 'Type' },
+                      ...TASK_TYPES.map((t) => ({ value: t.id, label: t.label })),
                     ]}
-                    aria-label="Filter by team"
+                    aria-label="Filter by type"
                   />
                 </div>
-              ) : null}
-              <label className="relative min-w-[140px] flex-1 sm:max-w-[180px]">
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  className="pointer-events-none absolute top-1/2 left-2 h-3.5 w-3.5 -translate-y-1/2 text-ink-400"
-                  aria-hidden
-                >
-                  <circle cx="11" cy="11" r="7" />
-                  <path d="m20 20-3.5-3.5" />
-                </svg>
-                <input
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search…"
-                  className="h-7 w-full rounded-md border border-ink-600 bg-ink-900 pr-2 pl-7 text-xs text-ink-50 outline-none placeholder:text-ink-400 focus:border-brand-500"
-                />
-              </label>
-              <div className="w-[88px] shrink-0">
-                <Select
-                  size="xs"
-                  className="rounded-md bg-ink-900"
-                  value={typeFilter}
-                  onChange={(v) => setTypeFilter(v as TaskType | 'all')}
-                  options={[
-                    { value: 'all', label: 'Type' },
-                    ...TASK_TYPES.map((t) => ({ value: t.id, label: t.label })),
-                  ]}
-                  aria-label="Filter by type"
-                />
+                <div className="w-[110px] shrink-0">
+                  <Select
+                    size="sm"
+                    value={priorityFilter}
+                    onChange={(v) => setPriorityFilter(v as TaskPriority | 'all')}
+                    options={[
+                      { value: 'all', label: 'Priority' },
+                      ...TASK_PRIORITIES.map((p) => ({ value: p, label: p })),
+                    ]}
+                    aria-label="Filter by priority"
+                  />
+                </div>
+                <div className="w-[110px] shrink-0">
+                  <Select
+                    size="sm"
+                    value={statusFilter}
+                    onChange={setStatusFilter}
+                    options={[
+                      { value: 'all', label: 'Column' },
+                      ...columns.map((c) => ({ value: c.id, label: c.label })),
+                    ]}
+                    aria-label="Filter by column"
+                  />
+                </div>
               </div>
-              <div className="w-[88px] shrink-0">
-                <Select
-                  size="xs"
-                  className="rounded-md bg-ink-900"
-                  value={priorityFilter}
-                  onChange={(v) => setPriorityFilter(v as TaskPriority | 'all')}
-                  options={[
-                    { value: 'all', label: 'Priority' },
-                    ...TASK_PRIORITIES.map((p) => ({ value: p, label: p })),
-                  ]}
-                  aria-label="Filter by priority"
-                />
-              </div>
-              <div className="w-[88px] shrink-0">
-                <Select
-                  size="xs"
-                  className="rounded-md bg-ink-900"
-                  value={statusFilter}
-                  onChange={setStatusFilter}
-                  options={[
-                    { value: 'all', label: 'Column' },
-                    ...columns.map((c) => ({ value: c.id, label: c.label })),
-                  ]}
-                  aria-label="Filter by column"
-                />
-              </div>
-            </div>
+            ) : null}
         </div>
 
-        {/* Board fills remaining viewport — each column scrolls cards when needed */}
-        <div className="min-h-0 flex-1 overflow-hidden p-1.5 sm:p-2">
+        {/* Board fills remaining viewport */}
+        <div className="min-h-0 flex-1 overflow-hidden p-2 sm:p-2.5">
             {!project ? (
-              <div className="flex h-full flex-col items-center justify-center rounded-xl border border-dashed border-ink-500 bg-ink-800 px-6 py-12 text-center">
-                <p className="text-sm font-semibold text-ink-50">Create a project to begin</p>
-                <Button className="mt-4" size="sm" onClick={() => setShowCreateProject(true)}>
-                  New project
-                </Button>
+              <div className="flex h-full flex-col items-center justify-center border border-dashed border-ink-600 bg-ink-800/60 px-6 py-12 text-center">
+                <p className="text-sm font-semibold text-ink-50">No project yet</p>
+                <p className="mt-1 max-w-sm text-xs leading-relaxed text-ink-400">
+                  Boards need a project for tasks and teams. Chat and Dashboard work without one —
+                  use the sidebar anytime.
+                </p>
+                <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+                  <Button size="sm" onClick={() => setShowCreateProject(true)}>
+                    New project
+                  </Button>
+                  <Button size="sm" variant="secondary" onClick={() => navigate('/')}>
+                    Dashboard
+                  </Button>
+                  <Button size="sm" variant="secondary" onClick={() => navigate('/chat')}>
+                    Chat
+                  </Button>
+                </div>
               </div>
             ) : (
               <div
@@ -733,18 +802,16 @@ export function BoardWorkspacePage() {
                       onDragLeave={(e) => leaveColumn(e, col.id)}
                       onDrop={(e) => void handleDrop(e, col.id)}
                       className={cn(
-                        'flex h-full min-h-0 flex-col rounded-lg border border-ink-600/90 bg-ink-900 transition',
-                        // Mobile: swipe one column at a time
-                        'w-[min(82vw,250px)] shrink-0',
-                        // Desktop: ≤6 share full width equally; >6 show 6 then scroll
+                        'flex h-full min-h-0 flex-col rounded-md border border-ink-600 bg-ink-900/80 transition-colors',
+                        'w-[min(82vw,260px)] shrink-0',
                         fillWidth
                           ? 'md:w-auto md:min-w-0 md:flex-1 md:shrink'
                           : 'md:w-[calc((100%-5*0.625rem)/6)] md:min-w-[calc((100%-5*0.625rem)/6)] md:shrink-0',
                         dropTarget === col.id &&
-                          'border-brand-600 bg-brand-50/40 ring-2 ring-brand-600/20',
+                          'border-brand-500 bg-brand-500/5',
                       )}
                     >
-                    <div className="flex shrink-0 items-center justify-between gap-1 px-2 pt-2 pb-1">
+                    <div className="flex shrink-0 items-center justify-between gap-1.5 border-b border-ink-700/70 px-2.5 py-2">
                       <div className="flex min-w-0 flex-1 items-center gap-2">
                         <span
                           className={cn(
@@ -760,7 +827,7 @@ export function BoardWorkspacePage() {
                             onBlur={() => void commitRenameColumn()}
                             onKeyDown={onRenameKeyDown}
                             disabled={columnBusy}
-                            className="h-7 min-w-0 flex-1 rounded-md border border-brand-500 bg-ink-800 px-2 text-xs font-semibold text-ink-100 outline-none"
+                            className="h-7 min-w-0 flex-1 rounded-md border border-brand-500 bg-ink-800 px-2 text-[13px] font-semibold text-ink-50 outline-none"
                             aria-label="Column name"
                           />
                         ) : (
@@ -770,9 +837,9 @@ export function BoardWorkspacePage() {
                             disabled={!canEditColumns}
                             onClick={() => beginRenameColumn(col.id, col.label)}
                             className={cn(
-                              'min-w-0 truncate text-left text-xs font-semibold text-ink-100',
+                              'min-w-0 truncate text-left text-[13px] font-semibold text-ink-50',
                               canEditColumns &&
-                                'rounded px-1 -mx-1 hover:bg-ink-800 hover:ring-1 hover:ring-ink-600',
+                                'rounded-md px-1 -mx-1 hover:bg-ink-800',
                             )}
                           >
                             {col.label}
@@ -780,7 +847,7 @@ export function BoardWorkspacePage() {
                         )}
                       </div>
                       <div className="flex shrink-0 items-center gap-0.5">
-                        <span className="inline-flex min-w-5 items-center justify-center rounded-md bg-ink-800 px-1.5 py-0.5 text-[10px] font-bold text-ink-200 ring-1 ring-ink-600/80">
+                        <span className="inline-flex min-w-5 items-center justify-center rounded-md bg-ink-800 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-ink-300">
                           {count}
                         </span>
                         {canEditColumns ? (
@@ -790,7 +857,7 @@ export function BoardWorkspacePage() {
                               title="Move column left"
                               disabled={columnBusy || idx === 0}
                               onClick={() => void onMoveColumn(col.id, -1)}
-                              className="rounded px-1 text-[11px] font-bold text-ink-400 hover:bg-ink-800 hover:text-ink-200 disabled:opacity-30"
+                              className="flex h-6 w-6 items-center justify-center rounded-md text-ink-400 hover:bg-ink-800 hover:text-ink-200 disabled:opacity-30"
                             >
                               ‹
                             </button>
@@ -799,7 +866,7 @@ export function BoardWorkspacePage() {
                               title="Move column right"
                               disabled={columnBusy || idx === columns.length - 1}
                               onClick={() => void onMoveColumn(col.id, 1)}
-                              className="rounded px-1 text-[11px] font-bold text-ink-400 hover:bg-ink-800 hover:text-ink-200 disabled:opacity-30"
+                              className="flex h-6 w-6 items-center justify-center rounded-md text-ink-400 hover:bg-ink-800 hover:text-ink-200 disabled:opacity-30"
                             >
                               ›
                             </button>
@@ -809,7 +876,7 @@ export function BoardWorkspacePage() {
                                 title="Remove column"
                                 disabled={columnBusy}
                                 onClick={() => requestRemoveColumn(col.id, col.label)}
-                                className="rounded px-1 text-xs font-bold text-ink-400 hover:bg-ink-800 hover:text-[#ed4245]"
+                                className="flex h-6 w-6 items-center justify-center rounded-md text-ink-400 hover:bg-ink-800 hover:text-[#ed4245]"
                               >
                                 ×
                               </button>
@@ -819,7 +886,7 @@ export function BoardWorkspacePage() {
                       </div>
                     </div>
                     <div
-                      className="min-h-0 flex-1 space-y-1.5 overflow-y-auto overscroll-contain px-1.5 pb-1.5"
+                      className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain px-2 py-2"
                       onDragOver={(e) => allowDrop(e, col.id)}
                       onDrop={(e) => void handleDrop(e, col.id)}
                     >
@@ -843,8 +910,8 @@ export function BoardWorkspacePage() {
                         />
                       ))}
                       {count === 0 ? (
-                        <div className="flex min-h-[6rem] flex-1 items-center justify-center rounded-lg border border-dashed border-ink-600 bg-ink-800/50 px-3 py-4">
-                          <p className="text-center text-[11px] font-medium text-ink-400">
+                        <div className="flex min-h-[5.5rem] flex-1 items-center justify-center border border-dashed border-ink-600 px-3 py-4">
+                          <p className="text-center text-[12px] font-medium text-ink-400">
                             Drop tasks here
                           </p>
                         </div>
@@ -859,22 +926,14 @@ export function BoardWorkspacePage() {
       </div>
 
       {membersPanelOpen ? (
-        <button
-          type="button"
-          aria-label="Close members panel"
-          className="absolute inset-0 z-30 bg-black/50"
-          onClick={() => setMembersPanelOpen(false)}
-        />
-      ) : null}
-
-      <aside
-        className={cn(
-          'absolute inset-y-0 right-0 z-40 flex w-[min(18rem,92vw)] flex-col border-l border-ink-600 bg-ink-800 shadow-xl transition-transform duration-200 ease-out sm:w-60',
-          membersPanelOpen
-            ? 'translate-x-0 pointer-events-auto'
-            : 'pointer-events-none translate-x-full',
-        )}
-      >
+        <>
+          <button
+            type="button"
+            aria-label="Close members panel"
+            className="absolute inset-0 z-30 bg-black/50"
+            onClick={() => setMembersPanelOpen(false)}
+          />
+          <aside className="absolute inset-y-0 right-0 z-40 flex w-[min(18rem,92vw)] flex-col border-l border-ink-600 bg-ink-800 sm:w-60">
         <div className="border-b border-ink-600 px-3 py-3">
           <div className="flex items-start justify-between gap-2">
             <p className="text-[11px] font-medium tracking-wide text-ink-300 uppercase">
@@ -1051,7 +1110,9 @@ export function BoardWorkspacePage() {
             {filtered.length} task{filtered.length === 1 ? '' : 's'} · {boardLabel}
           </p>
         ) : null}
-      </aside>
+          </aside>
+        </>
+      ) : null}
 
       {showCreateProject ? (
         <CreateProjectModal

@@ -2,6 +2,8 @@ import { Navigate, Outlet, Route, Routes } from 'react-router-dom';
 import { AppShell } from '@/components/layout/AppShell';
 import { RequireAuth } from '@/components/layout/RequireAuth';
 import { CallProvider } from '@/lib/calls/CallContext';
+import { GoogleDeepLinkBridge } from '@/lib/auth/GoogleDeepLinkBridge';
+import { GoogleCallbackPage } from '@/pages/auth/GoogleCallbackPage';
 import { LoginPage } from '@/pages/auth/LoginPage';
 import { RegisterPage } from '@/pages/auth/RegisterPage';
 import { DashboardPage } from '@/pages/dashboard/DashboardPage';
@@ -20,28 +22,32 @@ function AuthenticatedTree() {
 
 export default function App() {
   return (
-    <Routes>
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/register" element={<RegisterPage />} />
-      <Route element={<RequireAuth />}>
-        <Route element={<AuthenticatedTree />}>
-          <Route element={<AppShell />}>
-            <Route path="/" element={<DashboardPage />} />
-            <Route path="/board" element={<BoardWorkspacePage />} />
-            <Route path="/chat" element={<ChatPage />} />
-            <Route path="/notifications" element={<NotificationsPage />} />
-            <Route path="/profile" element={<Navigate to="/" replace />} />
-            {/* Legacy routes */}
-            <Route path="/projects" element={<Navigate to="/board" replace />} />
-            <Route path="/projects/:projectId" element={<Navigate to="/board" replace />} />
-            <Route path="/projects/:projectId/board" element={<Navigate to="/board" replace />} />
-            <Route path="/attendance" element={<Navigate to="/" replace />} />
-            <Route path="/activity" element={<Navigate to="/" replace />} />
-            <Route path="/tasks" element={<Navigate to="/board" replace />} />
+    <>
+      <GoogleDeepLinkBridge />
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
+        <Route path="/auth/google/callback" element={<GoogleCallbackPage />} />
+        <Route element={<RequireAuth />}>
+          <Route element={<AuthenticatedTree />}>
+            <Route element={<AppShell />}>
+              <Route path="/" element={<DashboardPage />} />
+              <Route path="/board" element={<BoardWorkspacePage />} />
+              <Route path="/chat" element={<ChatPage />} />
+              <Route path="/notifications" element={<NotificationsPage />} />
+              <Route path="/profile" element={<Navigate to="/" replace />} />
+              {/* Legacy routes */}
+              <Route path="/projects" element={<Navigate to="/board" replace />} />
+              <Route path="/projects/:projectId" element={<Navigate to="/board" replace />} />
+              <Route path="/projects/:projectId/board" element={<Navigate to="/board" replace />} />
+              <Route path="/attendance" element={<Navigate to="/" replace />} />
+              <Route path="/activity" element={<Navigate to="/" replace />} />
+              <Route path="/tasks" element={<Navigate to="/board" replace />} />
+            </Route>
           </Route>
         </Route>
-      </Route>
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </>
   );
 }

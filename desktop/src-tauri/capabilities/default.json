@@ -6,6 +6,11 @@
   "permissions": [
     "core:default",
     "allow-activity-tracking",
+    "allow-privacy-settings",
+    "allow-google-oauth-loopback",
+    "opener:default",
+    "opener:allow-open-url",
+    "deep-link:default",
     "sql:default",
     "sql:allow-execute",
     "sql:allow-select"

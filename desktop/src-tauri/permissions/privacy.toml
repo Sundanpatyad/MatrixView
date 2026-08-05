@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "allow-privacy-settings"
+description = "Allow opening system privacy settings for camera/microphone"
+commands.allow = ["open_privacy_settings"]

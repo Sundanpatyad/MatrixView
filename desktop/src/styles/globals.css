@@ -372,3 +372,17 @@
 .attendance-dismiss-paused {
   animation-play-state: paused;
 }
+
+/*
+ * Modals/portals mount on document.body and would cover the sidebar.
+ * Keep the left nav strip clickable on desktop so empty Board never traps routing.
+ */
+:root {
+  --dockx-sidebar-w: 3.5rem;
+}
+
+@media (min-width: 768px) {
+  .dockx-modal-layer {
+    left: var(--dockx-sidebar-w, 3.5rem) !important;
+  }
+}

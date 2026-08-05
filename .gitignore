@@ -1,0 +1,6 @@
+# Secrets — never commit OAuth client JSON or env files
+client_secret*.json
+**/client_secret*.json
+.env
+**/.env
+!**/.env.example

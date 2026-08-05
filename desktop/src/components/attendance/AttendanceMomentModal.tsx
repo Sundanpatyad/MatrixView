@@ -128,7 +128,7 @@ export function AttendanceMomentModal({
   }
 
   return createPortal(
-    <div className="attendance-backdrop fixed inset-0 z-[10000] flex items-center justify-center bg-black/55 p-4">
+    <div className="dockx-modal-layer attendance-backdrop fixed inset-0 z-[10000] flex items-center justify-center bg-black/55 p-4">
       <button
         type="button"
         className="absolute inset-0"

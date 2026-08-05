@@ -34,7 +34,27 @@ async function projectsForEmail(orgId: string, email: string) {
 
 export async function listOrgUsers(actor: Actor) {
   requireOrgAdmin(actor);
-  const users = await User.find({ orgId: actor.orgId })
+
+  // Only people who share a project with the actor — never the full org directory.
+  const actorProjects = await Project.find({
+    orgId: actor.orgId,
+    'members.email': actor.email.toLowerCase(),
+  })
+    .select('members.email')
+    .lean();
+
+  const emails = new Set<string>();
+  for (const p of actorProjects) {
+    for (const m of p.members ?? []) {
+      if (m.email) emails.add(String(m.email).toLowerCase());
+    }
+  }
+  if (emails.size === 0) emails.add(actor.email.toLowerCase());
+
+  const users = await User.find({
+    orgId: actor.orgId,
+    email: { $in: [...emails] },
+  })
     .select('_id name email role status createdAt avatarUrl')
     .sort({ createdAt: -1 })
     .lean();

@@ -8,5 +8,16 @@
 	<string>DockX needs microphone access for voice notes and calls in chat.</string>
 	<key>NSDesktopCaptureUsageDescription</key>
 	<string>DockX needs screen recording access so you can share your screen or a browser tab during video calls.</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.dockx.desktop</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>dockx</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

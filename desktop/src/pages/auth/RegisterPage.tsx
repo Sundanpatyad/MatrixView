@@ -101,11 +101,11 @@ export function RegisterPage() {
       title={isInvite ? 'Join your project' : 'Create your account'}
       subtitle={subtitle}
       footer={
-        <p className="text-center text-sm text-ink-300">
+        <p className="text-sm text-ink-300">
           Already have an account?{' '}
           <Link
             to="/login"
-            className="font-semibold text-brand-300 transition hover:text-brand-400"
+            className="font-semibold text-brand-300 transition hover:text-brand-200"
           >
             Sign in
           </Link>
@@ -113,7 +113,7 @@ export function RegisterPage() {
       }
     >
       {isInvite && invite ? (
-        <div className="mb-5 rounded-xl border border-brand-500/25 bg-brand-500/10 px-3.5 py-3">
+        <div className="mb-5 border-l-2 border-brand-400 pl-3.5">
           <p className="text-[11px] font-semibold tracking-wide text-brand-300 uppercase">
             Invite
           </p>
@@ -130,7 +130,7 @@ export function RegisterPage() {
       {isInvite && inviteBroken ? (
         <div className="space-y-4">
           <p className="text-sm text-ink-300">
-            <Link to="/register" className="font-semibold text-brand-300 hover:text-brand-400">
+            <Link to="/register" className="font-semibold text-brand-300 hover:text-brand-200">
               Sign up without an invite
             </Link>{' '}
             instead.
@@ -178,12 +178,12 @@ export function RegisterPage() {
                 minLength={8}
                 autoComplete="new-password"
                 placeholder="Create a strong password"
-                className="pr-20"
+                className="pr-16"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword((v) => !v)}
-                className="absolute top-1/2 right-2 -translate-y-1/2 rounded-lg px-2.5 py-1 text-[12px] font-semibold text-ink-300 transition hover:bg-ink-700 hover:text-ink-50"
+                className="absolute top-1/2 right-2.5 -translate-y-1/2 rounded-md px-2 py-1 text-[12px] font-medium text-ink-300 transition hover:text-ink-50"
               >
                 {showPassword ? 'Hide' : 'Show'}
               </button>
@@ -193,7 +193,7 @@ export function RegisterPage() {
           <Button
             type="submit"
             size="lg"
-            className="mt-1 w-full rounded-xl"
+            className="mt-1 h-11 w-full rounded-lg shadow-none"
             disabled={loading || (isInvite && !invite)}
           >
             {loading ? 'Creating…' : isInvite ? 'Accept invite' : 'Create account'}

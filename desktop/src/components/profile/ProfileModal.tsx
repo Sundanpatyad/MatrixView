@@ -124,7 +124,7 @@ export function ProfileModal({ open, onClose }: Props) {
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4 backdrop-blur-[2px]">
+    <div className="dockx-modal-layer fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4 backdrop-blur-[2px]">
       <button type="button" className="absolute inset-0" aria-label="Close" onClick={onClose} />
       <div
         role="dialog"

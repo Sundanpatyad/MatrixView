@@ -4,19 +4,26 @@ import { TASK_TYPES, type BoardTask } from '@/lib/workspace/types';
 import { cn } from '@/lib/cn';
 
 const typeChip: Record<string, string> = {
-  task: 'bg-[#00a8fc]/10 text-[#006fae] dark:text-[#00a8fc] ring-[#00a8fc]/20',
-  bug: 'bg-[#ed4245]/10 text-[#c03537] dark:text-[#ed4245] ring-[#ed4245]/20',
-  story: 'bg-[#23a559]/15 text-[#18783f] dark:text-[#57f287] ring-[#23a559]/20',
-  time: 'bg-[#f0b232]/15 text-[#9a6700] dark:text-[#fee75c] ring-[#f0b232]/20',
+  task: 'bg-[#00a8fc]/12 text-[#00a8fc]',
+  bug: 'bg-[#ed4245]/12 text-[#ed4245]',
+  story: 'bg-[#23a559]/15 text-[#3ba55d]',
+  time: 'bg-[#f0b232]/15 text-[#f0b232]',
 };
 
 const priorityChip: Record<string, string> = {
-  lowest: 'bg-ink-700 text-ink-300',
-  low: 'bg-[#23a559]/15 text-[#18783f] dark:text-[#57f287]',
-  medium: 'bg-[#f0b232]/15 text-[#9a6700] dark:text-[#fee75c]',
-  high: 'bg-[#ed4245]/10 text-[#c03537] dark:text-[#ed4245]',
-  highest: 'bg-[#ed4245]/15 text-[#c03537] dark:text-[#ed4245]',
+  lowest: 'text-ink-400',
+  low: 'text-[#3ba55d]',
+  medium: 'text-[#f0b232]',
+  high: 'text-[#ed4245]',
+  highest: 'text-[#ed4245]',
 };
+
+function visibleDescription(description: string | undefined | null): string | null {
+  if (!description?.trim()) return null;
+  const d = description.trim();
+  if (d.includes('[seed-dummy]') || /^Dummy task\b/i.test(d)) return null;
+  return d;
+}
 
 type Props = {
   task: BoardTask;
@@ -41,12 +48,13 @@ export function DashboardTaskCard({
 }: Props) {
   const typeMeta = TASK_TYPES.find((t) => t.id === task.type);
   const draggedRef = useRef(false);
+  const description = visibleDescription(task.description);
+
   return (
     <article
       draggable
       onDragStart={(e) => {
         draggedRef.current = false;
-        // text/plain is required for reliable DnD in Tauri/WebView
         e.dataTransfer.setData('text/plain', task.id);
         e.dataTransfer.setData('text', task.id);
         e.dataTransfer.effectAllowed = 'move';
@@ -76,40 +84,38 @@ export function DashboardTaskCard({
         onOpen();
       }}
       className={cn(
-        'group cursor-grab select-none rounded-md border border-ink-600/80 bg-ink-800 p-2 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition',
-        'hover:border-ink-500 hover:shadow-[0_4px_12px_rgba(15,23,42,0.07)] active:cursor-grabbing',
-        dragging && 'scale-[0.98] opacity-45 shadow-none ring-2 ring-brand-500/30',
+        'group cursor-grab select-none rounded-md border border-ink-600 bg-ink-800 p-2.5 transition-colors',
+        'hover:border-ink-500 hover:bg-ink-800/90 active:cursor-grabbing',
+        dragging && 'opacity-40 ring-2 ring-brand-500/35',
       )}
     >
       <div className="flex items-center justify-between gap-2">
         <span
           className={cn(
-            'inline-flex rounded px-1.5 py-px text-[9px] font-bold tracking-wide uppercase ring-1 ring-inset',
-            typeChip[task.type] ?? 'bg-ink-900 text-ink-200 ring-ink-100',
+            'inline-flex rounded px-1.5 py-0.5 text-[10px] font-semibold tracking-wide uppercase',
+            typeChip[task.type] ?? 'bg-ink-700 text-ink-300',
           )}
         >
           {typeMeta?.label ?? task.type}
         </span>
-        <span className="text-[10px] font-semibold text-ink-400">{task.key}</span>
+        <span className="text-[11px] font-medium tabular-nums text-ink-400">{task.key}</span>
       </div>
 
-      <p className="mt-1.5 line-clamp-2 text-xs leading-snug font-semibold text-ink-50">
+      <p className="mt-2 line-clamp-2 text-[13px] leading-snug font-medium text-ink-50">
         {task.title}
       </p>
 
       {teamName ? (
-        <span className="mt-1 inline-flex max-w-full truncate rounded bg-brand-500/10 px-1.5 py-px text-[9px] font-bold text-brand-300 ring-1 ring-brand-500/20 ring-inset">
+        <span className="mt-1.5 inline-flex max-w-full truncate rounded bg-brand-500/10 px-1.5 py-0.5 text-[10px] font-medium text-brand-300">
           {teamName}
         </span>
       ) : null}
 
-      {task.description ? (
-        <p className="mt-0.5 line-clamp-1 text-[11px] leading-snug text-ink-300">
-          {task.description}
-        </p>
+      {description ? (
+        <p className="mt-1 line-clamp-1 text-[11px] leading-snug text-ink-400">{description}</p>
       ) : null}
 
-      <div className="mt-2 flex items-center justify-between gap-2 border-t border-ink-700/80 pt-1.5">
+      <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-ink-700/70 pt-2">
         <div className="flex min-w-0 items-center gap-1.5">
           <UserAvatar
             name={task.assigneeName || 'Unassigned'}
@@ -117,12 +123,14 @@ export function DashboardTaskCard({
             seed={task.assigneeName || task.id}
             size="xs"
           />
-          <span className="truncate text-[10px] font-medium text-ink-200">{task.assigneeName}</span>
+          <span className="truncate text-[11px] font-medium text-ink-300">
+            {task.assigneeName || 'Unassigned'}
+          </span>
         </div>
         <span
           className={cn(
-            'shrink-0 rounded px-1 py-px text-[9px] font-bold capitalize',
-            priorityChip[task.priority] ?? 'bg-ink-900 text-ink-300',
+            'shrink-0 text-[11px] font-semibold capitalize',
+            priorityChip[task.priority] ?? 'text-ink-400',
           )}
         >
           {task.priority}

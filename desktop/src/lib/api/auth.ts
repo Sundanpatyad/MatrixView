@@ -33,6 +33,54 @@ export function loginRequest(input: {
   });
 }
 
+/** Exchange one-time code from Google OAuth redirect for DockX tokens. */
+export function googleExchangeRequest(code: string): Promise<AuthResponse> {
+  return apiFetch<AuthResponse>('/api/auth/google/exchange', {
+    method: 'POST',
+    body: JSON.stringify({ code }),
+    skipRefresh: true,
+  });
+}
+
+/** Desktop loopback: ask backend for a Google authorize URL. */
+export function googleDesktopUrlRequest(redirectUri: string): Promise<{ url: string }> {
+  const qs = new URLSearchParams({
+    redirectUri,
+    deviceId: 'dockx-desktop',
+  });
+  return apiFetch<{ url: string; redirectUri: string }>(
+    `/api/auth/google/desktop-url?${qs.toString()}`,
+    { skipRefresh: true },
+  );
+}
+
+/** Desktop loopback: exchange Google auth code + matching redirect URI. */
+export function googleDesktopLoginRequest(input: {
+  code: string;
+  redirectUri: string;
+}): Promise<AuthResponse> {
+  return apiFetch<AuthResponse>('/api/auth/google/desktop', {
+    method: 'POST',
+    body: JSON.stringify({
+      code: input.code,
+      redirectUri: input.redirectUri,
+      deviceType: 'desktop',
+      deviceId: 'dockx-desktop',
+    }),
+    skipRefresh: true,
+  });
+}
+
+/** Start Google OAuth in the system / current browser window. */
+export function googleStartUrl(returnTo: string): string {
+  const base = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') || '';
+  const url = new URL(`${base}/api/auth/google/start`);
+  url.searchParams.set('returnTo', returnTo);
+  url.searchParams.set('deviceType', 'desktop');
+  url.searchParams.set('deviceId', 'dockx-desktop');
+  return url.toString();
+}
+
 export function registerRequest(input: {
   name: string;
   email: string;

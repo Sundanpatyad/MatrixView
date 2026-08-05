@@ -29,9 +29,9 @@ type Props = {
 };
 
 const sizes: Record<Size, string> = {
-  xs: 'h-7 px-2 text-[11px]',
-  sm: 'h-9 px-2.5 text-xs',
-  md: 'h-11 px-3 text-sm',
+  xs: 'h-7 rounded-md px-2 text-[11px]',
+  sm: 'h-8 rounded-md px-2.5 text-xs',
+  md: 'h-9 rounded-md px-3 text-sm',
 };
 
 export function Select({
@@ -151,9 +151,10 @@ export function Select({
         onClick={() => !disabled && setOpen((v) => !v)}
         onKeyDown={onKeyDown}
         className={cn(
-          'inline-flex w-full items-center justify-between gap-2 border border-ink-600 bg-ink-800 font-semibold text-ink-50 transition',
-          'hover:border-ink-500 focus:border-ink-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-45',
-          open && 'border-ink-500',
+          'inline-flex w-full items-center justify-between gap-2 border border-ink-500/70 bg-ink-900/70 font-semibold tracking-wide text-ink-50 transition-[border-color,background-color,box-shadow] duration-150',
+          'hover:border-brand-500/40 hover:bg-ink-800 focus:border-brand-500/50 focus:outline-none',
+          'disabled:cursor-not-allowed disabled:opacity-45',
+          open && 'border-brand-500/50 bg-ink-800',
           sizes[size],
           className,
         )}

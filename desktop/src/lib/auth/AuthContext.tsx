@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from 'react';
 import {
+  googleExchangeRequest,
   loginRequest,
   logoutRequest,
   meRequest,
@@ -16,6 +17,7 @@ import {
   registerRequest,
   updateMeRequest,
   uploadAvatarRequest,
+  type AuthResponse,
   type AuthUser,
 } from '@/lib/api/auth';
 import { configureApiAuth } from '@/lib/api/client';
@@ -43,6 +45,10 @@ type AuthContextValue = {
     orgName?: string;
     inviteToken?: string;
   }) => Promise<void>;
+  /** Finish Google OAuth after `/auth/google/callback?code=…` */
+  completeOAuth: (code: string) => Promise<void>;
+  /** Apply tokens from desktop Google loopback sign-in */
+  applySession: (result: AuthResponse) => void;
   logout: () => Promise<void>;
   updateProfile: (input: { name?: string; phone?: string }) => Promise<void>;
   uploadAvatar: (file: File) => Promise<void>;
@@ -192,6 +198,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [applyAuth],
   );
 
+  const completeOAuth = useCallback(
+    async (code: string) => {
+      const result = await googleExchangeRequest(code);
+      applyAuth(result);
+    },
+    [applyAuth],
+  );
+
+  const applySession = useCallback(
+    (result: AuthResponse) => {
+      applyAuth(result);
+    },
+    [applyAuth],
+  );
+
   const logout = useCallback(async () => {
     const { accessToken, refreshToken } = tokensRef.current;
     await logoutRequest(refreshToken, accessToken);
@@ -233,11 +254,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isBootstrapping,
       login,
       register,
+      completeOAuth,
+      applySession,
       logout,
       updateProfile,
       uploadAvatar,
     }),
-    [user, isBootstrapping, login, register, logout, updateProfile, uploadAvatar],
+    [
+      user,
+      isBootstrapping,
+      login,
+      register,
+      completeOAuth,
+      applySession,
+      logout,
+      updateProfile,
+      uploadAvatar,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

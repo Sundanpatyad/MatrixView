@@ -1,0 +1,254 @@
+import { apiFetch } from './client';
+import type {
+  BoardTask,
+  PickedFile,
+  Project,
+  ProjectRole,
+  ProjectTeam,
+  TaskPriority,
+  TaskType,
+  TimelineItem,
+} from './types';
+
+export interface WorkspaceSnapshot {
+  projects: Project[];
+  tasks: BoardTask[];
+  timeline: TimelineItem[];
+  teams: ProjectTeam[];
+}
+
+function appendFiles(form: FormData, files: PickedFile[]) {
+  files.forEach((file) => {
+    form.append('files', {
+      uri: file.uri,
+      name: file.name,
+      type: file.mimeType,
+    } as unknown as Blob);
+  });
+}
+
+export function fetchWorkspace() {
+  return apiFetch<WorkspaceSnapshot>('/api/workspace', { auth: true });
+}
+
+export function listProjectsRequest() {
+  return apiFetch<{ projects: Project[] }>('/api/projects', { auth: true });
+}
+
+export function createProjectRequest(input: { name: string; key: string; description?: string }) {
+  return apiFetch<{ project: Project }>('/api/projects', { method: 'POST', body: input, auth: true });
+}
+
+export function deleteProjectRequest(projectId: string) {
+  return apiFetch<{ ok: true; projectId: string }>(`/api/projects/${projectId}`, { method: 'DELETE', auth: true });
+}
+
+export function uploadProjectAvatarRequest(projectId: string, file: PickedFile) {
+  const form = new FormData();
+  form.append('avatar', { uri: file.uri, name: file.name, type: file.mimeType } as unknown as Blob);
+  return apiFetch<{ project: Project }>(`/api/projects/${projectId}/avatar`, {
+    method: 'POST',
+    body: form,
+    auth: true,
+  });
+}
+
+export function removeProjectAvatarRequest(projectId: string) {
+  return apiFetch<{ project: Project }>(`/api/projects/${projectId}/avatar`, { method: 'DELETE', auth: true });
+}
+
+export function addMemberRequest(projectId: string, input: { name?: string; email: string; role?: ProjectRole }) {
+  return apiFetch<{
+    project: Project;
+    result: 'added' | 'invited';
+    emailSent: boolean;
+    inviteLink: string | null;
+  }>(`/api/projects/${projectId}/members`, { method: 'POST', body: input, auth: true });
+}
+
+export function updateMemberRoleRequest(projectId: string, memberId: string, role: ProjectRole) {
+  return apiFetch<{ project: Project }>(`/api/projects/${projectId}/members/${memberId}`, {
+    method: 'PATCH',
+    body: { role },
+    auth: true,
+  });
+}
+
+export function removeMemberRequest(projectId: string, memberId: string) {
+  return apiFetch<{ project: Project }>(`/api/projects/${projectId}/members/${memberId}`, {
+    method: 'DELETE',
+    auth: true,
+  });
+}
+
+export function addColumnRequest(projectId: string, label: string) {
+  return apiFetch<{ project: Project }>(`/api/projects/${projectId}/columns`, {
+    method: 'POST',
+    body: { label },
+    auth: true,
+  });
+}
+
+export function renameColumnRequest(projectId: string, columnId: string, label: string) {
+  return apiFetch<{ project: Project }>(`/api/projects/${projectId}/columns/${columnId}`, {
+    method: 'PATCH',
+    body: { label },
+    auth: true,
+  });
+}
+
+export function reorderColumnsRequest(projectId: string, columnIds: string[]) {
+  return apiFetch<{ project: Project }>(`/api/projects/${projectId}/columns`, {
+    method: 'PUT',
+    body: { columnIds },
+    auth: true,
+  });
+}
+
+export function removeColumnRequest(projectId: string, columnId: string, moveTo?: string) {
+  const query = moveTo ? `?moveTo=${encodeURIComponent(moveTo)}` : '';
+  return apiFetch<{ project: Project; tasks: BoardTask[] }>(
+    `/api/projects/${projectId}/columns/${columnId}${query}`,
+    { method: 'DELETE', auth: true },
+  );
+}
+
+export interface CreateTaskInput {
+  title: string;
+  description?: string;
+  type?: TaskType;
+  priority?: TaskPriority;
+  estimateHours?: number;
+  assigneeName?: string;
+  assigneeId?: string;
+  dueDate?: string;
+  teamId?: string | null;
+}
+
+export function createTaskRequest(projectId: string, input: CreateTaskInput) {
+  return apiFetch<{ task: BoardTask }>(`/api/projects/${projectId}/tasks`, {
+    method: 'POST',
+    body: input,
+    auth: true,
+  });
+}
+
+export type UpdateTaskInput = Partial<CreateTaskInput> & {
+  status?: string;
+  loggedHours?: number;
+  reporterName?: string;
+  labels?: string[];
+  startDate?: string;
+  endDate?: string;
+};
+
+export function updateTaskRequest(taskId: string, input: UpdateTaskInput) {
+  return apiFetch<{ task: BoardTask }>(`/api/tasks/${taskId}`, { method: 'PATCH', body: input, auth: true });
+}
+
+export function listProjectTasksRequest(projectId: string, teamId?: string) {
+  const query = teamId ? `?teamId=${encodeURIComponent(teamId)}` : '';
+  return apiFetch<{ tasks: BoardTask[] }>(`/api/projects/${projectId}/tasks${query}`, { auth: true });
+}
+
+export function addCommentRequest(taskId: string, body: string, files: PickedFile[] = []) {
+  const form = new FormData();
+  form.append('body', body);
+  appendFiles(form, files);
+  return apiFetch<{ task: BoardTask }>(`/api/tasks/${taskId}/comments`, {
+    method: 'POST',
+    body: form,
+    auth: true,
+    timeoutMs: 60000,
+  });
+}
+
+export function addTaskAttachmentsRequest(taskId: string, files: PickedFile[]) {
+  const form = new FormData();
+  appendFiles(form, files);
+  return apiFetch<{ task: BoardTask }>(`/api/tasks/${taskId}/attachments`, {
+    method: 'POST',
+    body: form,
+    auth: true,
+    timeoutMs: 60000,
+  });
+}
+
+export function removeTaskAttachmentRequest(taskId: string, attachmentId: string) {
+  return apiFetch<{ task: BoardTask }>(`/api/tasks/${taskId}/attachments/${attachmentId}`, {
+    method: 'DELETE',
+    auth: true,
+  });
+}
+
+export function createTeamRequest(projectId: string, input: { name: string; memberIds?: string[] }) {
+  return apiFetch<{ team: ProjectTeam }>(`/api/projects/${projectId}/teams`, {
+    method: 'POST',
+    body: input,
+    auth: true,
+  });
+}
+
+export function listProjectTeamsRequest(projectId: string) {
+  return apiFetch<{ teams: ProjectTeam[] }>(`/api/projects/${projectId}/teams`, { auth: true });
+}
+
+export function updateTeamRequest(teamId: string, input: { name?: string; memberIds?: string[] }) {
+  return apiFetch<{ team: ProjectTeam }>(`/api/teams/${teamId}`, { method: 'PATCH', body: input, auth: true });
+}
+
+export function addTeamMembersRequest(teamId: string, memberIds: string[]) {
+  return apiFetch<{ team: ProjectTeam }>(`/api/teams/${teamId}/members`, {
+    method: 'POST',
+    body: { memberIds },
+    auth: true,
+  });
+}
+
+export function removeTeamMemberRequest(teamId: string, memberId: string) {
+  return apiFetch<{ team: ProjectTeam }>(`/api/teams/${teamId}/members/${memberId}`, {
+    method: 'DELETE',
+    auth: true,
+  });
+}
+
+export function deleteTeamRequest(teamId: string) {
+  return apiFetch<{ ok: true; teamId: string }>(`/api/teams/${teamId}`, { method: 'DELETE', auth: true });
+}
+
+export function createTimelineRequest(
+  input: {
+    projectId: string;
+    title: string;
+    description?: string;
+    type?: TaskType;
+    priority?: TaskPriority;
+    dueDate?: string;
+    teamId?: string;
+  },
+  files: PickedFile[] = [],
+) {
+  const form = new FormData();
+  Object.entries(input).forEach(([key, value]) => {
+    if (value !== undefined && value !== null) form.append(key, String(value));
+  });
+  appendFiles(form, files);
+  return apiFetch<{ item: TimelineItem }>('/api/timeline', {
+    method: 'POST',
+    body: form,
+    auth: true,
+    timeoutMs: 60000,
+  });
+}
+
+export function assignTimelineRequest(itemId: string, assignee: { id: string; name: string }) {
+  return apiFetch<{ timelineItem: TimelineItem; task: BoardTask }>(`/api/timeline/${itemId}/assign`, {
+    method: 'POST',
+    body: assignee,
+    auth: true,
+  });
+}
+
+export function deleteTimelineRequest(itemId: string) {
+  return apiFetch<{ ok: true }>(`/api/timeline/${itemId}`, { method: 'DELETE', auth: true });
+}

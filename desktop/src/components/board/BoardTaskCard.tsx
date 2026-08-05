@@ -4,11 +4,11 @@ import { TASK_TYPES, type BoardTask } from '@/lib/workspace/types';
 import { cn } from '@/lib/cn';
 
 const priorityStyles: Record<string, string> = {
-  lowest: 'text-ink-200 bg-ink-700',
-  low: 'text-[#18783f] dark:text-[#57f287] bg-[#23a559]/15',
-  medium: 'text-[#9a6700] dark:text-[#fee75c] bg-[#f0b232]/15',
-  high: 'text-[#c03537] dark:text-[#ed4245] bg-[#ed4245]/15',
-  highest: 'text-white bg-[#ed4245]',
+  lowest: 'text-ink-400',
+  low: 'text-[#3ba55d]',
+  medium: 'text-[#f0b232]',
+  high: 'text-[#ed4245]',
+  highest: 'text-[#ed4245]',
 };
 
 type Props = {
@@ -36,7 +36,6 @@ export function BoardTaskCard({
       draggable
       onDragStart={(e) => {
         draggedRef.current = false;
-        // text/plain works in all browsers + Tauri webview; custom types often don't
         e.dataTransfer.setData('text/plain', task.id);
         e.dataTransfer.effectAllowed = 'move';
         onDragStart(task.id);
@@ -51,7 +50,6 @@ export function BoardTaskCard({
         }, 50);
       }}
       onDragOver={(e) => {
-        // Allow dropping onto/near cards inside a column
         e.preventDefault();
         e.dataTransfer.dropEffect = 'move';
       }}
@@ -60,52 +58,45 @@ export function BoardTaskCard({
         onOpen();
       }}
       className={cn(
-        'select-none rounded-lg border border-ink-500 bg-ink-800 p-3 shadow-sm transition hover:border-ink-500',
-        'cursor-grab active:cursor-grabbing',
-        dragging && 'opacity-40 ring-2 ring-brand-600',
+        'select-none rounded-md border border-ink-600 bg-ink-800 p-2.5 transition-colors',
+        'cursor-grab hover:border-ink-500 active:cursor-grabbing',
+        dragging && 'opacity-40 ring-2 ring-brand-500/35',
       )}
     >
       <div className="flex items-start justify-between gap-2">
         <span
           className={cn(
-            'inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white',
+            'inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-white uppercase',
             typeMeta?.color ?? 'bg-ink-700',
           )}
         >
           {typeMeta?.label ?? task.type}
         </span>
-        <span className="text-[10px] font-bold text-ink-200">{task.key}</span>
+        <span className="text-[11px] font-medium tabular-nums text-ink-400">{task.key}</span>
       </div>
 
-      <p className="mt-2 text-sm font-bold text-ink-50">{task.title}</p>
+      <p className="mt-2 text-[13px] font-medium text-ink-50">{task.title}</p>
 
-      <div className="mt-3 flex flex-wrap items-center gap-1.5">
+      <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-ink-700/70 pt-2">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <UserAvatar
+            name={task.assigneeName || 'Unassigned'}
+            src={avatarUrl}
+            seed={task.assigneeName || task.id}
+            size="xs"
+          />
+          <span className="truncate text-[11px] font-medium text-ink-300">
+            {task.assigneeName || 'Unassigned'}
+          </span>
+        </div>
         <span
           className={cn(
-            'rounded px-1.5 py-0.5 text-[10px] font-bold capitalize',
+            'shrink-0 text-[11px] font-semibold capitalize',
             priorityStyles[task.priority],
           )}
         >
           {task.priority}
         </span>
-        <span className="rounded bg-ink-700 px-1.5 py-0.5 text-[10px] font-bold text-ink-200">
-          {task.estimateHours}h est
-        </span>
-        {task.loggedHours > 0 ? (
-          <span className="rounded bg-brand-500/10 px-1.5 py-0.5 text-[10px] font-bold text-brand-600 dark:text-brand-300">
-            {task.loggedHours}h logged
-          </span>
-        ) : null}
-      </div>
-
-      <div className="mt-3 flex items-center justify-between">
-        <span className="text-[11px] font-semibold text-ink-200">{task.assigneeName}</span>
-        <UserAvatar
-          name={task.assigneeName || 'Unassigned'}
-          src={avatarUrl}
-          seed={task.assigneeName || task.id}
-          size="sm"
-        />
       </div>
     </article>
   );

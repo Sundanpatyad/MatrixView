@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { useLocation } from 'react-router-dom';
 import {
   IconHand,
   IconLayoutGrid,
@@ -16,7 +17,12 @@ import {
   IconX,
 } from '@/components/ui/Icons';
 import { Button } from '@/components/ui/Button';
+import { MediaPermissionModal } from '@/components/calls/MediaPermissionModal';
 import { cn } from '@/lib/cn';
+import {
+  isMediaPermissionError,
+  mediaKindFromPermissionError,
+} from '@/lib/media/permissions';
 import type {
   CallFloatingReaction,
   CallLayoutMode,
@@ -589,9 +595,13 @@ export function CallOverlay({
   onToggleScreenShare,
   onDismissError,
 }: Props) {
+  const location = useLocation();
   const remoteIsScreen = useMemo(() => isScreenTrack(remoteStream), [remoteStream]);
   const [shareTargets, setShareTargets] = useState<CaptureTarget[] | null>(null);
   const [shareBusy, setShareBusy] = useState(false);
+  const [permissionOpen, setPermissionOpen] = useState(false);
+  const permissionError = Boolean(error && isMediaPermissionError(error));
+  const permissionKind = mediaKindFromPermissionError(error, call.mediaKind);
 
   const presentingPeer = useMemo(() => {
     if (!call.isGroup) return null;
@@ -798,6 +808,10 @@ export function CallOverlay({
 
   useEffect(() => {
     if (!error || call.phase !== 'idle') return;
+    if (isMediaPermissionError(error)) {
+      setPermissionOpen(true);
+      return;
+    }
     const t = window.setTimeout(onDismissError, 4000);
     return () => window.clearTimeout(t);
   }, [error, call.phase, onDismissError]);
@@ -805,6 +819,16 @@ export function CallOverlay({
   useEffect(() => {
     if (call.phase === 'idle' || call.phase === 'ended') setShareTargets(null);
   }, [call.phase]);
+
+  // Never leave permission UI trapping the shell after the user leaves Chat / hangs up.
+  useEffect(() => {
+    if (call.phase === 'idle' && !error) setPermissionOpen(false);
+  }, [call.phase, error]);
+
+  useEffect(() => {
+    setPermissionOpen(false);
+    setShareTargets(null);
+  }, [location.pathname]);
 
   const inVideoCall =
     call.mediaKind === 'video' &&
@@ -1113,7 +1137,7 @@ export function CallOverlay({
         </div>
       ) : null}
 
-      {error && call.phase === 'idle' ? (
+      {error && call.phase === 'idle' && !permissionError ? (
         <div
           className="pointer-events-none fixed inset-x-0 top-0 z-[10040] flex justify-end p-3 sm:p-4"
           role="status"
@@ -1121,15 +1145,15 @@ export function CallOverlay({
         >
           <div
             className={cn(
-              'pointer-events-auto flex max-w-[280px] items-center gap-2 rounded-xl',
-              'border border-ink-600 bg-ink-800/95 px-2.5 py-2 shadow-lg backdrop-blur-md',
+              'pointer-events-auto flex max-w-[min(100%,22rem)] items-center gap-2 rounded-xl',
+              'border border-ink-600 bg-ink-800/95 px-2.5 py-2',
               'animate-[incoming-call-toast_0.28s_ease-out]',
             )}
           >
             <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-red-500/15 text-red-300">
               <IconPhoneOff className="h-3.5 w-3.5" />
             </span>
-            <p className="min-w-0 flex-1 truncate text-xs font-medium text-ink-100">{error}</p>
+            <p className="min-w-0 flex-1 text-xs font-medium leading-snug text-ink-100">{error}</p>
             <button
               type="button"
               title="Dismiss"
@@ -1145,6 +1169,19 @@ export function CallOverlay({
           </div>
         </div>
       ) : null}
+
+      <MediaPermissionModal
+        open={permissionOpen && permissionError}
+        kind={permissionKind}
+        onClose={() => {
+          setPermissionOpen(false);
+          onDismissError();
+        }}
+        onGranted={() => {
+          setPermissionOpen(false);
+          onDismissError();
+        }}
+      />
     </>
   );
 }

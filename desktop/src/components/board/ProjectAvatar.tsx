@@ -86,7 +86,7 @@ export function ProjectAvatar({
         <>
           <button
             type="button"
-            className="fixed inset-0 z-40"
+            className="fixed inset-0 z-30"
             aria-label="Close"
             onClick={() => setMenuOpen(false)}
           />

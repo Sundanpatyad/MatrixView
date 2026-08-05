@@ -1,0 +1,8 @@
+[[permission]]
+identifier = "allow-google-oauth-loopback"
+description = "Allow desktop Google OAuth loopback listener"
+commands.allow = [
+  "google_oauth_loopback_start",
+  "google_oauth_loopback_wait",
+  "google_oauth_loopback_cancel"
+]

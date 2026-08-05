@@ -1,0 +1,82 @@
+{
+  "expo": {
+    "name": "DockX",
+    "slug": "dockx",
+    "scheme": "dockx",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "dev.dockx.mobile",
+      "infoPlist": {
+        "UIBackgroundModes": [
+          "audio",
+          "voip"
+        ],
+        "NSCameraUsageDescription": "DockX uses the camera so you can capture photos to share in chats and attach to tasks.",
+        "NSPhotoLibraryUsageDescription": "DockX needs photo library access so you can share images in chats and attach them to tasks.",
+        "NSMicrophoneUsageDescription": "DockX uses the microphone to record voice notes.",
+        "NSAppTransportSecurity": {
+          "NSAllowsLocalNetworking": true
+        }
+      }
+    },
+    "android": {
+      "package": "dev.dockx.mobile",
+      "adaptiveIcon": {
+        "backgroundColor": "#111214",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "RECORD_AUDIO",
+        "MODIFY_AUDIO_SETTINGS",
+        "ACCESS_NETWORK_STATE",
+        "BLUETOOTH",
+        "BLUETOOTH_CONNECT",
+        "WAKE_LOCK"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-secure-store",
+      "expo-image",
+      "@react-native-community/datetimepicker",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "DockX needs photo library access so you can share images in chats and attach them to tasks.",
+          "cameraPermission": "DockX uses the camera so you can capture photos to share in chats and attach to tasks."
+        }
+      ],
+      "expo-font",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#111214"
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
+      ]
+    ]
+  }
+}

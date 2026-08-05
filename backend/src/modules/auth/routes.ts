@@ -75,6 +75,172 @@ router.post('/login', async (req, res, next) => {
   }
 });
 
+router.get('/google/start', async (req, res, next) => {
+  try {
+    const {
+      buildGoogleAuthUrl,
+      googleConfigured,
+    } = await import('./google.js');
+    if (!googleConfigured()) {
+      throw new AuthError('Google sign-in is not configured', 503, 'GOOGLE_NOT_CONFIGURED');
+    }
+    const returnTo = z.string().url().parse(req.query.returnTo);
+    const deviceType = z
+      .enum(['web', 'desktop', 'mobile'])
+      .optional()
+      .parse(req.query.deviceType) ?? 'desktop';
+    const deviceId = z.string().max(128).optional().parse(req.query.deviceId);
+    const url = buildGoogleAuthUrl({ returnTo, deviceType, deviceId });
+    res.redirect(url);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** Desktop app: JSON auth URL for a loopback redirect (installed OAuth client). */
+router.get('/google/desktop-url', async (req, res, next) => {
+  try {
+    const { buildDesktopLoopbackAuthUrl, googleConfigured } = await import('./google.js');
+    if (!googleConfigured()) {
+      throw new AuthError('Google sign-in is not configured', 503, 'GOOGLE_NOT_CONFIGURED');
+    }
+    const redirectUri = z.string().url().parse(req.query.redirectUri);
+    const deviceId = z.string().max(128).optional().parse(req.query.deviceId);
+    const url = buildDesktopLoopbackAuthUrl(redirectUri, deviceId);
+    res.json({ url, redirectUri });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** Desktop app: exchange Google auth code from the local loopback listener. */
+router.post('/google/desktop', async (req, res, next) => {
+  try {
+    const { assertLoopbackRedirectUri, exchangeGoogleCode, googleConfigured } =
+      await import('./google.js');
+    if (!googleConfigured()) {
+      throw new AuthError('Google sign-in is not configured', 503, 'GOOGLE_NOT_CONFIGURED');
+    }
+    const body = z
+      .object({
+        code: z.string().min(10),
+        redirectUri: z.string().url(),
+        deviceType: z.enum(['web', 'desktop', 'mobile']).optional(),
+        deviceId: z.string().max(128).optional(),
+      })
+      .parse(req.body);
+    const redirectUri = assertLoopbackRedirectUri(body.redirectUri);
+    const profile = await exchangeGoogleCode(body.code, redirectUri);
+    const result = await authService.loginWithGoogle({
+      googleId: profile.googleId,
+      email: profile.email,
+      name: profile.name,
+      avatarUrl: profile.avatarUrl,
+      deviceType: body.deviceType ?? 'desktop',
+      deviceId: body.deviceId,
+      ...clientMeta(req),
+    });
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/google/callback', async (req, res, next) => {
+  const {
+    assertAllowedReturnTo,
+    decodeOAuthState,
+    exchangeGoogleCode,
+    storeOAuthExchange,
+  } = await import('./google.js');
+
+  let returnTo: string | null = null;
+  try {
+    const stateRaw = z.string().min(1).parse(req.query.state);
+    const state = decodeOAuthState(stateRaw);
+    assertAllowedReturnTo(state.returnTo);
+    returnTo = state.returnTo;
+
+    const oauthError = typeof req.query.error === 'string' ? req.query.error : null;
+    if (oauthError) {
+      const dest = new URL(state.returnTo);
+      dest.searchParams.set('error', oauthError);
+      res.redirect(dest.toString());
+      return;
+    }
+
+    const code = z.string().min(1).parse(req.query.code);
+    const profile = await exchangeGoogleCode(code);
+    const result = await authService.loginWithGoogle({
+      googleId: profile.googleId,
+      email: profile.email,
+      name: profile.name,
+      avatarUrl: profile.avatarUrl,
+      deviceType: state.deviceType,
+      deviceId: state.deviceId,
+      ...clientMeta(req),
+    });
+    const exchangeCode = storeOAuthExchange(result);
+    const dest = new URL(state.returnTo);
+    dest.searchParams.set('code', exchangeCode);
+    res.redirect(dest.toString());
+  } catch (err) {
+    if (returnTo) {
+      const dest = new URL(returnTo);
+      const msg =
+        err instanceof AuthError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : 'Google sign-in failed';
+      dest.searchParams.set('error', msg.slice(0, 180));
+      res.redirect(dest.toString());
+      return;
+    }
+    next(err);
+  }
+});
+
+router.post('/google/exchange', async (req, res, next) => {
+  try {
+    const { consumeOAuthExchange } = await import('./google.js');
+    const body = z.object({ code: z.string().min(10) }).parse(req.body);
+    const result = consumeOAuthExchange(body.code);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/google', async (req, res, next) => {
+  try {
+    const { verifyGoogleIdToken, googleConfigured } = await import('./google.js');
+    if (!googleConfigured()) {
+      throw new AuthError('Google sign-in is not configured', 503, 'GOOGLE_NOT_CONFIGURED');
+    }
+    const body = z
+      .object({
+        idToken: z.string().min(20),
+        deviceType: z.enum(['web', 'desktop', 'mobile']).optional(),
+        deviceId: z.string().max(128).optional(),
+      })
+      .parse(req.body);
+    const profile = await verifyGoogleIdToken(body.idToken);
+    const result = await authService.loginWithGoogle({
+      googleId: profile.googleId,
+      email: profile.email,
+      name: profile.name,
+      avatarUrl: profile.avatarUrl,
+      deviceType: body.deviceType,
+      deviceId: body.deviceId,
+      ...clientMeta(req),
+    });
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.post('/refresh', async (req, res, next) => {
   try {
     const body = z.object({ refreshToken: z.string().min(10) }).parse(req.body);

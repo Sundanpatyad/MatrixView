@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AddUserModal } from '@/components/dashboard/AddUserModal';
 import { AdminActivityPanel } from '@/components/dashboard/AdminActivityPanel';
@@ -39,11 +39,11 @@ const STATUS_META = [
 ] as const;
 
 const PRIORITY_META = [
-  { id: 'highest', label: 'Highest', color: '#ed4245' },
-  { id: 'high', label: 'High', color: '#f07178' },
-  { id: 'medium', label: 'Medium', color: '#f0b232' },
-  { id: 'low', label: 'Low', color: '#3ba55d' },
-  { id: 'lowest', label: 'Lowest', color: '#80848e' },
+  { id: 'highest', label: 'Highest', short: 'H+', color: '#ed4245' },
+  { id: 'high', label: 'High', short: 'Hi', color: '#f07178' },
+  { id: 'medium', label: 'Medium', short: 'Med', color: '#f0b232' },
+  { id: 'low', label: 'Low', short: 'Lo', color: '#3ba55d' },
+  { id: 'lowest', label: 'Lowest', short: 'L−', color: '#80848e' },
 ] as const;
 
 function DonutChart({
@@ -90,11 +90,11 @@ function DonutChart({
           <p className="text-[9px] font-semibold tracking-wide text-ink-400 uppercase">tasks</p>
         </div>
       </div>
-      <ul className="min-w-0 flex-1 space-y-1">
+      <ul className="min-w-0 flex-1 space-y-1.5">
         {slices.map((s) => (
-          <li key={s.label} className="flex items-center gap-2 text-[11px]">
+          <li key={s.label} className="flex items-center gap-2 text-[12px]">
             <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: s.color }} />
-            <span className="min-w-0 flex-1 truncate text-ink-200">{s.label}</span>
+            <span className="min-w-0 flex-1 truncate text-ink-300">{s.label}</span>
             <span className="tabular-nums font-semibold text-ink-50">{s.value}</span>
           </li>
         ))}
@@ -109,15 +109,15 @@ function BarChart({
   bars: { id: string; label: string; value: number; color: string }[];
 }) {
   const max = Math.max(...bars.map((b) => b.value), 1);
-  const h = 112;
-  const gap = 10;
-  const barW = 28;
+  const h = 108;
+  const gap = 12;
+  const barW = 26;
   const width = Math.max(bars.length * (barW + gap) + gap, 120);
 
   return (
-    <svg viewBox={`0 0 ${width} ${h + 22}`} className="h-36 w-full">
+    <svg viewBox={`0 0 ${width} ${h + 24}`} className="h-36 w-full">
       {bars.map((b, i) => {
-        const bh = (b.value / max) * (h - 14);
+        const bh = (b.value / max) * (h - 16);
         const x = gap + i * (barW + gap);
         const y = h - bh;
         return (
@@ -127,24 +127,24 @@ function BarChart({
               y={4}
               width={barW}
               height={h - 4}
-              rx={6}
+              rx={5}
               fill="var(--chart-track)"
-              opacity={0.35}
+              opacity={0.3}
             />
-            <rect x={x} y={y} width={barW} height={Math.max(bh, 3)} rx={6} fill={b.color} />
+            <rect x={x} y={y} width={barW} height={Math.max(bh, 3)} rx={5} fill={b.color} />
             <text
               x={x + barW / 2}
-              y={y - 4}
+              y={y - 5}
               textAnchor="middle"
-              style={{ fontSize: 9, fontWeight: 700, fill: 'var(--ink-50)' }}
+              style={{ fontSize: 10, fontWeight: 600, fill: 'var(--ink-50)' }}
             >
               {b.value}
             </text>
             <text
               x={x + barW / 2}
-              y={h + 14}
+              y={h + 16}
               textAnchor="middle"
-              style={{ fontSize: 8, fontWeight: 600, fill: 'var(--ink-300)' }}
+              style={{ fontSize: 9, fontWeight: 600, fill: 'var(--ink-300)' }}
             >
               {b.label}
             </text>
@@ -152,6 +152,31 @@ function BarChart({
         );
       })}
     </svg>
+  );
+}
+
+function FilterChip({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'h-7 rounded-md px-2.5 text-[11px] font-semibold tracking-wide capitalize transition-[color,background-color,transform] duration-150 ease-out active:scale-[0.98]',
+        active
+          ? 'bg-brand-500 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.14)]'
+          : 'text-ink-300 hover:bg-ink-700 hover:text-ink-50',
+      )}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -303,12 +328,15 @@ export function DashboardPage() {
     if (tab === 'users') void loadOrgUsers();
   }, [tab, loadOrgUsers]);
 
+  /** Only members assigned to the selected project(s) — never the full org directory. */
   const teamUsers = useMemo(() => {
     const map = new Map<string, TeamUser>();
     for (const p of scopedProjects) {
       const project = getProject(p.id);
       if (!project) continue;
       for (const m of project.members) {
+        // Pending invites aren't assigned yet
+        if (m.status === 'pending') continue;
         const key = m.email.toLowerCase();
         const existing = map.get(key);
         if (existing) {
@@ -323,27 +351,6 @@ export function DashboardPage() {
         }
       }
     }
-    // Include org users who may not be on a project yet
-    for (const ou of orgUsers) {
-      const key = ou.email.toLowerCase();
-      const existing = map.get(key);
-      if (existing) {
-        for (const p of ou.projects) {
-          if (!existing.projects.includes(p.name)) existing.projects.push(p.name);
-        }
-      } else {
-        map.set(key, {
-          id: ou.id,
-          name: ou.name,
-          email: ou.email,
-          role: 'member',
-          addedAt: ou.createdAt ?? '',
-          taskCount: 0,
-          openCount: 0,
-          projects: ou.projects.map((p) => p.name),
-        });
-      }
-    }
     for (const t of scopedTasks) {
       const emailMatch = [...map.values()].find(
         (u) =>
@@ -355,7 +362,15 @@ export function DashboardPage() {
       if (t.status !== 'done') emailMatch.openCount += 1;
     }
     return [...map.values()].sort((a, b) => b.taskCount - a.taskCount);
-  }, [scopedProjects, scopedTasks, getProject, orgUsers]);
+  }, [scopedProjects, scopedTasks, getProject]);
+
+  useEffect(() => {
+    if (selectedUserEmail === 'all') return;
+    const stillVisible = teamUsers.some(
+      (u) => u.email.toLowerCase() === selectedUserEmail,
+    );
+    if (!stillVisible) setSelectedUserEmail('all');
+  }, [teamUsers, selectedUserEmail]);
 
   const stats = useMemo(() => {
     let scope: BoardTask[] = scopedTasks;
@@ -414,7 +429,7 @@ export function DashboardPage() {
     // Workload per project for bar chart
     const byProject = scopedProjects.map((p) => ({
       id: p.id,
-      label: p.key.slice(0, 4),
+      label: (p.key || p.name).slice(0, 5),
       value: scope.filter((t) => t.projectId === p.id).length,
       color: '#5865F2',
     }));
@@ -447,41 +462,65 @@ export function DashboardPage() {
 
   const priorityBars = PRIORITY_META.map((p) => ({
     id: p.id,
-    label: p.label.slice(0, 3),
+    label: p.short,
     value: stats.byPriority[p.id] ?? 0,
     color: p.color,
   }));
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
+      {projects.length === 0 ? (
+        <section className="shrink-0 border-b border-brand-500/25 bg-brand-500/10 px-4 py-3">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-ink-50">Welcome to DockX</p>
+              <p className="mt-0.5 text-xs text-ink-300">
+                Create a project when you’re ready for boards and tasks. Chat works right away from
+                the sidebar.
+              </p>
+            </div>
+            <div className="flex shrink-0 flex-wrap gap-2">
+              <Button size="sm" onClick={() => setShowCreateProject(true)}>
+                New project
+              </Button>
+              <Link to="/chat">
+                <Button size="sm" variant="secondary">
+                  Open chat
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </section>
+      ) : null}
+
       {/* Top bar */}
       <section className="shrink-0 border-b border-ink-600 bg-ink-800">
-        <div className="flex flex-col gap-2 px-3 py-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:px-4">
+        <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
           <div className="min-w-0 shrink-0">
-            <p className="text-[10px] font-semibold tracking-wide text-ink-400 uppercase">
+            <p className="text-[11px] font-medium tracking-wide text-ink-400 uppercase">
               Dashboard
             </p>
-            <h1 className="truncate text-base font-semibold text-ink-50 sm:text-lg">
+            <h1 className="mt-0.5 truncate text-lg font-semibold tracking-tight text-ink-50">
               {greeting()}, {firstName}
             </h1>
           </div>
 
-          <div className="flex flex-wrap items-center gap-1.5 sm:justify-end">
-            <div className="w-[160px] shrink-0 sm:w-[200px]">
+          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+            <div className="w-[168px] shrink-0 sm:w-[200px]">
               <Select
                 value={activeProjectId}
                 onChange={(value) => setActiveProjectId(value as typeof activeProjectId)}
                 options={projectSwitchOptions}
                 aria-label="Switch project"
-                size="xs"
+                size="sm"
               />
             </div>
             {myRoleOnActive ? (
               <span
                 className={cn(
-                  'hidden rounded-md px-2 py-1 text-[10px] font-bold tracking-wide uppercase md:inline',
+                  'hidden h-8 items-center rounded-md px-2.5 text-[11px] font-semibold tracking-wide uppercase md:inline-flex',
                   myRoleOnActive === 'admin'
-                    ? 'bg-brand-500/10 text-brand-300'
+                    ? 'bg-brand-500/15 text-brand-300'
                     : 'bg-ink-700 text-ink-200',
                 )}
               >
@@ -489,94 +528,101 @@ export function DashboardPage() {
               </span>
             ) : null}
 
-            <div className="flex h-7 shrink-0 items-center gap-1.5 border border-ink-600 bg-ink-900 px-2">
+            <div className="flex h-8 shrink-0 items-center gap-2 rounded-md border border-ink-600 bg-ink-900/80 px-2.5">
               <span
                 className={cn(
                   'h-1.5 w-1.5 shrink-0 rounded-full',
                   !checkedIn
-                    ? 'bg-ink-300'
+                    ? 'bg-ink-400'
                     : onBreak
                       ? 'bg-[#f0b232]'
                       : 'bg-[#23a559]',
                 )}
               />
-              <span className="hidden text-[10px] font-semibold tracking-wide text-ink-300 uppercase sm:inline">
+              <span className="hidden text-[11px] font-semibold tracking-wide text-ink-300 uppercase sm:inline">
                 {!checkedIn ? 'Out' : onBreak ? 'Break' : 'In'}
               </span>
               <span className="text-xs font-semibold tabular-nums text-ink-50">
                 {checkedIn ? elapsedLabel : '00:00:00'}
               </span>
               {checkedIn && checkInAt ? (
-                <span className="hidden text-[10px] text-ink-400 lg:inline">
+                <span className="hidden text-[11px] text-ink-400 xl:inline">
                   · in {checkInAt}
                 </span>
               ) : null}
               {!checkedIn && checkOutAt ? (
-                <span className="hidden text-[10px] text-ink-400 lg:inline">
+                <span className="hidden text-[11px] text-ink-400 xl:inline">
                   · out {checkOutAt}
                 </span>
               ) : null}
             </div>
 
-            {!attendanceReady ? (
-              <Button size="xs" variant="secondary" disabled>
-                …
-              </Button>
-            ) : !checkedIn ? (
-              <Button size="xs" onClick={() => void checkIn()}>
-                Check in
-              </Button>
-            ) : (
-              <>
-                <Button size="xs" variant="secondary" onClick={toggleBreak}>
-                  {onBreak ? 'End break' : 'Break'}
+            <div className="flex items-center gap-1.5">
+              {!attendanceReady ? (
+                <Button size="sm" variant="secondary" disabled>
+                  …
                 </Button>
-                <Button size="xs" variant="danger" onClick={() => void checkOut()}>
-                  <span className="sm:hidden">Out</span>
-                  <span className="hidden sm:inline">Check out</span>
+              ) : !checkedIn ? (
+                <Button size="sm" onClick={() => void checkIn()}>
+                  Check in
                 </Button>
-              </>
-            )}
-            <Button size="xs" variant="secondary" onClick={() => setShowCreateProject(true)}>
-              <span className="sm:hidden">New</span>
-              <span className="hidden sm:inline">New project</span>
-            </Button>
-            {canDeleteActiveProject ? (
-              <Button
-                size="xs"
-                variant="danger"
-                onClick={() => setProjectToDelete(activeProjectId)}
-                className="hidden sm:inline-flex"
+              ) : (
+                <>
+                  <Button size="sm" variant="secondary" onClick={toggleBreak}>
+                    {onBreak ? 'End break' : 'Break'}
+                  </Button>
+                  <Button size="sm" variant="danger" onClick={() => void checkOut()}>
+                    <span className="sm:hidden">Out</span>
+                    <span className="hidden sm:inline">Check out</span>
+                  </Button>
+                </>
+              )}
+            </div>
+
+            <div className="hidden h-5 w-px bg-ink-600 sm:block" aria-hidden />
+
+            <div className="flex items-center gap-1.5">
+              <Button size="sm" variant="secondary" onClick={() => setShowCreateProject(true)}>
+                <span className="sm:hidden">New</span>
+                <span className="hidden sm:inline">New project</span>
+              </Button>
+              {canDeleteActiveProject ? (
+                <Button
+                  size="sm"
+                  variant="danger"
+                  onClick={() => setProjectToDelete(activeProjectId)}
+                  className="hidden sm:inline-flex"
+                >
+                  Delete
+                </Button>
+              ) : null}
+              <Link
+                to={
+                  activeProjectId !== 'all'
+                    ? `/board?project=${activeProjectId}`
+                    : '/board'
+                }
               >
-                Delete
-              </Button>
-            ) : null}
-            <Link
-              to={
-                activeProjectId !== 'all'
-                  ? `/board?project=${activeProjectId}`
-                  : '/board'
-              }
-            >
-              <Button size="xs" variant="secondary">
-                Board
-              </Button>
-            </Link>
+                <Button size="sm" variant="secondary">
+                  Board
+                </Button>
+              </Link>
+            </div>
           </div>
         </div>
 
         {/* Tabs */}
-        <nav className="flex gap-0 overflow-x-auto border-t border-ink-700 px-2 md:px-3 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <nav className="flex gap-0.5 overflow-x-auto border-t border-ink-700 px-3 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {tabs.map((t) => (
             <button
               key={t.id}
               type="button"
               onClick={() => setTab(t.id)}
               className={cn(
-                'shrink-0 border-b-2 px-3 py-2 text-xs font-semibold transition',
+                'shrink-0 border-b-2 px-3.5 py-2.5 text-[13px] font-medium transition-colors',
                 tab === t.id
-                  ? 'border-ink-900 text-ink-50'
-                  : 'border-transparent text-ink-300 hover:text-ink-100',
+                  ? 'border-brand-500 text-ink-50'
+                  : 'border-transparent text-ink-400 hover:text-ink-200',
               )}
             >
               {t.label}
@@ -604,30 +650,26 @@ export function DashboardPage() {
 
       {tab === 'tasks' ? (
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-ink-800">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-ink-600 px-4 py-2.5">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-ink-600 px-4 py-3">
             <div>
-              <h2 className="text-sm font-semibold text-ink-50">Task list view</h2>
-              <p className="text-[11px] text-ink-300">{taskList.length} tasks</p>
+              <h2 className="text-sm font-semibold text-ink-50">Task list</h2>
+              <p className="mt-0.5 text-[12px] text-ink-400">{taskList.length} tasks</p>
             </div>
-            <div className="flex w-full flex-wrap items-center gap-1 sm:w-auto">
-              {(['all', 'open', 'done'] as const).map((f) => (
-                <button
-                  key={f}
-                  type="button"
-                  onClick={() => setTaskFilter(f)}
-                  className={cn(
-                    'px-2.5 py-1 text-[11px] font-semibold capitalize',
-                    taskFilter === f
-                      ? 'bg-brand-500 text-white'
-                      : 'text-ink-200 hover:bg-ink-700',
-                  )}
-                >
-                  {f}
-                </button>
-              ))}
-              <div className="ml-0 w-full min-w-0 sm:ml-2 sm:w-[140px]">
+            <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+              <div className="flex items-center gap-0.5 rounded-md border border-ink-600 bg-ink-900/50 p-0.5">
+                {(['all', 'open', 'done'] as const).map((f) => (
+                  <FilterChip
+                    key={f}
+                    active={taskFilter === f}
+                    onClick={() => setTaskFilter(f)}
+                  >
+                    {f}
+                  </FilterChip>
+                ))}
+              </div>
+              <div className="w-full min-w-0 sm:w-[160px]">
                 <Select
-                  size="xs"
+                  size="sm"
                   value={selectedUserEmail}
                   onChange={(v) => setSelectedUserEmail(v as string | 'all')}
                   options={[
@@ -770,7 +812,9 @@ export function DashboardPage() {
             <div>
               <h2 className="text-sm font-semibold text-ink-50">Users list</h2>
               <p className="text-[11px] text-ink-300">
-                {teamUsers.length} people across projects · click to filter Tasks tab
+                {teamUsers.length} member{teamUsers.length === 1 ? '' : 's'} on{' '}
+                {activeProjectId === 'all' ? 'your projects' : 'this project'} · click to
+                filter Tasks
               </p>
             </div>
             {isProjectAdminAnywhere ? (
@@ -785,8 +829,8 @@ export function DashboardPage() {
               {teamUsers.length === 0 ? (
                 <p className="px-1 py-12 text-center text-xs text-ink-400">
                   {isProjectAdminAnywhere
-                    ? 'No users yet. Click Add user to create one.'
-                    : 'No users yet.'}
+                    ? 'No members on this project yet. Invite from the board or Add user.'
+                    : 'No members on this project yet.'}
                 </p>
               ) : (
                 teamUsers.map((u) => {
@@ -875,8 +919,8 @@ export function DashboardPage() {
                       className="px-4 py-12 text-center text-ink-400"
                     >
                       {isProjectAdminAnywhere
-                        ? 'No users yet. Click Add user to create one.'
-                        : 'No users yet.'}
+                        ? 'No members on this project yet. Invite from the board or Add user.'
+                        : 'No members on this project yet.'}
                     </td>
                   </tr>
                 ) : (
@@ -965,7 +1009,7 @@ export function DashboardPage() {
       <section className="grid shrink-0 grid-cols-2 border-b border-ink-600 bg-ink-800 sm:grid-cols-4">
         {[
           { label: 'Open tasks', value: stats.open, hint: `${stats.totalTasks} total`, accent: '#00a8fc' },
-          { label: 'Done', value: stats.byStatus.done, hint: `${stats.completion}%`, accent: '#23a559' },
+          { label: 'Done', value: stats.byStatus.done, hint: `${stats.completion}% complete`, accent: '#23a559' },
           { label: 'Due week', value: stats.dueSoon, hint: `${stats.overdue} overdue`, accent: '#f0b232' },
           {
             label: 'Projects',
@@ -977,46 +1021,48 @@ export function DashboardPage() {
           <div
             key={card.label}
             className={cn(
-              'px-4 py-2.5',
+              'px-4 py-3.5',
               i < 3 && 'border-r border-ink-700',
               i >= 2 && 'border-t border-ink-700 sm:border-t-0',
             )}
           >
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-2">
               <span className="h-1.5 w-1.5 rounded-full" style={{ background: card.accent }} />
-              <p className="text-[10px] font-bold tracking-wide text-ink-400 uppercase">
+              <p className="text-[11px] font-semibold tracking-wide text-ink-400 uppercase">
                 {card.label}
               </p>
             </div>
-            <p className="mt-0.5 text-2xl font-semibold tabular-nums text-ink-50">{card.value}</p>
-            <p className="text-[11px] text-ink-400">{card.hint}</p>
+            <p className="mt-1.5 text-[1.65rem] leading-none font-semibold tabular-nums tracking-tight text-ink-50">
+              {card.value}
+            </p>
+            <p className="mt-1 text-[12px] text-ink-400">{card.hint}</p>
           </div>
         ))}
       </section>
 
       {/* Main full-screen grid */}
-      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[1fr_280px]">
+      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[1fr_260px]">
         <div className="min-h-0 overflow-y-auto">
           {/* Graphs */}
           <section className="grid border-b border-ink-600 bg-ink-800 lg:grid-cols-3">
-            <div className="border-b border-ink-600 p-3 lg:border-r lg:border-b-0">
-              <h2 className="text-xs font-semibold text-ink-50">Status mix</h2>
-              <p className="text-[10px] text-ink-400">Tasks by column</p>
-              <div className="mt-2">
+            <div className="border-b border-ink-600 p-4 lg:border-r lg:border-b-0">
+              <h2 className="text-[13px] font-semibold text-ink-50">Status mix</h2>
+              <p className="mt-0.5 text-[12px] text-ink-400">Tasks by column</p>
+              <div className="mt-3">
                 <DonutChart slices={statusSlices} />
               </div>
             </div>
-            <div className="border-b border-ink-600 p-3 lg:border-r lg:border-b-0">
-              <h2 className="text-xs font-semibold text-ink-50">Priority</h2>
-              <p className="text-[10px] text-ink-400">Distribution</p>
-              <div className="mt-2">
+            <div className="border-b border-ink-600 p-4 lg:border-r lg:border-b-0">
+              <h2 className="text-[13px] font-semibold text-ink-50">Priority</h2>
+              <p className="mt-0.5 text-[12px] text-ink-400">Distribution</p>
+              <div className="mt-3">
                 <BarChart bars={priorityBars} />
               </div>
             </div>
-            <div className="p-3">
-              <h2 className="text-xs font-semibold text-ink-50">By project</h2>
-              <p className="text-[10px] text-ink-400">Workload</p>
-              <div className="mt-2">
+            <div className="p-4">
+              <h2 className="text-[13px] font-semibold text-ink-50">By project</h2>
+              <p className="mt-0.5 text-[12px] text-ink-400">Workload</p>
+              <div className="mt-3">
                 {stats.byProject.length === 0 ? (
                   <p className="py-8 text-xs text-ink-400">No projects yet</p>
                 ) : (
@@ -1035,32 +1081,28 @@ export function DashboardPage() {
 
           {/* Task list */}
           <section className="flex min-h-[280px] flex-col bg-ink-800">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-ink-600 px-3 py-2">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-ink-600 px-4 py-3">
               <div>
                 <h2 className="text-sm font-semibold text-ink-50">Task list</h2>
-                <p className="text-[10px] text-ink-400">
+                <p className="mt-0.5 text-[12px] text-ink-400">
                   {taskList.length} shown
                   {selectedUserEmail !== 'all' ? ' · filtered by user' : ''}
                 </p>
               </div>
-              <div className="flex items-center gap-1">
-                {(['all', 'open', 'done'] as const).map((f) => (
-                  <button
-                    key={f}
-                    type="button"
-                    onClick={() => setTaskFilter(f)}
-                    className={cn(
-                      'px-2 py-1 text-[11px] font-semibold capitalize',
-                      taskFilter === f
-                        ? 'bg-brand-500 text-white'
-                        : 'text-ink-200 hover:bg-ink-700',
-                    )}
-                  >
-                    {f}
-                  </button>
-                ))}
-                <Link to="/board" className="ml-1">
-                  <Button size="xs" variant="secondary">
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-0.5 rounded-md border border-ink-600 bg-ink-900/50 p-0.5">
+                  {(['all', 'open', 'done'] as const).map((f) => (
+                    <FilterChip
+                      key={f}
+                      active={taskFilter === f}
+                      onClick={() => setTaskFilter(f)}
+                    >
+                      {f}
+                    </FilterChip>
+                  ))}
+                </div>
+                <Link to="/board">
+                  <Button size="sm" variant="secondary">
                     Board
                   </Button>
                 </Link>
@@ -1068,21 +1110,21 @@ export function DashboardPage() {
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[520px] text-left text-xs sm:min-w-[640px]">
-                <thead className="sticky top-0 bg-ink-900 text-[10px] font-bold tracking-wide text-ink-400 uppercase">
+              <table className="w-full min-w-[520px] text-left text-[13px] sm:min-w-[640px]">
+                <thead className="sticky top-0 bg-ink-900 text-[11px] font-semibold tracking-wide text-ink-400 uppercase">
                   <tr>
-                    <th className="px-3 py-2 font-bold">Task</th>
-                    <th className="px-3 py-2 font-bold">Project</th>
-                    <th className="px-3 py-2 font-bold">Assignee</th>
-                    <th className="px-3 py-2 font-bold">Status</th>
-                    <th className="px-3 py-2 font-bold">Priority</th>
-                    <th className="px-3 py-2 font-bold">Due</th>
+                    <th className="px-4 py-2.5 font-semibold">Task</th>
+                    <th className="px-3 py-2.5 font-semibold">Project</th>
+                    <th className="px-3 py-2.5 font-semibold">Assignee</th>
+                    <th className="px-3 py-2.5 font-semibold">Status</th>
+                    <th className="px-3 py-2.5 font-semibold">Priority</th>
+                    <th className="px-3 py-2.5 font-semibold">Due</th>
                   </tr>
                 </thead>
                 <tbody>
                   {taskList.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="px-3 py-8 text-center text-ink-400">
+                      <td colSpan={6} className="px-4 py-10 text-center text-sm text-ink-400">
                         No tasks in this view. Open the board to create one.
                       </td>
                     </tr>
@@ -1096,15 +1138,15 @@ export function DashboardPage() {
                       return (
                         <tr
                           key={t.id}
-                          className="border-t border-ink-700 transition hover:bg-ink-900/70"
+                          className="border-t border-ink-700/80 transition-colors hover:bg-ink-900/60"
                         >
-                          <td className="px-3 py-2">
-                            <p className="font-semibold text-ink-50">{t.title}</p>
-                            <p className="text-[10px] text-ink-400">{t.key}</p>
+                          <td className="px-4 py-2.5">
+                            <p className="font-medium text-ink-50">{t.title}</p>
+                            <p className="mt-0.5 text-[11px] text-ink-400">{t.key}</p>
                           </td>
-                          <td className="px-3 py-2 text-ink-200">{proj?.name ?? '—'}</td>
-                          <td className="px-3 py-2">
-                            <div className="flex items-center gap-1.5">
+                          <td className="px-3 py-2.5 text-ink-300">{proj?.name ?? '—'}</td>
+                          <td className="px-3 py-2.5">
+                            <div className="flex items-center gap-2">
                               <UserAvatar
                                 name={t.assigneeName || 'Unassigned'}
                                 src={avatarFromMembers(
@@ -1115,11 +1157,11 @@ export function DashboardPage() {
                                 seed={t.assigneeName || t.id}
                                 size="xs"
                               />
-                              <span className="truncate text-ink-200">{t.assigneeName}</span>
+                              <span className="truncate text-ink-300">{t.assigneeName}</span>
                             </div>
                           </td>
-                          <td className="px-3 py-2">
-                            <span className="inline-flex items-center gap-1 text-[11px] capitalize text-ink-200">
+                          <td className="px-3 py-2.5">
+                            <span className="inline-flex items-center gap-1.5 text-[12px] capitalize text-ink-300">
                               <span
                                 className="h-1.5 w-1.5 rounded-full"
                                 style={{ background: statusColor }}
@@ -1127,15 +1169,15 @@ export function DashboardPage() {
                               {t.status.replace('_', ' ')}
                             </span>
                           </td>
-                          <td className="px-3 py-2">
+                          <td className="px-3 py-2.5">
                             <span
-                              className="text-[11px] font-semibold capitalize"
+                              className="text-[12px] font-medium capitalize"
                               style={{ color: priorityColor }}
                             >
                               {t.priority}
                             </span>
                           </td>
-                          <td className="px-3 py-2 text-ink-300">
+                          <td className="px-3 py-2.5 text-ink-400">
                             {t.dueDate
                               ? new Date(t.dueDate).toLocaleDateString(undefined, {
                                   month: 'short',
@@ -1155,10 +1197,10 @@ export function DashboardPage() {
 
         {/* Users list */}
         <aside className="flex min-h-0 flex-col border-t border-ink-600 bg-ink-800 lg:border-t-0 lg:border-l">
-          <div className="border-b border-ink-600 px-3 py-2">
+          <div className="border-b border-ink-600 px-4 py-3">
             <h2 className="text-sm font-semibold text-ink-50">Users</h2>
-            <p className="text-[10px] text-ink-400">
-              Click to filter · {teamUsers.length} people
+            <p className="mt-0.5 text-[12px] text-ink-400">
+              Project members · {teamUsers.length}
             </p>
           </div>
 
@@ -1166,24 +1208,26 @@ export function DashboardPage() {
             type="button"
             onClick={() => setSelectedUserEmail('all')}
             className={cn(
-              'flex items-center gap-2 border-b border-ink-700 px-3 py-2 text-left text-xs',
+              'flex items-center gap-2.5 border-b border-ink-700 px-4 py-2.5 text-left text-[13px] transition-colors',
               selectedUserEmail === 'all'
                 ? 'bg-brand-500/10 font-semibold'
-                : 'hover:bg-ink-700',
+                : 'hover:bg-ink-900/70',
             )}
           >
-            <span className="flex h-7 w-7 items-center justify-center rounded-md bg-brand-500 text-[10px] font-bold text-white">
+            <span className="flex h-8 w-8 items-center justify-center rounded-md bg-brand-500 text-[10px] font-bold text-white">
               All
             </span>
             <div>
-              <p className="text-ink-50">All users</p>
-              <p className="text-[10px] font-normal text-ink-400">Full workspace</p>
+              <p className="text-ink-50">All members</p>
+              <p className="text-[11px] font-normal text-ink-400">
+                {activeProjectId === 'all' ? 'Your projects' : 'This project'}
+              </p>
             </div>
           </button>
 
           <ul className="min-h-0 flex-1 overflow-y-auto">
             {teamUsers.length === 0 ? (
-              <li className="px-3 py-6 text-center text-xs text-ink-400">
+              <li className="px-4 py-8 text-center text-xs text-ink-400">
                 Invite members from the board.
               </li>
             ) : (
@@ -1198,8 +1242,8 @@ export function DashboardPage() {
                       type="button"
                       onClick={() => setSelectedUserEmail(u.email.toLowerCase())}
                       className={cn(
-                        'flex w-full items-center gap-2 border-b border-ink-700 px-3 py-2 text-left',
-                        active ? 'bg-brand-500/10' : 'hover:bg-ink-700',
+                        'flex w-full items-center gap-2.5 border-b border-ink-700/80 px-4 py-2.5 text-left transition-colors',
+                        active ? 'bg-brand-500/10' : 'hover:bg-ink-900/70',
                       )}
                     >
                       <UserAvatar
@@ -1216,13 +1260,13 @@ export function DashboardPage() {
                         size="sm"
                       />
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-xs font-semibold text-ink-50">
+                        <p className="truncate text-[13px] font-medium text-ink-50">
                           {u.name}
                           {isYou ? (
-                            <span className="ml-1 font-medium text-ink-400">(you)</span>
+                            <span className="ml-1 font-normal text-ink-400">(you)</span>
                           ) : null}
                         </p>
-                        <p className="truncate text-[10px] text-ink-400">
+                        <p className="truncate text-[11px] text-ink-400">
                           {u.openCount} open · {u.taskCount} total
                         </p>
                       </div>
@@ -1233,9 +1277,9 @@ export function DashboardPage() {
             )}
           </ul>
 
-          <div className="border-t border-ink-600 p-2">
+          <div className="border-t border-ink-600 p-3">
             <Link to="/board" className="block">
-              <Button size="xs" className="w-full">
+              <Button size="sm" className="w-full">
                 Open board
               </Button>
             </Link>
