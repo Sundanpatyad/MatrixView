@@ -238,7 +238,7 @@ function MessageTicks({
   const double = status === 'delivered' || status === 'read';
   return (
     <span
-      className={cn('inline-flex', read ? 'text-[#57f287]' : 'text-white/65')}
+      className={cn('inline-flex', read ? 'text-[#6fe99a]' : 'text-white/65')}
       title={status ?? 'sent'}
       aria-label={status ?? 'sent'}
     >
@@ -405,7 +405,7 @@ function MediaPreviewModal({
               href={src}
               target="_blank"
               rel="noreferrer"
-              className="rounded-xl bg-brand-500 px-4 py-2 text-sm font-medium text-white"
+              className="rounded-xl bg-brand-500 px-4 py-2 text-sm font-medium text-[#062816]"
             >
               Download file
             </a>
@@ -695,8 +695,8 @@ function PresenceDot({
     <span
       className={cn(
         'absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-white',
-        socketOnline ? 'bg-[#23a559]' : checkedIn ? 'bg-[#f0b232]' : 'bg-ink-300',
-        socketOnline && 'ring-1 ring-[#23a559]/40',
+        socketOnline ? 'bg-[#4BDE80]' : checkedIn ? 'bg-[#f0b232]' : 'bg-ink-300',
+        socketOnline && 'ring-1 ring-[#4BDE80]/40',
         className,
       )}
       title={title}
@@ -968,7 +968,7 @@ function NewDmModal({
                 <span className="flex items-center gap-2">
                   <span className="block truncate text-sm font-semibold text-ink-50">{u.name}</span>
                   {u.checkedIn ? (
-                    <span className="shrink-0 text-[10px] font-semibold text-[#57f287]">
+                    <span className="shrink-0 text-[10px] font-semibold text-[#6fe99a]">
                       In
                     </span>
                   ) : null}
@@ -2310,7 +2310,7 @@ export function ChatPage() {
                 className={cn(
                   'h-1.5 w-1.5 shrink-0 rounded-full',
                   socketReady
-                    ? 'bg-[#23a559]'
+                    ? 'bg-[#4BDE80]'
                     : online
                       ? 'bg-[#f0b232]'
                       : 'bg-ink-400',
@@ -2382,7 +2382,7 @@ export function ChatPage() {
                 className={cn(
                   'h-7 flex-1 rounded-md text-[12px] font-semibold tracking-wide transition-[color,background-color,transform] duration-150 active:scale-[0.98]',
                   listFilter === f.id
-                    ? 'bg-brand-500 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.14)]'
+                    ? 'bg-brand-500 text-[#062816] shadow-[inset_0_1px_0_rgba(255,255,255,0.14)]'
                     : 'text-ink-400 hover:bg-ink-800 hover:text-ink-100',
                 )}
               >
@@ -2450,7 +2450,7 @@ export function ChatPage() {
                       </span>
                       <span className="shrink-0 text-[11px] tabular-nums text-ink-400">
                         {liveCall ? (
-                          <span className="font-semibold text-[#23a559]">Live</span>
+                          <span className="font-semibold text-[#4BDE80]">Live</span>
                         ) : (
                           formatTime(c.lastMessageAt)
                         )}
@@ -2459,7 +2459,7 @@ export function ChatPage() {
                     <span
                       className={cn(
                         'mt-0.5 block truncate text-[12px]',
-                        liveCall ? 'font-medium text-[#23a559]' : 'text-ink-400',
+                        liveCall ? 'font-medium text-[#4BDE80]' : 'text-ink-400',
                       )}
                     >
                       {liveCall ? preview : <MessagePreviewLabel text={preview} />}
@@ -2529,7 +2529,7 @@ export function ChatPage() {
                       </>
                     ) : peerPresence && 'checkedIn' in peerPresence ? (
                       peerPresence.online ? (
-                        <span className="text-[#23a559]">
+                        <span className="text-[#4BDE80]">
                           Online
                           {peerPresence.checkedIn ? ' · checked in' : ''}
                         </span>
@@ -2667,9 +2667,9 @@ export function ChatPage() {
             {active.type === 'group' &&
             activeRooms[active.id] &&
             !(call.phase !== 'idle' && call.conversationId === active.id) ? (
-              <div className="flex flex-col gap-2 border-b border-[#23a559]/25 bg-[#23a559]/10 px-4 py-2.5 sm:flex-row sm:items-center sm:gap-3">
+              <div className="flex flex-col gap-2 border-b border-[#4BDE80]/25 bg-[#4BDE80]/10 px-4 py-2.5 sm:flex-row sm:items-center sm:gap-3">
                 <div className="flex min-w-0 flex-1 items-center gap-3">
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#23a559]/20 text-[#23a559]">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#4BDE80]/20 text-[#4BDE80]">
                     <IconPhone className="h-3.5 w-3.5" />
                   </span>
                   <div className="min-w-0 flex-1">
@@ -2916,7 +2916,7 @@ export function ChatPage() {
                               hasVisualMedia ? 'p-1' : 'px-3 py-2 sm:px-3.5 sm:py-2.5',
                               mine
                                 ? cn(
-                                    'bg-brand-500 text-white',
+                                    'bg-brand-500 text-[#062816]',
                                     'shadow-[inset_0_1px_0_rgba(255,255,255,0.14)]',
                                     sameSenderAsPrev
                                       ? 'rounded-2xl rounded-tr-md'

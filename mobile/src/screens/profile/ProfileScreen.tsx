@@ -82,9 +82,13 @@ export function ProfileScreen() {
     <Screen edges={[]}>
       {/* BlurView must mount after scroll content so Android can sample it. */}
       <ScrollView
+        contentInsetAdjustmentBehavior="never"
         contentContainerStyle={[
           styles.scroll,
-          { paddingTop: pad.top + 12, paddingBottom: pad.bottom + 40 },
+          {
+            paddingTop: pad.top + 8,
+            paddingBottom: pad.bottom + 40,
+          },
         ]}
         showsVerticalScrollIndicator={false}
       >

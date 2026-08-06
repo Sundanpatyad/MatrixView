@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { radius, useColors } from '@/theme';
+import { radius, resolveAccentColor, useColors } from '@/theme';
 
 import { Sheet } from './Sheet';
 
@@ -49,7 +49,7 @@ export function OptionSheet<T extends string>({
         <View style={styles.list}>
           {options.map((option) => {
             const active = option.value === value;
-            const accent = option.color ?? colors.brand;
+            const accent = resolveAccentColor(option.color, colors.brand);
 
             return (
               <Pressable

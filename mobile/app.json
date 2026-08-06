@@ -15,6 +15,7 @@
       "bundleIdentifier": "dev.dockx.mobile",
       "appleTeamId": "KZKUS3ASDC",
       "infoPlist": {
+        "UIDesignRequiresCompatibility": false,
         "UIBackgroundModes": [
           "audio",
           "voip"
@@ -31,7 +32,7 @@
     "android": {
       "package": "dev.dockx.mobile",
       "adaptiveIcon": {
-        "backgroundColor": "#111214",
+        "backgroundColor": "#5865F2",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"

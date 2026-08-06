@@ -1,14 +1,14 @@
 import { cn } from '@/lib/cn';
 
 const AVATAR_COLORS = [
-  'bg-[#5865f2]',
-  'bg-[#57f287]',
+  'bg-[#4BDE80]',
+  'bg-[#6fe99a]',
   'bg-[#eb459e]',
   'bg-[#00a8fc]',
   'bg-[#fee75c]',
   'bg-[#ed4245]',
-  'bg-[#4752c4]',
-  'bg-[#23a559]',
+  'bg-[#2FC46A]',
+  'bg-[#4BDE80]',
 ];
 
 function initials(name: string) {

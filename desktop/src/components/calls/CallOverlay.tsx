@@ -95,7 +95,7 @@ function ControlBtn({
         danger
           ? 'bg-[#ea4335] text-white hover:bg-[#d93025]'
           : active
-            ? 'bg-brand-500 text-white hover:bg-brand-600'
+            ? 'bg-brand-500 text-[#062816] hover:bg-brand-600'
             : 'bg-ink-700 text-ink-50 hover:bg-ink-600',
       )}
     >
@@ -1036,7 +1036,7 @@ export function CallOverlay({
               <button
                 type="button"
                 onClick={onAccept}
-                className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-brand-500 px-3 py-2.5 text-sm font-medium text-white transition hover:bg-brand-400"
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-brand-500 px-3 py-2.5 text-sm font-medium text-[#062816] transition hover:bg-brand-400"
               >
                 {call.mediaKind === 'video' ? (
                   <IconVideo className="h-4 w-4" />

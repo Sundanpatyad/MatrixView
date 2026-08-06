@@ -337,7 +337,7 @@ function TimelineTable({
                       'inline-block px-1.5 py-0.5 text-[10px] font-bold uppercase',
                       row.inBacklog
                         ? 'bg-[#f0b232]/15 text-[#9a6700] dark:text-[#fee75c]'
-                        : 'bg-[#23a559]/15 text-[#18783f] dark:text-[#57f287]',
+                        : 'bg-[#4BDE80]/15 text-[#18783f] dark:text-[#6fe99a]',
                     )}
                   >
                     {row.statusLabel}
@@ -1191,7 +1191,7 @@ export function TimelinePanel() {
                   className={cn(
                     'px-3 py-1 text-[11px] font-semibold',
                     filter === f.id
-                      ? 'bg-brand-500 text-white'
+                      ? 'bg-brand-500 text-[#062816]'
                       : 'text-ink-300 hover:bg-ink-700 hover:text-ink-50',
                   )}
                 >

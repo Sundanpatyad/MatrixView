@@ -148,7 +148,7 @@ export function DownloadDesktopButton({
   const label = desktopDownloadLabel(platform);
 
   const variants = {
-    primary: "bg-brand-500 text-white hover:bg-brand-600",
+    primary: "bg-brand-500 text-[#062816] hover:bg-brand-600",
     secondary:
       "border border-ink-600 bg-ink-800/70 text-ink-100 hover:border-brand-400/40 hover:text-ink-50",
     ghost:

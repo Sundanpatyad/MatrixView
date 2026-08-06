@@ -201,7 +201,7 @@ export function Select({
                         'flex w-full items-center px-3 py-2 text-left text-xs font-semibold transition',
                         opt.disabled && 'cursor-not-allowed opacity-40',
                         opt.value === value
-                          ? 'bg-brand-500 text-white'
+                          ? 'bg-brand-500 text-[#062816]'
                           : highlight === i
                             ? 'bg-ink-600 text-ink-50'
                             : 'text-ink-200 hover:bg-ink-700',

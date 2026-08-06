@@ -65,7 +65,7 @@ export function ProjectsPage() {
               to={`/projects/${project.id}/board`}
               className="flex min-w-0 flex-1 items-center gap-3 rounded-xl transition hover:opacity-90"
             >
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-500 text-sm font-bold text-white">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-500 text-sm font-bold text-[#062816]">
                 {project.key.slice(0, 2)}
               </span>
               <div className="min-w-0">

@@ -187,7 +187,7 @@ export function MediaPermissionModal({ open, kind, onClose, onGranted }: Props) 
         {hint ? (
           <p
             className={`mt-4 text-[13px] leading-relaxed ${
-              status === 'granted' ? 'text-[#23a559]' : 'text-ink-300'
+              status === 'granted' ? 'text-[#4BDE80]' : 'text-ink-300'
             }`}
           >
             {hint}

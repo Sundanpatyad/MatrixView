@@ -103,12 +103,12 @@ function sessionSpanMs(session: ActivitySession) {
 
 const CHART_COLORS = [
   '#00a8fc',
-  '#23a559',
+  '#4BDE80',
   '#f0b232',
   '#ed4245',
-  '#57f287',
+  '#6fe99a',
   '#f07178',
-  '#5865F2',
+  '#4BDE80',
   '#80848e',
   '#3ba55d',
   '#94a3b8',
@@ -492,7 +492,7 @@ export function AdminActivityPanel({ projectId }: { projectId?: string } = {}) {
               className={cn(
                 'flex w-full items-center gap-2 px-3 py-2 text-left text-xs',
                 selectedId === 'all'
-                  ? 'bg-brand-500 text-white'
+                  ? 'bg-brand-500 text-[#062816]'
                   : 'text-ink-200 hover:bg-ink-700',
               )}
             >
@@ -539,7 +539,7 @@ export function AdminActivityPanel({ projectId }: { projectId?: string } = {}) {
                       size="sm"
                     />
                     {m.tracking ? (
-                      <span className="absolute -right-0.5 -bottom-0.5 h-2 w-2 rounded-full border-2 border-ink-800 bg-[#23a559]" />
+                      <span className="absolute -right-0.5 -bottom-0.5 h-2 w-2 rounded-full border-2 border-ink-800 bg-[#4BDE80]" />
                     ) : null}
                   </span>
                   <span className="min-w-0 flex-1">
@@ -572,7 +572,7 @@ export function AdminActivityPanel({ projectId }: { projectId?: string } = {}) {
                 label: 'Check-ins',
                 value: String(checkInCount),
                 hint: selectedSession ? '1 selected' : 'this day',
-                accent: '#23a559',
+                accent: '#4BDE80',
               },
               {
                 label: 'Away',
@@ -761,8 +761,8 @@ export function AdminActivityPanel({ projectId }: { projectId?: string } = {}) {
                                 </span>
                               )}
                               {isLive ? (
-                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#57f287]">
-                                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#23a559]" />
+                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#6fe99a]">
+                                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#4BDE80]" />
                                   Live
                                 </span>
                               ) : (

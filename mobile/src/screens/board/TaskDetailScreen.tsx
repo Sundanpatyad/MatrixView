@@ -31,7 +31,14 @@ import { formatBytes, formatDate, formatRelative, isOverdue, titleCase } from '@
 import { resolveMediaUrl } from '@/lib/mediaUrl';
 import { pickDocuments, pickImages } from '@/lib/pickers';
 import type { RootStackParamList } from '@/navigation/types';
-import { priorityColor, radius, statusAccent, taskTypeColor, useColors } from '@/theme';
+import {
+  priorityColor,
+  radius,
+  resolveAccentColor,
+  statusAccent,
+  taskTypeColor,
+  useColors,
+} from '@/theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'TaskDetail'>;
 
@@ -60,7 +67,7 @@ export function TaskDetailScreen({ route, navigation }: Props) {
       (project?.columns ?? []).map((column) => ({
         value: column.id,
         label: column.label,
-        color: column.accent || statusAccent[column.id] || colors.brand,
+        color: resolveAccentColor(column.accent || statusAccent[column.id], colors.brand),
       })),
     [colors.brand, project],
   );
@@ -98,7 +105,10 @@ export function TaskDetailScreen({ route, navigation }: Props) {
   }
 
   const column = project?.columns.find((entry) => entry.id === task.status);
-  const statusColor = column?.accent || statusAccent[task.status] || colors.brand;
+  const statusColor = resolveAccentColor(
+    column?.accent || statusAccent[task.status],
+    colors.brand,
+  );
   const overdue = isOverdue(task.dueDate) && task.status !== 'done';
 
   const patch = async (input: Parameters<typeof updateTask>[1], success: string) => {

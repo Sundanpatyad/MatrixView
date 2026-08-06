@@ -2,7 +2,7 @@ import type { DesktopTask } from '@/data/mockTasks';
 import { cn } from '@/lib/cn';
 
 const priorityStyles = {
-  low: 'bg-[#23a559]/15 text-[#18783f] dark:text-[#57f287] border border-[#23a559]/25',
+  low: 'bg-[#4BDE80]/15 text-[#18783f] dark:text-[#6fe99a] border border-[#4BDE80]/25',
   medium: 'bg-[#f0b232]/15 text-[#b77900] dark:text-[#fee75c] border border-[#f0b232]/30',
   high: 'bg-[#ed4245]/15 text-[#c03537] dark:text-[#ed4245] border border-[#ed4245]/30',
 } as const;
@@ -11,7 +11,7 @@ const barStyles = {
   todo: 'bg-ink-500',
   in_progress: 'bg-amber-600',
   review: 'bg-[#00a8fc]',
-  done: 'bg-[#23a559]',
+  done: 'bg-[#4BDE80]',
 } as const;
 
 type Props = {
@@ -96,7 +96,7 @@ export function TaskCard({
           {task.assignees.map((a) => (
             <span
               key={a}
-              className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-ink-800 bg-brand-500 text-[9px] font-bold text-white"
+              className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-ink-800 bg-brand-500 text-[9px] font-bold text-[#062816]"
             >
               {a}
             </span>

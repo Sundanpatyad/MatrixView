@@ -109,9 +109,13 @@ export function NotificationsScreen() {
       <FlatList
         data={filtered}
         keyExtractor={(item) => item.id}
+        contentInsetAdjustmentBehavior="never"
         contentContainerStyle={[
           styles.list,
-          { paddingTop: pad.top + 4, paddingBottom: pad.bottom + 24 },
+          {
+            paddingTop: pad.top + 2,
+            paddingBottom: pad.bottom + 24,
+          },
         ]}
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={
@@ -275,8 +279,8 @@ const styles = StyleSheet.create({
   },
   filters: {
     paddingHorizontal: 16,
-    paddingBottom: 10,
-    paddingTop: 4,
+    paddingBottom: 8,
+    paddingTop: 0,
     gap: 8,
     alignItems: 'center',
   },

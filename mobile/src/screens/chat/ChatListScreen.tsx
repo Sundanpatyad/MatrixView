@@ -185,9 +185,13 @@ export function ChatListScreen() {
       <FlatList
         data={filtered}
         keyExtractor={(conversation) => conversation.id}
+        contentInsetAdjustmentBehavior="never"
         contentContainerStyle={[
           styles.list,
-          { paddingTop: pad.top + 8, paddingBottom: pad.bottom + 24 },
+          {
+            paddingTop: pad.top + 4,
+            paddingBottom: pad.bottom + 24,
+          },
         ]}
         showsVerticalScrollIndicator={false}
         refreshControl={

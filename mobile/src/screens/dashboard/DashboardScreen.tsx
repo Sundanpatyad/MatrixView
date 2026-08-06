@@ -21,7 +21,7 @@ import { useNotifications } from '@/context/NotificationContext';
 import { useWorkspace } from '@/context/WorkspaceContext';
 import { formatRelative, isOverdue } from '@/lib/format';
 import type { RootStackParamList } from '@/navigation/types';
-import { radius, statusAccent, useColors } from '@/theme';
+import { radius, resolveAccentColor, statusAccent, useColors } from '@/theme';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type TaskFilter = 'mine' | 'open' | 'all';
@@ -82,7 +82,7 @@ export function DashboardScreen() {
     const known = columns.map((column) => ({
       id: column.id,
       label: column.label,
-      accent: column.accent || statusAccent[column.id] || colors.brand,
+      accent: resolveAccentColor(column.accent || statusAccent[column.id], colors.brand),
       count: counts.get(column.id) ?? 0,
     }));
 
@@ -157,6 +157,7 @@ export function DashboardScreen() {
   return (
     <Screen>
       <ScrollView
+        contentInsetAdjustmentBehavior="never"
         contentContainerStyle={[styles.scroll, { paddingBottom: tabBarHeight + 36 }]}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.brand} />}

@@ -3,7 +3,7 @@ export const COLUMN_ACCENTS = [
   'bg-[#f0b232]',
   'bg-[#00a8fc]',
   'bg-[#23a559]',
-  'bg-[#5865f2]',
+  'bg-[#4BDE80]',
   'bg-[#eb459e]',
   'bg-[#57f287]',
   'bg-[#ed4245]',

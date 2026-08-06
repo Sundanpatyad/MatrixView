@@ -32,18 +32,20 @@ export function Avatar({ name, uri, size = 40, online, square = false }: AvatarP
 
   return (
     <View style={{ width: size, height: size }}>
-      {resolved ? (
-        <Image
-          source={{ uri: resolved }}
-          style={{ width: size, height: size, borderRadius, backgroundColor: colors.surfaceAlt }}
-          contentFit="cover"
-          transition={150}
-        />
-      ) : (
-        <View style={[styles.fallback, { width: size, height: size, borderRadius, backgroundColor: background }]}>
-          <Text style={[styles.initials, { fontSize: size * 0.38 }]}>{initialsOf(name)}</Text>
-        </View>
-      )}
+      <View style={{ width: size, height: size, borderRadius, overflow: 'hidden' }}>
+        {resolved ? (
+          <Image
+            source={{ uri: resolved }}
+            style={{ width: size, height: size, backgroundColor: colors.surfaceAlt }}
+            contentFit="cover"
+            transition={150}
+          />
+        ) : (
+          <View style={[styles.fallback, { width: size, height: size, backgroundColor: background }]}>
+            <Text style={[styles.initials, { fontSize: size * 0.38 }]}>{initialsOf(name)}</Text>
+          </View>
+        )}
+      </View>
 
       {online !== undefined ? (
         <View

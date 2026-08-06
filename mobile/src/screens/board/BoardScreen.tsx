@@ -21,18 +21,9 @@ import { useToast } from '@/context/ToastContext';
 import { useWorkspace } from '@/context/WorkspaceContext';
 import type { BoardTask } from '@/lib/api';
 import type { RootStackParamList } from '@/navigation/types';
-import { radius, statusAccent, useColors } from '@/theme';
+import { radius, resolveAccentColor, statusAccent, tintColor, useColors } from '@/theme';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
-
-function softFill(hex: string, alpha = 0.16): string {
-  const value = hex.replace('#', '');
-  const full = value.length === 3 ? value.split('').map((c) => c + c).join('') : value;
-  const r = parseInt(full.slice(0, 2), 16);
-  const g = parseInt(full.slice(2, 4), 16);
-  const b = parseInt(full.slice(4, 6), 16);
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-}
 
 export function BoardScreen() {
   const navigation = useNavigation<Nav>();
@@ -158,7 +149,7 @@ export function BoardScreen() {
       (project?.columns ?? []).map((column) => ({
         value: column.id,
         label: column.label,
-        color: column.accent || statusAccent[column.id] || colors.brand,
+        color: resolveAccentColor(column.accent || statusAccent[column.id], colors.brand),
       })),
     [colors.brand, project],
   );
@@ -238,7 +229,7 @@ export function BoardScreen() {
           }
           renderItem={({ item }) => {
             const active = item.id === activeColumn;
-            const accent = item.accent || statusAccent[item.id] || colors.brand;
+            const accent = resolveAccentColor(item.accent || statusAccent[item.id], colors.brand);
             return (
               <Pressable
                 onPress={() => setActiveColumn(item.id)}
@@ -258,7 +249,7 @@ export function BoardScreen() {
                 <View
                   style={[
                     styles.columnCount,
-                    { backgroundColor: active ? softFill(accent) : colors.track },
+                    { backgroundColor: active ? tintColor(accent, 0.16) : colors.track },
                   ]}
                 >
                   <Text style={[styles.columnCountText, { color: active ? accent : colors.textMuted }]}>
@@ -304,6 +295,7 @@ export function BoardScreen() {
       <FlatList
         data={columnTasks}
         keyExtractor={(task) => task.id}
+        contentInsetAdjustmentBehavior="never"
         contentContainerStyle={[styles.list, { paddingBottom: tabBarHeight + 24 }]}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.brand} />}

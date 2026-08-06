@@ -82,7 +82,7 @@ export function RegisterScreen({ navigation, route }: Props) {
     }
   };
 
-  const bannerFill = isDark ? 'rgba(88, 101, 242, 0.16)' : 'rgba(88, 101, 242, 0.10)';
+  const bannerFill = isDark ? 'rgba(75, 222, 128, 0.16)' : 'rgba(75, 222, 128, 0.10)';
 
   return (
     <AuthLayout

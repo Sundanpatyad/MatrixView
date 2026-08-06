@@ -34,7 +34,7 @@ const TONE_STYLES: Record<ToastTone, string> = {
   error:
     'border-[#ed4245]/35 bg-[#ed4245]/12 text-[#c03537] dark:text-[#ffb4b4]',
   success:
-    'border-[#23a559]/35 bg-[#23a559]/12 text-[#1a7a42] dark:text-[#57f287]',
+    'border-[#4BDE80]/35 bg-[#4BDE80]/12 text-[#1a7a42] dark:text-[#6fe99a]',
   info: 'border-brand-500/35 bg-brand-500/12 text-brand-700 dark:text-brand-300',
 };
 

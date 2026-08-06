@@ -1,22 +1,31 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import React from 'react';
+import React, { useLayoutEffect } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { canUseLiquidGlass } from '@/components/ui/GlassSurface';
 import { useColors } from '@/theme';
 
-import { GlassSurface } from './GlassSurface';
+import { GlassButton, GlassButtonGroup } from './GlassButton';
 
 /** Height of the header row itself, excluding the status bar inset. */
-export const HEADER_CONTENT_HEIGHT = 56;
+export const HEADER_CONTENT_HEIGHT = 52;
 
 /**
  * Total space a floating header occupies. Screens pad their scroll content by
- * this so the first item starts below the glass instead of under it.
+ * this so the first item starts below the chrome instead of under it.
  */
 export function useFloatingHeaderHeight(): number {
   return useSafeAreaInsets().top + HEADER_CONTENT_HEIGHT;
+}
+
+/**
+ * Layout clearance under the active header.
+ * Use for absolute overlays / inverted lists that can't rely on automatic insets.
+ */
+export function useHeaderClearance(): number {
+  return useFloatingHeaderHeight();
 }
 
 export interface HeaderAction {
@@ -37,12 +46,16 @@ interface AppHeaderProps {
   center?: React.ReactNode;
   border?: boolean;
   /**
-   * Pins the header above the screen as a blurred pane. The screen is then
-   * responsible for padding its content by `useFloatingHeaderHeight()`.
+   * Pins the header above the screen. The screen is then responsible for
+   * padding its content by `useFloatingHeaderHeight()`.
    */
   floating?: boolean;
 }
 
+/**
+ * Transparent header chrome. On iOS 26+, only the buttons are pure native
+ * Liquid Glass — not the whole header bar.
+ */
 export function AppHeader({
   title,
   subtitle,
@@ -51,12 +64,16 @@ export function AppHeader({
   actions = [],
   left,
   center,
-  border = true,
   floating = false,
 }: AppHeaderProps) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
+  const liquid = canUseLiquidGlass();
+
+  useLayoutEffect(() => {
+    navigation.setOptions({ headerShown: false });
+  }, [navigation]);
 
   const handleBack = () => {
     if (onBack) {
@@ -66,29 +83,40 @@ export function AppHeader({
     if (navigation.canGoBack()) navigation.goBack();
   };
 
-  const content = (
-    <>
-      {showBack ? (
-        <Pressable onPress={handleBack} hitSlop={12} style={styles.back} accessibilityLabel="Go back">
-          <Ionicons name="chevron-back" size={26} color={colors.text} />
-        </Pressable>
-      ) : null}
+  const backControl = showBack ? (
+    liquid ? (
+      <GlassButton onPress={handleBack} accessibilityLabel="Go back" selected>
+        <Ionicons name="chevron-back" size={22} color={colors.text} />
+      </GlassButton>
+    ) : (
+      <Pressable onPress={handleBack} hitSlop={12} style={styles.plainBtn} accessibilityLabel="Go back">
+        <Ionicons name="chevron-back" size={26} color={colors.text} />
+      </Pressable>
+    )
+  ) : null;
 
-      {left}
-
-      {center ?? (
-        <View style={styles.titles}>
-          <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>
-            {title}
-          </Text>
-          {subtitle ? (
-            <Text style={[styles.subtitle, { color: colors.textSubtle }]} numberOfLines={1}>
-              {subtitle}
-            </Text>
-          ) : null}
-        </View>
-      )}
-
+  const actionControls =
+    actions.length === 0 ? null : liquid ? (
+      <GlassButtonGroup spacing={8} style={styles.actions}>
+        {actions.map((action) => (
+          <GlassButton
+            key={action.accessibilityLabel}
+            onPress={action.onPress}
+            accessibilityLabel={action.accessibilityLabel}
+            selected
+          >
+            <View>
+              <Ionicons name={action.icon} size={20} color={action.tint ?? colors.text} />
+              {action.badge ? (
+                <View style={[styles.badge, { backgroundColor: colors.danger, borderColor: colors.bg }]}>
+                  <Text style={styles.badgeText}>{action.badge > 99 ? '99+' : action.badge}</Text>
+                </View>
+              ) : null}
+            </View>
+          </GlassButton>
+        ))}
+      </GlassButtonGroup>
+    ) : (
       <View style={styles.actions}>
         {actions.map((action) => (
           <Pressable
@@ -96,7 +124,7 @@ export function AppHeader({
             onPress={action.onPress}
             hitSlop={10}
             accessibilityLabel={action.accessibilityLabel}
-            style={({ pressed }) => [styles.action, pressed && { opacity: 0.6 }]}
+            style={({ pressed }) => [styles.plainBtn, pressed && { opacity: 0.6 }]}
           >
             <Ionicons name={action.icon} size={22} color={action.tint ?? colors.textMuted} />
             {action.badge ? (
@@ -107,32 +135,32 @@ export function AppHeader({
           </Pressable>
         ))}
       </View>
-    </>
-  );
-
-  if (floating) {
-    return (
-      <GlassSurface
-        edge={border ? 'bottom' : 'none'}
-        style={[styles.floating, { paddingTop: insets.top }]}
-      >
-        <View style={styles.header}>{content}</View>
-      </GlassSurface>
     );
-  }
 
   return (
     <View
-      style={[
-        styles.header,
-        {
-          backgroundColor: colors.bg,
-          borderBottomColor: border ? colors.border : 'transparent',
-          borderBottomWidth: border ? StyleSheet.hairlineWidth : 0,
-        },
-      ]}
+      pointerEvents="box-none"
+      style={[floating ? styles.floating : null, floating ? { paddingTop: insets.top } : null]}
     >
-      {content}
+      <View style={styles.header} pointerEvents="box-none">
+        {backControl}
+        {left}
+
+        {center ?? (
+          <View style={styles.titles} pointerEvents="none">
+            <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>
+              {title}
+            </Text>
+            {subtitle ? (
+              <Text style={[styles.subtitle, { color: colors.textSubtle }]} numberOfLines={1}>
+                {subtitle}
+              </Text>
+            ) : null}
+          </View>
+        )}
+
+        {actionControls}
+      </View>
     </View>
   );
 }
@@ -148,15 +176,13 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     gap: 10,
     height: HEADER_CONTENT_HEIGHT,
   },
-  back: {
-    marginLeft: -6,
-  },
   titles: {
     flex: 1,
+    minWidth: 0,
   },
   title: {
     fontSize: 20,
@@ -170,9 +196,14 @@ const styles = StyleSheet.create({
   actions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
+    gap: 8,
+    marginLeft: 'auto',
   },
-  action: {
+  plainBtn: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
     position: 'relative',
   },
   badge: {

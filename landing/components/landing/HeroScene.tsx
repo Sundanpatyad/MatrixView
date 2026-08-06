@@ -54,8 +54,8 @@ function paintDashboard(
   const border = dark ? "#383a40" : "#d6d9dc";
   const text = dark ? "#f2f3f5" : "#111214";
   const muted = dark ? "#949ba4" : "#5c5e66";
-  const brand = "#5865f2";
-  const green = "#23a559";
+  const brand = "#4BDE80";
+  const green = "#4BDE80";
   const yellow = "#f0b232";
   const blue = "#00a8fc";
 
@@ -104,7 +104,7 @@ function paintDashboard(
   const nav = [brand, muted, muted, muted, muted];
   nav.forEach((c, i) => {
     if (c === brand) {
-      ctx.fillStyle = `rgba(88,101,242,${0.15 + state.pulse * 0.12})`;
+      ctx.fillStyle = `rgba(75, 222, 128,${0.15 + state.pulse * 0.12})`;
       roundRect(ctx, 12, 76 + i * 56, 48, 40, 10);
       ctx.fill();
     }
@@ -164,9 +164,9 @@ function paintDashboard(
     const bhPx = Math.max(0.08, bh) * 160;
     const by = 430 - bhPx;
     const active = i === state.activeBar;
-    ctx.fillStyle = active ? brand : "rgba(88,101,242,0.28)";
+    ctx.fillStyle = active ? brand : "rgba(75, 222, 128,0.28)";
     if (active) {
-      ctx.shadowColor = "rgba(88,101,242,0.55)";
+      ctx.shadowColor = "rgba(75, 222, 128,0.55)";
       ctx.shadowBlur = 18;
     }
     roundRect(ctx, bx, by, 36, bhPx, 8);
@@ -195,8 +195,8 @@ function paintDashboard(
     const sel = Math.floor(state.pulse * 3.9) % 4 === i;
     ctx.fillStyle = sel
       ? dark
-        ? "rgba(88,101,242,0.22)"
-        : "rgba(88,101,242,0.12)"
+        ? "rgba(75, 222, 128,0.22)"
+        : "rgba(75, 222, 128,0.12)"
       : dark
         ? "#313338"
         : "#f2f3f5";
@@ -226,7 +226,7 @@ function paintDashboard(
     const bob = Math.sin(state.pulse * Math.PI * 2 + i) * 3;
     ctx.beginPath();
     ctx.fillStyle =
-      i % 2 === 0 ? "rgba(88,101,242,0.25)" : "rgba(0,168,252,0.2)";
+      i % 2 === 0 ? "rgba(75, 222, 128,0.25)" : "rgba(0,168,252,0.2)";
     ctx.arc(px, 580 + bob, 20, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = brand;
@@ -404,7 +404,7 @@ export function HeroScene({ className = "" }: Props) {
         return { mesh, canvas: c, draw, tex: t };
       };
 
-      const chipA = makeChip("DESK STATUS", "Checked in", "#23a559");
+      const chipA = makeChip("DESK STATUS", "Checked in", "#4BDE80");
       chipA.mesh.position.set(mobile ? -0.95 : -1.6, mobile ? -0.9 : 0.95, 0.65);
       chipA.mesh.rotation.y = 0.28;
       product.add(chipA.mesh);

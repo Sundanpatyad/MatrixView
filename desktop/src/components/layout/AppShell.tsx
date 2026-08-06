@@ -115,8 +115,8 @@ export function AppShell() {
                   className={cn(
                     'flex h-9 w-9 items-center justify-center rounded-xl transition-colors',
                     active
-                      ? 'bg-brand-500 text-white'
-                      : 'text-ink-300 hover:bg-brand-500/80 hover:text-white',
+                      ? 'bg-brand-500 text-[#062816]'
+                      : 'text-ink-300 hover:bg-brand-500/80 hover:text-[#062816]',
                   )}
                 >
                   <item.Icon className="shrink-0" />
@@ -130,8 +130,8 @@ export function AppShell() {
               className={cn(
                 'flex h-9 w-9 items-center justify-center rounded-xl transition-colors',
                 profileOpen
-                  ? 'bg-brand-500 text-white'
-                  : 'text-ink-300 hover:bg-brand-500/80 hover:text-white',
+                  ? 'bg-brand-500 text-[#062816]'
+                  : 'text-ink-300 hover:bg-brand-500/80 hover:text-[#062816]',
               )}
             >
               <IconProfile className="shrink-0" />
@@ -192,8 +192,8 @@ export function AppShell() {
                       className={cn(
                         'flex h-9 items-center gap-2.5 rounded-xl px-2.5 text-sm font-medium transition-colors',
                         active
-                          ? 'bg-brand-500 text-white'
-                          : 'text-ink-300 hover:bg-brand-500/80 hover:text-white',
+                          ? 'bg-brand-500 text-[#062816]'
+                          : 'text-ink-300 hover:bg-brand-500/80 hover:text-[#062816]',
                       )}
                     >
                       <item.Icon className="shrink-0" />
@@ -210,8 +210,8 @@ export function AppShell() {
                   className={cn(
                     'flex h-9 items-center gap-2.5 rounded-xl px-2.5 text-sm font-medium transition-colors',
                     profileOpen
-                      ? 'bg-brand-500 text-white'
-                      : 'text-ink-300 hover:bg-brand-500/80 hover:text-white',
+                      ? 'bg-brand-500 text-[#062816]'
+                      : 'text-ink-300 hover:bg-brand-500/80 hover:text-[#062816]',
                   )}
                 >
                   <IconProfile className="shrink-0" />
@@ -308,7 +308,7 @@ export function AppShell() {
                     ? 'bg-ink-400'
                     : onBreak
                       ? 'bg-[#f0b232]'
-                      : 'bg-[#23a559]',
+                      : 'bg-[#4BDE80]',
                 )}
               />
               <span className="hidden sm:inline">{status}</span>

@@ -1,7 +1,15 @@
 import React from 'react';
 import { StyleSheet, Text, View, type ViewStyle } from 'react-native';
 
-import { radius, useColors, useTheme } from '@/theme';
+import {
+  onAccentColor,
+  resolveAccentColor,
+  softAccentLabel,
+  tintColor,
+  useColors,
+  useTheme,
+} from '@/theme';
+import { radius } from '@/theme';
 
 interface BadgeProps {
   label: string;
@@ -12,35 +20,23 @@ interface BadgeProps {
   dot?: boolean;
 }
 
-function tint(hex: string, alpha: number): string {
-  const value = hex.replace('#', '');
-  const full = value.length === 3 ? value.split('').map((c) => c + c).join('') : value;
-  const r = parseInt(full.slice(0, 2), 16);
-  const g = parseInt(full.slice(2, 4), 16);
-  const b = parseInt(full.slice(4, 6), 16);
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-}
-
 export function Badge({ label, color, solid = false, style, dot = false }: BadgeProps) {
   const colors = useColors();
   const { isDark } = useTheme();
-  const accent = color ?? colors.brand;
-  const softAlpha = isDark ? 0.22 : 0.12;
-  const borderAlpha = isDark ? 0.4 : 0.28;
+  const accent = resolveAccentColor(color, colors.brand);
+
+  const softAlpha = isDark ? 0.22 : 0.14;
+  const borderAlpha = isDark ? 0.45 : 0.32;
+
+  const backgroundColor = solid ? accent : tintColor(accent, softAlpha);
+  const borderColor = solid ? tintColor(accent, isDark ? 0.7 : 0.55) : tintColor(accent, borderAlpha);
+  const labelColor = solid ? onAccentColor(accent) : softAccentLabel(accent, isDark);
+  const dotColor = solid ? onAccentColor(accent) : accent;
 
   return (
-    <View
-      style={[
-        styles.badge,
-        {
-          backgroundColor: solid ? accent : tint(accent, softAlpha),
-          borderColor: solid ? accent : tint(accent, borderAlpha),
-        },
-        style,
-      ]}
-    >
-      {dot ? <View style={[styles.dot, { backgroundColor: solid ? '#ffffff' : accent }]} /> : null}
-      <Text style={[styles.text, { color: solid ? '#ffffff' : accent }]} numberOfLines={1}>
+    <View style={[styles.badge, { backgroundColor, borderColor }, style]}>
+      {dot ? <View style={[styles.dot, { backgroundColor: dotColor }]} /> : null}
+      <Text style={[styles.text, { color: labelColor }]} numberOfLines={1}>
         {label}
       </Text>
     </View>
@@ -51,20 +47,20 @@ const styles = StyleSheet.create({
   badge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    gap: 5,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
     borderRadius: radius.pill,
     borderWidth: StyleSheet.hairlineWidth,
     alignSelf: 'flex-start',
   },
   dot: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
   text: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '700',
     letterSpacing: 0.15,
   },

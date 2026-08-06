@@ -275,7 +275,7 @@ export function DatePicker({
                         !inMonth && 'text-ink-300',
                         inMonth && !isSelected && 'text-ink-100 hover:bg-ink-600',
                         isToday && !isSelected && 'ring-1 ring-ink-300',
-                        isSelected && 'bg-brand-500 text-white',
+                        isSelected && 'bg-brand-500 text-[#062816]',
                       )}
                     >
                       {date.getDate()}

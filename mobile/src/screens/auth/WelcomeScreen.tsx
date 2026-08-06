@@ -246,7 +246,7 @@ export function WelcomeScreen({ navigation }: Props) {
           >
             <LinearGradient
               colors={['rgba(88,101,242,0.55)', 'rgba(88,101,242,0)']}
-              style={StyleSheet.absoluteFillObject}
+              style={StyleSheet.absoluteFill}
             />
           </Animated.View>
 
@@ -393,7 +393,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   coreSheen: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(255,255,255,0.12)',
   },
   coreText: {
@@ -420,7 +420,7 @@ const styles = StyleSheet.create({
     elevation: 7,
   },
   bubbleSheen: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(255,255,255,0.12)',
   },
   copy: {

@@ -24,7 +24,7 @@ import {
   OptionSheet,
   Screen,
   Sheet,
-  useFloatingHeaderHeight,
+  useHeaderClearance,
   type SheetOption,
 } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
@@ -70,7 +70,7 @@ export function ChatThreadScreen({ route, navigation }: Props) {
     setTyping,
   } = useChat();
   const { startCall, joinGroupCall, activeRooms, call } = useCall();
-  const headerHeight = useFloatingHeaderHeight();
+  const headerHeight = useHeaderClearance();
 
   const conversation = conversations.find((entry) => entry.id === conversationId);
   const messages = messagesFor(conversationId);
@@ -739,7 +739,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
   emptyOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 1,

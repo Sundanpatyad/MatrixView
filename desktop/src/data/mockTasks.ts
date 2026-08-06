@@ -135,5 +135,5 @@ export const boardColumns: { id: DesktopTaskStatus; label: string; accent: strin
   { id: 'todo', label: 'Not started', accent: 'bg-ink-400' },
   { id: 'in_progress', label: 'In progress', accent: 'bg-[#f0b232]' },
   { id: 'review', label: 'Under review', accent: 'bg-[#00a8fc]' },
-  { id: 'done', label: 'Completed', accent: 'bg-[#23a559]' },
+  { id: 'done', label: 'Completed', accent: 'bg-[#4BDE80]' },
 ];

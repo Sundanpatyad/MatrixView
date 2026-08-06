@@ -16,7 +16,7 @@ so a user can move between desktop and phone with no loss of state.
 | Storage | `expo-secure-store` for tokens, `AsyncStorage` for profile and preferences |
 | Media | `expo-image-picker`, `expo-document-picker`, `expo-image`, `expo-sharing` |
 | Calls | `react-native-webrtc` (mesh peer connections, Google STUN) |
-| Surfaces | `expo-blur` for the glass tab bar and headers |
+| Surfaces | `expo-blur` / `expo-glass-effect`; iOS 26+ uses native tab bar + nav bar (Liquid Glass) |
 
 ## Getting started
 
@@ -195,7 +195,12 @@ npx expo export      # Production bundle smoke test
 
 ## Notes and limitations
 
+- **iOS 26+ native Liquid Glass tabs.** When Liquid Glass is available, tabs use
+  `createNativeBottomTabNavigator` (`UITabBarController`) for the real system
+  bar and selection animation. Header actions use `GlassView` buttons. Older
+  iOS / Android keep JS tabs. Rebuild with **Xcode 26+**.
 - **Calls need a development build.** See the section above. `getWebRTC()` in
+
   `src/lib/webrtc/webrtcModule.ts` loads the native module lazily behind a
   guard, so the rest of the app stays usable in Expo Go.
 - **No speaker/earpiece toggle.** `react-native-webrtc` exposes no audio-routing
@@ -219,3 +224,7 @@ npx expo export      # Production bundle smoke test
   write it.
 - **Offline caching is not ported.** The desktop app uses Tauri SQLite; mobile
   currently keeps state in memory with optimistic sends and retry.
+
+
+
+npx expo run:ios --device

@@ -91,7 +91,7 @@ export function LiveBoardPlayground() {
 }
 
 const STATUSES = [
-  { key: "in", label: "Checked in", color: "#23a559", hint: "Focusing on desk work" },
+  { key: "in", label: "Checked in", color: "#4BDE80", hint: "Focusing on desk work" },
   { key: "break", label: "On break", color: "#f0b232", hint: "Paused · timer still running" },
   { key: "out", label: "Checked out", color: "#80848e", hint: "Day complete" },
 ] as const;
@@ -141,7 +141,7 @@ export function DeskStatusToggle() {
             onClick={() => setStatus(s.key)}
             className={`rounded-full px-4 py-2 text-[13px] font-semibold transition ${
               status === s.key
-                ? "bg-brand-500 text-white"
+                ? "bg-brand-500 text-[#062816]"
                 : "border border-ink-600 bg-ink-900/40 text-ink-200 hover:border-brand-400/40 hover:text-ink-50"
             }`}
           >
@@ -196,7 +196,7 @@ export function ModuleExplorer() {
             onClick={() => setActive(m.id)}
             className={`shrink-0 rounded-xl px-4 py-3 text-left text-sm font-semibold transition lg:w-full ${
               active === m.id
-                ? "bg-brand-500 text-white"
+                ? "bg-brand-500 text-[#062816]"
                 : "border border-ink-600 bg-ink-800 text-ink-200 hover:border-brand-400/40 hover:text-ink-50"
             }`}
           >
@@ -267,7 +267,7 @@ export function FaqAccordion() {
               <span
                 className={`grid h-8 w-8 shrink-0 place-items-center rounded-full border border-ink-600 text-lg text-ink-300 transition ${
                   isOpen
-                    ? "rotate-45 border-brand-500 bg-brand-500 text-white"
+                    ? "rotate-45 border-brand-500 bg-brand-500 text-[#062816]"
                     : ""
                 }`}
               >
@@ -326,7 +326,7 @@ export function AudienceSwitcher() {
             onClick={() => setActive(x.id)}
             className={`rounded-full px-5 py-2 text-sm font-semibold transition ${
               active === x.id
-                ? "bg-brand-500 text-white"
+                ? "bg-brand-500 text-[#062816]"
                 : "border border-ink-600 text-ink-200 hover:border-brand-400/40 hover:text-ink-50"
             }`}
           >

@@ -270,7 +270,7 @@ export function LandingExperience() {
             <DownloadDesktopNavLink />
             <MagneticLink
               href={APP_LOGIN_URL}
-              className="hidden rounded-full bg-brand-500 px-4 py-2 text-[13px] font-semibold text-white hover:bg-brand-600 sm:inline-flex"
+              className="hidden rounded-full bg-brand-500 px-4 py-2 text-[13px] font-semibold text-[#062816] hover:bg-brand-600 sm:inline-flex"
             >
               Log in
             </MagneticLink>

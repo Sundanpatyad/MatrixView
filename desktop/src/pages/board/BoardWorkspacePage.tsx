@@ -613,7 +613,7 @@ export function BoardWorkspacePage() {
               <span
                 className={cn(
                   'h-1.5 w-1.5 rounded-full',
-                  !checkedIn ? 'bg-ink-400' : onBreak ? 'bg-[#f0b232]' : 'bg-[#23a559]',
+                  !checkedIn ? 'bg-ink-400' : onBreak ? 'bg-[#f0b232]' : 'bg-[#4BDE80]',
                 )}
               />
               <span className="text-[11px] font-semibold tracking-wide text-ink-300 uppercase">
@@ -789,7 +789,7 @@ export function BoardWorkspacePage() {
                     'bg-ink-400',
                     'bg-[#f0b232]',
                     'bg-[#00a8fc]',
-                    'bg-[#23a559]',
+                    'bg-[#4BDE80]',
                     'bg-brand-500',
                   ];
                   const renaming = editingColumnId === col.id;
@@ -1067,7 +1067,7 @@ export function BoardWorkspacePage() {
                         className={cn(
                           'flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] font-bold',
                           active
-                            ? 'border-brand-500 bg-brand-500 text-white'
+                            ? 'border-brand-500 bg-brand-500 text-[#062816]'
                             : 'border-ink-500 text-transparent',
                         )}
                       >

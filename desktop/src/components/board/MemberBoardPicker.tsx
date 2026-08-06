@@ -199,7 +199,7 @@ export function MemberBoardPicker({ members, selectedIds, onToggle, className }:
                             className={cn(
                               'flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] font-bold',
                               active
-                                ? 'border-brand-500 bg-brand-500 text-white'
+                                ? 'border-brand-500 bg-brand-500 text-[#062816]'
                                 : 'border-ink-500 text-transparent',
                             )}
                           >
