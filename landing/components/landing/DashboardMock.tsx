@@ -219,7 +219,7 @@ export function DashboardMock() {
             onClick={() => {
               window.location.href = "https://matrix-view.vercel.app/";
             }}
-            className="mt-4 w-full rounded-lg bg-brand-500 py-2 text-[12px] font-semibold text-[#062816] transition hover:bg-brand-600"
+            className="mt-4 w-full rounded-lg bg-brand-500 py-2 text-[12px] font-semibold text-on-brand transition hover:bg-brand-600"
           >
             Open full dashboard
           </button>

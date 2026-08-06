@@ -27,34 +27,38 @@
   --font-landing: "Syne", ui-sans-serif, system-ui, sans-serif;
   --font-landing-body: "DM Sans", ui-sans-serif, system-ui, sans-serif;
 
-  /* Discord Blurple scale */
+  /* DockX brand — shared with mobile / desktop */
   --color-brand-50: var(--brand-50);
   --color-brand-100: var(--brand-100);
   --color-brand-200: var(--brand-200);
   --color-brand-300: var(--brand-300);
   --color-brand-400: var(--brand-400);
-  --color-brand-500: #5865f2;
-  --color-brand-600: #4752c4;
+  --color-brand-500: var(--brand-500);
+  --color-brand-600: var(--brand-600);
   --color-brand-700: var(--brand-700);
   --color-brand-800: var(--brand-800);
   --color-brand-900: var(--brand-900);
 
-  /* Discord status */
-  --color-status-in: #23a559;
-  --color-status-break: #f0b232;
-  --color-status-out: #80848e;
-  --color-status-offline: #80848e;
-  --color-status-sync: #00a8fc;
-  --color-status-error: #ed4245;
-  --color-status-idle: #f0b232;
-  --color-status-dnd: #f23f43;
+  --color-accent-300: #7ba8f5;
+  --color-accent-400: #5a8fe0;
+  --color-accent-500: #3b74d8;
 
-  /* Discord accent palette */
-  --color-discord-green: #57f287;
-  --color-discord-yellow: #fee75c;
-  --color-discord-fuchsia: #eb459e;
-  --color-discord-red: #ed4245;
-  --color-discord-link: #00a8fc;
+  --color-on-brand: var(--on-brand);
+
+  --color-status-in: #22c55e;
+  --color-status-break: #f59e0b;
+  --color-status-out: #676e79;
+  --color-status-offline: #676e79;
+  --color-status-sync: #5a8fe0;
+  --color-status-error: #ef4444;
+  --color-status-idle: #f59e0b;
+  --color-status-dnd: #ef4444;
+
+  --color-discord-green: #22c55e;
+  --color-discord-yellow: #f59e0b;
+  --color-discord-fuchsia: #a78bfa;
+  --color-discord-red: #ef4444;
+  --color-discord-link: #5a8fe0;
 }
 
 @theme inline {
@@ -75,7 +79,7 @@
   --color-muted: var(--color-ink-800);
   --color-muted-foreground: var(--color-ink-300);
   --color-primary: var(--color-brand-500);
-  --color-primary-foreground: #ffffff;
+  --color-primary-foreground: var(--on-brand);
   --color-secondary: var(--color-ink-700);
   --color-secondary-foreground: var(--color-ink-50);
   --color-accent: var(--color-ink-700);
@@ -85,18 +89,18 @@
   --color-popover: var(--color-ink-800);
   --color-popover-foreground: var(--color-ink-50);
   --color-input: var(--color-ink-600);
-  --color-destructive: #ed4245;
+  --color-destructive: #ef4444;
   --color-destructive-foreground: #ffffff;
-  --color-ring: var(--color-brand-500);
-  --color-chart-1: #5865f2;
-  --color-chart-2: #23a559;
-  --color-chart-3: #00a8fc;
-  --color-chart-4: #f0b232;
-  --color-chart-5: #eb459e;
+  --color-ring: #5a8fe0;
+  --color-chart-1: #4e6094;
+  --color-chart-2: #5a8fe0;
+  --color-chart-3: #7ba8f5;
+  --color-chart-4: #83c5be;
+  --color-chart-5: #f4a261;
   --color-sidebar: var(--color-ink-800);
   --color-sidebar-foreground: var(--color-ink-50);
   --color-sidebar-primary: var(--color-brand-500);
-  --color-sidebar-primary-foreground: #ffffff;
+  --color-sidebar-primary-foreground: var(--on-brand);
   --color-sidebar-accent: var(--color-ink-700);
   --color-sidebar-accent-foreground: var(--color-ink-50);
   --color-sidebar-border: var(--color-ink-600);
@@ -106,66 +110,72 @@
 
 :root {
   color-scheme: light;
-  --brand-50: #eef0ff;
-  --brand-100: #e0e3ff;
-  --brand-200: #c4c9ff;
-  --brand-300: #4752c4;
-  --brand-400: #5865f2;
-  --brand-700: #3c45a5;
-  --brand-800: #3442d9;
-  --brand-900: #2e3590;
-  --ink-50: #111214;
-  --ink-100: #1e1f22;
-  --ink-200: #4e5058;
-  --ink-300: #5c5e66;
-  --ink-400: #6d6f78;
-  --ink-500: #80848e;
-  --ink-600: #d6d9dc;
-  --ink-700: #e3e5e8;
+  --brand-50: #f5f7fc;
+  --brand-100: #dce5fa;
+  --brand-200: #a6b7e5;
+  --brand-300: #7a92cc;
+  --brand-400: #6075b1;
+  --brand-500: #4e6094;
+  --brand-600: #40507c;
+  --brand-700: #31405f;
+  --brand-800: #232f46;
+  --brand-900: #171f2f;
+  --ink-50: #171f2f;
+  --ink-100: #232f46;
+  --ink-200: #40507c;
+  --ink-300: #6075b1;
+  --ink-400: #7a92cc;
+  --ink-500: #9299a6;
+  --ink-600: #d7e0f2;
+  --ink-700: #e8eefb;
   --ink-800: #ffffff;
-  --ink-900: #f2f3f5;
-  --ink-950: #e3e5e8;
-  --atmosphere-start: #f8f9ff;
-  --atmosphere-mid: #f2f3f5;
-  --atmosphere-end: #eef0ff;
-  --atmosphere-glow: rgba(88, 101, 242, 0.18);
-  --atmosphere-glow-soft: rgba(71, 82, 196, 0.09);
-  --grid-line: rgba(30, 31, 34, 0.05);
+  --ink-900: #f5f7fc;
+  --ink-950: #eef2fa;
+  --atmosphere-start: #f5f7fc;
+  --atmosphere-mid: #eef2fa;
+  --atmosphere-end: #dce5fa;
+  --atmosphere-glow: rgba(78, 96, 148, 0.14);
+  --atmosphere-glow-soft: rgba(90, 143, 224, 0.1);
+  --grid-line: rgba(23, 31, 47, 0.06);
   --secondary-button: #ffffff;
-  --secondary-button-hover: #e3e5e8;
-  --card-shadow: rgba(30, 31, 34, 0.14);
+  --secondary-button-hover: #eef2fa;
+  --card-shadow: rgba(23, 31, 47, 0.12);
+  --on-brand: #ffffff;
 }
 
 :root.dark {
   color-scheme: dark;
-  --brand-50: #242744;
-  --brand-100: #2e335f;
-  --brand-200: #3c458e;
-  --brand-300: #a5adf8;
-  --brand-400: #8891f2;
-  --brand-700: #8891f2;
-  --brand-800: #a5adf8;
-  --brand-900: #e0e3ff;
-  --ink-50: #f2f3f5;
-  --ink-100: #dbdee1;
-  --ink-200: #b5bac1;
-  --ink-300: #949ba4;
-  --ink-400: #80848e;
-  --ink-500: #4e5058;
-  --ink-600: #383a40;
-  --ink-700: #313338;
-  --ink-800: #2b2d31;
-  --ink-900: #1e1f22;
-  --ink-950: #111214;
-  --atmosphere-start: #1e1f22;
-  --atmosphere-mid: #111214;
-  --atmosphere-end: #1e1f22;
-  --atmosphere-glow: rgba(88, 101, 242, 0.22);
-  --atmosphere-glow-soft: rgba(71, 82, 196, 0.14);
+  --brand-50: #f5f7fc;
+  --brand-100: #dce5fa;
+  --brand-200: #a6b7e5;
+  --brand-300: #7a92cc;
+  --brand-400: #6075b1;
+  --brand-500: #4e6094;
+  --brand-600: #40507c;
+  --brand-700: #31405f;
+  --brand-800: #232f46;
+  --brand-900: #171f2f;
+  --ink-50: #ffffff;
+  --ink-100: #ffffff;
+  --ink-200: #c9ced8;
+  --ink-300: #9299a6;
+  --ink-400: #676e79;
+  --ink-500: #676e79;
+  --ink-600: #363c48;
+  --ink-700: #282d37;
+  --ink-800: #20242c;
+  --ink-900: #181a20;
+  --ink-950: #121316;
+  --atmosphere-start: #181a20;
+  --atmosphere-mid: #121316;
+  --atmosphere-end: #181a20;
+  --atmosphere-glow: rgba(90, 143, 224, 0.16);
+  --atmosphere-glow-soft: rgba(78, 96, 148, 0.14);
   --grid-line: rgba(242, 243, 245, 0.03);
-  --secondary-button: #2b2d31;
-  --secondary-button-hover: #313338;
+  --secondary-button: #20242c;
+  --secondary-button-hover: #282d37;
   --card-shadow: rgba(0, 0, 0, 0.45);
+  --on-brand: #ffffff;
 }
 
 @utility atmosphere {
@@ -291,8 +301,8 @@
   padding: 0.75rem 1.25rem;
   font-size: 0.875rem;
   font-weight: 600;
-  color: #ffffff;
-  background: #5865f2;
+  color: var(--on-brand);
+  background: #7ba8f5;
   box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.12) inset;
   transition: transform 200ms ease, background 200ms ease, filter 200ms ease;
   overflow: hidden;
@@ -300,11 +310,11 @@
 }
 @utility btn-primary {
   &:hover {
-    background: #4752c4;
+    background: #5a8fe0;
     transform: translateY(-1px);
   }
   &:active {
-    background: #3c45a5;
+    background: #4a7fd0;
     transform: translateY(0);
   }
 }
@@ -332,7 +342,7 @@
 }
 
 @utility logo-mark {
-  background: #5865f2;
+  background: #7ba8f5;
   box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.15) inset;
 }
 
@@ -344,6 +354,6 @@
 
 @utility ring-glow {
   box-shadow:
-    0 0 0 1px rgba(88, 101, 242, 0.35),
-    0 20px 60px -20px rgba(88, 101, 242, 0.25);
+    0 0 0 1px rgba(123, 168, 245, 0.35),
+    0 20px 60px -20px rgba(123, 168, 245, 0.25);
 }

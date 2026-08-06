@@ -293,7 +293,7 @@ export function HeroScene({ className = "" }: Props) {
       const pGeo = new THREE.BufferGeometry();
       pGeo.setAttribute("position", new THREE.BufferAttribute(pPos, 3));
       const pMat = new THREE.PointsMaterial({
-        color: 0x5865f2,
+        color: 0x7ba8f5,
         size: 0.022,
         transparent: true,
         opacity: isDark() ? 0.45 : 0.28,
@@ -312,7 +312,7 @@ export function HeroScene({ className = "" }: Props) {
           const ring = new THREE.Mesh(
             new THREE.TorusGeometry(2.4 + i * 0.35, 0.006, 8, 128),
             new THREE.MeshBasicMaterial({
-              color: i === 1 ? 0x5865f2 : 0xa5adf8,
+              color: i === 1 ? 0x7ba8f5 : 0x8eb8f8,
               transparent: true,
               opacity: 0.18 - i * 0.04,
             }),
@@ -419,7 +419,7 @@ export function HeroScene({ className = "" }: Props) {
       const key = new THREE.DirectionalLight(0xffffff, 0.7);
       key.position.set(3, 4, 5);
       scene.add(key);
-      const rim = new THREE.DirectionalLight(0x5865f2, 0.45);
+      const rim = new THREE.DirectionalLight(0x7ba8f5, 0.45);
       rim.position.set(-3, 1, -2);
       scene.add(rim);
 

@@ -238,10 +238,10 @@ export function LandingExperience() {
           <a href="/" className="flex items-center gap-2.5" data-cursor="grow">
             <img
               src="/logo.png"
-              alt=""
-              width={28}
-              height={28}
-              className="h-7 w-7 rounded-md object-cover"
+              alt="DockX"
+              width={36}
+              height={36}
+              className="h-9 w-9 rounded-[22%] object-cover shadow-[0_6px_18px_rgba(0,0,0,0.28)]"
             />
             <span className="font-landing text-[15px] font-semibold tracking-tight text-ink-50">
               DockX
@@ -270,7 +270,7 @@ export function LandingExperience() {
             <DownloadDesktopNavLink />
             <MagneticLink
               href={APP_LOGIN_URL}
-              className="hidden rounded-full bg-brand-500 px-4 py-2 text-[13px] font-semibold text-[#062816] hover:bg-brand-600 sm:inline-flex"
+              className="hidden rounded-full bg-brand-500 px-4 py-2 text-[13px] font-semibold text-on-brand hover:bg-brand-600 sm:inline-flex"
             >
               Log in
             </MagneticLink>
@@ -303,6 +303,14 @@ export function LandingExperience() {
 
         <div className="relative z-[2] mx-auto grid w-full max-w-6xl gap-8 px-5 sm:px-8 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:items-center">
           <div className="max-w-xl">
+            <img
+              data-hero="mark"
+              src="/logo.png"
+              alt=""
+              width={88}
+              height={88}
+              className="mb-6 h-[4.5rem] w-[4.5rem] rounded-[22%] object-cover shadow-[0_18px_48px_rgba(59,111,212,0.35)] sm:h-24 sm:w-24"
+            />
             <h1
               data-hero="brand"
               className="font-landing text-[clamp(3.25rem,12vw,6.5rem)] leading-[0.9] font-semibold tracking-[-0.04em] text-ink-50"

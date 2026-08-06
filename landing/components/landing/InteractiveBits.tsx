@@ -62,7 +62,7 @@ export function CursorGlow() {
         gsap.to(ring, {
           scale: 2.8,
           opacity: 0.7,
-          borderColor: "rgba(88,101,242,0.9)",
+          borderColor: "rgba(123,168,245,0.9)",
           duration: 0.25,
         });
         gsap.to(dot, { scale: 0.35, duration: 0.2 });
@@ -124,7 +124,7 @@ export function CursorGlow() {
       <div
         ref={dotRef}
         aria-hidden
-        className="pointer-events-none fixed top-0 left-0 z-[101] hidden h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-brand-400 shadow-[0_0_12px_rgba(88,101,242,0.8)] md:block"
+        className="pointer-events-none fixed top-0 left-0 z-[101] hidden h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-brand-400 shadow-[0_0_12px_rgba(123,168,245,0.8)] md:block"
       />
     </>
   );
