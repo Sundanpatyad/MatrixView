@@ -5,6 +5,7 @@ import React, { useEffect, useRef } from 'react';
 import {
   Animated,
   Easing,
+  Image,
   Pressable,
   StyleSheet,
   Text,
@@ -245,22 +246,16 @@ export function WelcomeScreen({ navigation }: Props) {
             ]}
           >
             <LinearGradient
-              colors={['rgba(88,101,242,0.55)', 'rgba(88,101,242,0)']}
+              colors={['rgba(59,130,246,0.55)', 'rgba(59,130,246,0)']}
               style={StyleSheet.absoluteFill}
             />
           </Animated.View>
 
-          <View style={styles.core}>
-            <LinearGradient
-              colors={['#6d78f5', '#5865f2', '#4752c4']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.coreFace}
-            >
-              <View style={styles.coreSheen} />
-              <Text style={styles.coreText}>DX</Text>
-            </LinearGradient>
-          </View>
+          <Image
+            source={require('../../../assets/icon.png')}
+            accessibilityLabel="DockX"
+            style={styles.coreLogo}
+          />
 
           {ORBIT.map((node, index) => (
             <OrbitBubble key={node.icon} node={node} index={index} spin={spin} appear={appear} />
@@ -375,32 +370,15 @@ const styles = StyleSheet.create({
     borderRadius: 60,
     overflow: 'hidden',
   },
-  core: {
+  coreLogo: {
     width: 84,
     height: 84,
-    borderRadius: 28,
-    shadowColor: '#5865f2',
-    shadowOpacity: 0.55,
+    borderRadius: 22,
+    shadowColor: '#3b82f6',
+    shadowOpacity: 0.45,
     shadowRadius: 24,
     shadowOffset: { width: 0, height: 10 },
     elevation: 10,
-  },
-  coreFace: {
-    flex: 1,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  coreSheen: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-  },
-  coreText: {
-    color: '#ffffff',
-    fontSize: 26,
-    fontWeight: '800',
-    letterSpacing: -0.6,
   },
   bubbleWrap: {
     position: 'absolute',

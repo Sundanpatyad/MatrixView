@@ -41,11 +41,11 @@ export function ProjectMembersScreen({ route }: Props) {
     if (!email.trim() || submitting) return;
     setSubmitting(true);
     try {
-      const result = await addMember(projectId, { email: email.trim(), name: name.trim() || undefined, role });
+      await addMember(projectId, { email: email.trim(), name: name.trim() || undefined, role });
       setEmail('');
       setName('');
       setInviteOpen(false);
-      toast.success(result.result === 'added' ? 'Member added' : 'Invitation sent');
+      toast.success('Invite sent. They must Accept before they can see the board.');
     } catch (error) {
       toast.fromError(error, 'Could not add the member.');
     } finally {
@@ -148,7 +148,7 @@ export function ProjectMembersScreen({ route }: Props) {
         visible={inviteOpen}
         onClose={() => setInviteOpen(false)}
         title="Invite to project"
-        subtitle="Existing users are added right away, new emails receive an invite link."
+        subtitle="They stay Pending until they Accept. They cannot see the board until then."
       >
         <View style={styles.form}>
           <Input

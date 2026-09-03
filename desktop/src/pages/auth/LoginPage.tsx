@@ -1,5 +1,5 @@
-import { useState, type FormEvent } from 'react';
-import { Link, Navigate, useNavigate } from 'react-router-dom';
+import { useState, type FormEvent, useEffect } from 'react';
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   AuthDivider,
   AuthField,
@@ -8,6 +8,7 @@ import {
 } from '@/components/auth/AuthLayout';
 import { Button } from '@/components/ui/Button';
 import { useAuth } from '@/lib/auth/AuthContext';
+import { peekInviteToken, postAuthPath, rememberInviteToken } from '@/lib/auth/inviteToken';
 import { openGoogleSignIn } from '@/lib/auth/googleSignIn';
 import { useToast } from '@/lib/toast/ToastContext';
 
@@ -38,6 +39,14 @@ export function LoginPage() {
   const { login, applySession, isAuthenticated, isBootstrapping } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const inviteToken = params.get('invite')?.trim() || peekInviteToken();
+  const afterAuth = postAuthPath(inviteToken);
+
+  useEffect(() => {
+    if (inviteToken) rememberInviteToken(inviteToken);
+  }, [inviteToken]);
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -52,14 +61,14 @@ export function LoginPage() {
     );
   }
 
-  if (isAuthenticated) return <Navigate to="/" replace />;
+  if (isAuthenticated) return <Navigate to={afterAuth} replace />;
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setLoading(true);
     try {
       await login(email, password);
-      navigate('/');
+      navigate(afterAuth);
     } catch (err) {
       toast.fromError(err, 'Unable to sign in');
     } finally {
@@ -75,7 +84,7 @@ export function LoginPage() {
       const result = await openGoogleSignIn();
       if (result.mode === 'desktop') {
         applySession(result.auth);
-        navigate('/');
+        navigate(afterAuth);
         return;
       }
       // web redirect — callback page finishes the session
@@ -95,7 +104,7 @@ export function LoginPage() {
         <p className="text-sm text-ink-300">
           New to DockX?{' '}
           <Link
-            to="/register"
+            to={inviteToken ? `/register?invite=${encodeURIComponent(inviteToken)}` : '/register'}
             className="font-semibold text-brand-300 transition hover:text-brand-200"
           >
             Create an account

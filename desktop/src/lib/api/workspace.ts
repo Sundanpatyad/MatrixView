@@ -397,3 +397,57 @@ export function deleteTimelineRequest(itemId: string): Promise<{ ok: boolean }> 
     auth: true,
   });
 }
+
+export type PendingInvite = {
+  id: string;
+  projectId: string;
+  projectName: string;
+  projectKey: string;
+  role: 'admin' | 'member';
+  inviterName: string;
+  expiresAt: string;
+};
+
+export type InvitePreview = {
+  id: string;
+  email: string;
+  name: string;
+  role: string;
+  projectName: string;
+  orgName: string;
+  inviterName: string;
+  hasAccount: boolean;
+  expiresAt: string;
+};
+
+export function fetchInvitePreview(token: string) {
+  return apiFetch<{ invite: InvitePreview }>(`/api/auth/invites/${encodeURIComponent(token)}`);
+}
+
+export function listInvitesRequest() {
+  return apiFetch<{ invites: PendingInvite[] }>('/api/invites', { auth: true });
+}
+
+export function acceptInviteRequest(inviteId: string) {
+  return apiFetch<{ project: Project; inviteId: string }>(`/api/invites/${inviteId}/accept`, {
+    method: 'POST',
+    auth: true,
+    body: JSON.stringify({}),
+  });
+}
+
+export function acceptInviteByTokenRequest(token: string) {
+  return apiFetch<{ project: Project; inviteId: string }>('/api/invites/accept', {
+    method: 'POST',
+    auth: true,
+    body: JSON.stringify({ token }),
+  });
+}
+
+export function declineInviteRequest(inviteId: string) {
+  return apiFetch<{ ok: true; inviteId: string }>(`/api/invites/${inviteId}/decline`, {
+    method: 'POST',
+    auth: true,
+    body: JSON.stringify({}),
+  });
+}

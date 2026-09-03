@@ -4,12 +4,14 @@ import { RequireAuth } from '@/components/layout/RequireAuth';
 import { CallProvider } from '@/lib/calls/CallContext';
 import { GoogleDeepLinkBridge } from '@/lib/auth/GoogleDeepLinkBridge';
 import { GoogleCallbackPage } from '@/pages/auth/GoogleCallbackPage';
+import { InviteAcceptPage } from '@/pages/auth/InviteAcceptPage';
 import { LoginPage } from '@/pages/auth/LoginPage';
 import { RegisterPage } from '@/pages/auth/RegisterPage';
 import { DashboardPage } from '@/pages/dashboard/DashboardPage';
 import { BoardWorkspacePage } from '@/pages/board/BoardWorkspacePage';
 import { ChatPage } from '@/pages/chat/ChatPage';
 import { NotificationsPage } from '@/pages/notifications/NotificationsPage';
+import { MyWorkPage } from '@/pages/work/MyWorkPage';
 
 /** Call signaling + global Accept/Decline overlay for authenticated routes only. */
 function AuthenticatedTree() {
@@ -27,11 +29,13 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
+        <Route path="/invite" element={<InviteAcceptPage />} />
         <Route path="/auth/google/callback" element={<GoogleCallbackPage />} />
         <Route element={<RequireAuth />}>
           <Route element={<AuthenticatedTree />}>
             <Route element={<AppShell />}>
-              <Route path="/" element={<DashboardPage />} />
+              <Route path="/" element={<MyWorkPage />} />
+              <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/board" element={<BoardWorkspacePage />} />
               <Route path="/chat" element={<ChatPage />} />
               <Route path="/notifications" element={<NotificationsPage />} />
@@ -41,8 +45,8 @@ export default function App() {
               <Route path="/projects/:projectId" element={<Navigate to="/board" replace />} />
               <Route path="/projects/:projectId/board" element={<Navigate to="/board" replace />} />
               <Route path="/attendance" element={<Navigate to="/" replace />} />
-              <Route path="/activity" element={<Navigate to="/" replace />} />
-              <Route path="/tasks" element={<Navigate to="/board" replace />} />
+              <Route path="/activity" element={<Navigate to="/dashboard" replace />} />
+              <Route path="/tasks" element={<Navigate to="/" replace />} />
             </Route>
           </Route>
         </Route>

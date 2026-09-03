@@ -536,7 +536,7 @@ function UserMultiFilter({
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search people, project, or team…"
+              placeholder="Search people, project, or group…"
               className="h-8 w-full rounded-md border border-ink-600 bg-ink-900 px-2.5 text-xs text-ink-50 outline-none placeholder:text-ink-400 focus:border-brand-500"
               autoFocus
             />
@@ -585,7 +585,7 @@ function UserMultiFilter({
                   p.projectLabels.length
                     ? p.projectLabels.join(', ')
                     : null,
-                  p.teamLabels.length ? `Teams: ${p.teamLabels.join(', ')}` : null,
+                  p.teamLabels.length ? `Groups: ${p.teamLabels.join(', ')}` : null,
                 ]
                   .filter(Boolean)
                   .join(' · ');
@@ -919,8 +919,8 @@ export function TimelinePanel() {
         teams: teamKeys.map((teamKey) => ({
           teamKey,
           teamLabel: teamKey
-            ? teamNameById.get(teamKey) ?? 'Unknown team'
-            : 'Project-wide',
+            ? teamNameById.get(teamKey) ?? 'Unknown group'
+            : 'No group',
           rows: byTeam.get(teamKey) ?? [],
         })),
         rows: [],
@@ -999,7 +999,7 @@ export function TimelinePanel() {
     return (
       <div className="flex h-full items-center justify-center bg-ink-900 p-8">
         <div className="max-w-sm border border-ink-600 bg-ink-800 px-6 py-8 text-center">
-          <p className="text-sm font-semibold text-ink-50">Project timeline</p>
+          <p className="text-sm font-semibold text-ink-50">Project backlog</p>
           <p className="mt-2 text-xs leading-relaxed text-ink-300">
             You need to be a project Admin to manage the backlog and assign work. Create a
             project on the board (you become Admin) or ask an admin to promote you.
@@ -1093,16 +1093,16 @@ export function TimelinePanel() {
 
           {createTeams.length > 0 ? (
             <div>
-              <label className={label}>Team</label>
+              <label className={label}>Group</label>
               <div className="mt-1">
                 <Select
                   value={teamId}
                   onChange={setTeamId}
                   options={[
-                    { value: '', label: 'Project-wide' },
+                    { value: '', label: 'No group' },
                     ...createTeams.map((t) => ({ value: t.id, label: t.name })),
                   ]}
-                  aria-label="Team"
+                  aria-label="Group"
                 />
               </div>
             </div>
@@ -1173,7 +1173,7 @@ export function TimelinePanel() {
               <p className="text-[11px] text-ink-300">
                 {backlogCount} backlog · {assignedCount} assigned · {items.length} in range
                 {dashProjectId !== 'all' && project ? ` · ${project.name}` : ''}
-                {hasTeams ? ' · grouped by date & team' : ' · grouped by date'}
+                {hasTeams ? ' · grouped by date & group' : ' · grouped by date'}
               </p>
             </div>
             <div className="flex gap-0.5 border border-ink-600 bg-ink-900 p-0.5">

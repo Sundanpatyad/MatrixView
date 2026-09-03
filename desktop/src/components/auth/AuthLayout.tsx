@@ -28,8 +28,8 @@ export function AuthLayout({ title, subtitle, children, footer, className }: Aut
         {/* Brand column */}
         <aside className="flex flex-col justify-between px-8 pt-10 pb-8 sm:px-12 lg:border-r lg:border-ink-600/60 lg:px-14 lg:py-14">
           <Link to="/login" className="inline-flex items-center gap-2.5 self-start">
-            <span className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-lg bg-brand-500">
-              <img src="/logo.png" alt="" className="h-5 w-5 object-cover" />
+            <span className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-lg">
+              <img src="/logo.png" alt="" className="h-9 w-9 object-cover" />
             </span>
             <span className="text-[1.25rem] font-semibold tracking-tight text-ink-50">DockX</span>
           </Link>

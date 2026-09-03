@@ -24,6 +24,7 @@ interface WorkspaceContextValue {
   tasks: BoardTask[];
   timeline: TimelineItem[];
   teams: ProjectTeam[];
+  pendingInvites: workspaceApi.PendingInvite[];
   isLoading: boolean;
   error: string | null;
 
@@ -33,6 +34,8 @@ interface WorkspaceContextValue {
   visibleTasks: BoardTask[];
 
   refresh: () => Promise<void>;
+  acceptInvite: (inviteId: string) => Promise<Project>;
+  declineInvite: (inviteId: string) => Promise<void>;
   isProjectAdmin: (projectId: string) => boolean;
   getProject: (projectId: string) => Project | undefined;
   getTask: (taskId: string) => BoardTask | undefined;
@@ -85,6 +88,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   const [tasks, setTasks] = useState<BoardTask[]>([]);
   const [timeline, setTimeline] = useState<TimelineItem[]>([]);
   const [teams, setTeams] = useState<ProjectTeam[]>([]);
+  const [pendingInvites, setPendingInvites] = useState<workspaceApi.PendingInvite[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeProjectId, setActiveProjectIdState] = useState<ActiveProjectId>('all');
@@ -109,11 +113,15 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(true);
     setError(null);
     try {
-      const snapshot = await workspaceApi.fetchWorkspace();
+      const [snapshot, inviteData] = await Promise.all([
+        workspaceApi.fetchWorkspace(),
+        workspaceApi.listInvitesRequest().catch(() => ({ invites: [] as workspaceApi.PendingInvite[] })),
+      ]);
       setProjects(snapshot.projects ?? []);
       setTasks(snapshot.tasks ?? []);
       setTimeline(snapshot.timeline ?? []);
       setTeams(snapshot.teams ?? []);
+      setPendingInvites(inviteData.invites ?? []);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load your workspace.');
     } finally {
@@ -127,6 +135,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       setTasks([]);
       setTimeline([]);
       setTeams([]);
+      setPendingInvites([]);
       joinedRooms.current.clear();
       return;
     }
@@ -162,6 +171,9 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         if (updatedTasks?.length) {
           setTasks((prev) => updatedTasks.reduce((acc, task) => upsertById(acc, task), prev));
         }
+      },
+      onProjectUpdated: ({ project }) => {
+        if (project) setProjects((prev) => upsertById(prev, project));
       },
       onTeamUpserted: ({ team }) => {
         if (team) setTeams((prev) => upsertById(prev, team));
@@ -291,6 +303,21 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     if (moved?.length) setTasks((prev) => moved.reduce((acc, task) => upsertById(acc, task), prev));
   }, []);
 
+  const acceptInvite = useCallback(
+    async (inviteId: string) => {
+      const { project } = await workspaceApi.acceptInviteRequest(inviteId);
+      setPendingInvites((prev) => prev.filter((invite) => invite.id !== inviteId));
+      await refresh();
+      return project;
+    },
+    [refresh],
+  );
+
+  const declineInvite = useCallback(async (inviteId: string) => {
+    await workspaceApi.declineInviteRequest(inviteId);
+    setPendingInvites((prev) => prev.filter((invite) => invite.id !== inviteId));
+  }, []);
+
   const addMember = useCallback(
     async (projectId: string, input: { name?: string; email: string; role?: ProjectRole }) => {
       const response = await workspaceApi.addMemberRequest(projectId, input);
@@ -342,6 +369,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       tasks,
       timeline,
       teams,
+      pendingInvites,
       isLoading,
       error,
       activeProjectId,
@@ -349,6 +377,8 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       activeProject,
       visibleTasks,
       refresh,
+      acceptInvite,
+      declineInvite,
       isProjectAdmin,
       getProject,
       getTask,
@@ -379,6 +409,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       tasks,
       timeline,
       teams,
+      pendingInvites,
       isLoading,
       error,
       activeProjectId,
@@ -386,6 +417,8 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       activeProject,
       visibleTasks,
       refresh,
+      acceptInvite,
+      declineInvite,
       isProjectAdmin,
       getProject,
       getTask,

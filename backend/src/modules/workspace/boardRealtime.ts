@@ -18,11 +18,12 @@ export async function broadcastProjectEvent(
 
   const userIds = new Set<string>();
   for (const m of project.members) {
+    if ((m as { status?: string }).status === 'pending') continue;
     if (m.userId) userIds.add(String(m.userId));
   }
 
   const emails = project.members
-    .filter((m) => !m.userId && m.email)
+    .filter((m) => !m.userId && m.email && (m as { status?: string }).status !== 'pending')
     .map((m) => m.email.toLowerCase());
   if (emails.length > 0) {
     const users = await User.find({ email: { $in: emails } })

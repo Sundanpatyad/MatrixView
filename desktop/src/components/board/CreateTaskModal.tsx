@@ -1,10 +1,11 @@
-import { useState, type FormEvent } from 'react';
+import { useMemo, useState, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/Button';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { useAuth } from '@/lib/auth/AuthContext';
+import { memberForUser } from '@/lib/workspace/taskHelpers';
 import {
   TASK_PRIORITIES,
   TASK_TYPES,
@@ -27,8 +28,20 @@ export function CreateTaskModal({
   defaultTeamId = null,
 }: Props) {
   const { user } = useAuth();
-  const { createTask, getProjectTeams } = useWorkspace();
+  const { createTask, getProject, getProjectTeams } = useWorkspace();
+  const project = getProject(projectId);
   const teams = getProjectTeams(projectId);
+  const members = useMemo(
+    () => (project?.members ?? []).filter((m) => m.status !== 'pending'),
+    [project?.members],
+  );
+
+  const initialAssignee = useMemo(() => {
+    if (defaultAssignee?.id) return defaultAssignee.id;
+    const me = memberForUser(project, user);
+    return me?.id ?? '';
+  }, [defaultAssignee?.id, project, user]);
+
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [type, setType] = useState<TaskType>('task');
@@ -36,25 +49,31 @@ export function CreateTaskModal({
   const [estimateHours, setEstimateHours] = useState(2);
   const [dueDate, setDueDate] = useState('');
   const [teamId, setTeamId] = useState<string>(defaultTeamId ?? '');
-  const assigneeName = defaultAssignee?.name ?? user?.name ?? 'You';
-  const assigneeId = defaultAssignee?.id;
+  const [assigneeId, setAssigneeId] = useState(initialAssignee);
+  const [busy, setBusy] = useState(false);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!title.trim()) return;
-    await createTask({
-      projectId,
-      title,
-      description,
-      type,
-      priority,
-      estimateHours: Number(estimateHours) || 0,
-      assigneeName,
-      assigneeId,
-      dueDate,
-      teamId: teams.length > 0 ? teamId || null : null,
-    });
-    onClose();
+    if (!title.trim() || busy) return;
+    const member = members.find((m) => m.id === assigneeId);
+    setBusy(true);
+    try {
+      await createTask({
+        projectId,
+        title,
+        description,
+        type,
+        priority,
+        estimateHours: Number(estimateHours) || 0,
+        assigneeName: member?.name ?? 'Unassigned',
+        assigneeId: member?.id ?? '',
+        dueDate,
+        teamId: teams.length > 0 ? teamId || null : null,
+      });
+      onClose();
+    } finally {
+      setBusy(false);
+    }
   }
 
   return createPortal(
@@ -66,15 +85,15 @@ export function CreateTaskModal({
         className="relative z-10 w-full max-w-lg rounded-2xl bg-ink-800 p-5 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-xl font-bold text-ink-50">Create issue</h2>
+        <h2 className="text-xl font-bold text-ink-50">Create task</h2>
         <p className="mt-1 text-sm font-medium text-ink-200">
-          Choose type: Task, Bug, Story, or Time.
+          Assign it now — it shows up on My Work for that person.
         </p>
 
-        <form onSubmit={onSubmit} className="mt-5 space-y-3">
+        <form onSubmit={(e) => void onSubmit(e)} className="mt-5 space-y-3">
           <div>
             <label className="mb-1 block text-xs font-bold text-ink-200 uppercase" htmlFor="title">
-              Summary
+              Title
             </label>
             <Input
               id="title"
@@ -82,6 +101,7 @@ export function CreateTaskModal({
               onChange={(e) => setTitle(e.target.value)}
               placeholder="What needs to be done?"
               required
+              autoFocus
             />
           </div>
 
@@ -95,7 +115,7 @@ export function CreateTaskModal({
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
               className="w-full rounded-lg border border-ink-500 bg-ink-800 px-3 py-2 text-sm font-medium text-ink-50"
-              placeholder="Details, steps to reproduce, acceptance criteria…"
+              placeholder="Details, steps, acceptance criteria…"
             />
           </div>
 
@@ -150,40 +170,50 @@ export function CreateTaskModal({
             </div>
           </div>
 
+          <div>
+            <label className="mb-1 block text-xs font-bold text-ink-200 uppercase">
+              Assigned to
+            </label>
+            <Select
+              size="md"
+              value={assigneeId}
+              onChange={setAssigneeId}
+              options={[
+                { value: '', label: 'Unassigned' },
+                ...members.map((m) => ({
+                  value: m.id,
+                  label:
+                    user && m.email.toLowerCase() === user.email.toLowerCase()
+                      ? `${m.name} (you)`
+                      : m.name,
+                })),
+              ]}
+              aria-label="Assigned to"
+            />
+          </div>
+
           {teams.length > 0 ? (
             <div>
-              <label className="mb-1 block text-xs font-bold text-ink-200 uppercase">Team</label>
+              <label className="mb-1 block text-xs font-bold text-ink-200 uppercase">Group</label>
               <Select
                 size="md"
                 value={teamId}
                 onChange={setTeamId}
                 options={[
-                  { value: '', label: 'Project-wide (no team)' },
+                  { value: '', label: 'No group' },
                   ...teams.map((t) => ({ value: t.id, label: t.name })),
                 ]}
               />
             </div>
           ) : null}
 
-          <div>
-            <label className="mb-1 block text-xs font-bold text-ink-200 uppercase">
-              Assigned to
-            </label>
-            <p className="rounded-lg border border-ink-600 bg-ink-900 px-3 py-2.5 text-sm font-semibold text-ink-100">
-              {assigneeName}
-              {assigneeName === user?.name ? (
-                <span className="font-medium text-ink-300"> (you)</span>
-              ) : (
-                <span className="font-medium text-ink-300"> — current board</span>
-              )}
-            </p>
-          </div>
-
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="secondary" onClick={onClose}>
               Cancel
             </Button>
-            <Button type="submit">Create</Button>
+            <Button type="submit" disabled={busy || !title.trim()}>
+              Create task
+            </Button>
           </div>
         </form>
       </div>

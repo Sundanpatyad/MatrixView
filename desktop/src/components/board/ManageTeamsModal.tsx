@@ -13,7 +13,7 @@ import { useToast } from '@/lib/toast/ToastContext';
 type Props = {
   projectId: string;
   onClose: () => void;
-  /** Jump to this team's tasks on the board */
+  /** Jump to this group's tasks on the board */
   onViewTeamTasks?: (teamId: string, memberIds: string[]) => void;
 };
 
@@ -128,7 +128,7 @@ export function ManageTeamsModal({ projectId, onClose, onViewTeamTasks }: Props)
         });
       }
     } catch (err) {
-      toast.fromError(err, 'Could not save team');
+      toast.fromError(err, 'Could not save group');
     } finally {
       setBusy(false);
     }
@@ -195,7 +195,7 @@ export function ManageTeamsModal({ projectId, onClose, onViewTeamTasks }: Props)
               <p className="text-[10px] font-bold uppercase tracking-wide text-ink-300">
                 {project?.key ?? 'Project'}
               </p>
-              <h2 className="text-sm font-semibold text-ink-50">Teams</h2>
+              <h2 className="text-sm font-semibold text-ink-50">Groups</h2>
             </div>
             <button
               type="button"
@@ -209,7 +209,7 @@ export function ManageTeamsModal({ projectId, onClose, onViewTeamTasks }: Props)
           <div className="min-h-0 flex-1 overflow-y-auto p-2">
             {teams.length === 0 && selectedId !== 'new' ? (
               <p className="px-2 py-6 text-center text-[11px] text-ink-400">
-                No teams yet. Create one to segregate work.
+                No groups yet. Create one to filter the board (everyone on the project can still see all tasks).
               </p>
             ) : (
               <ul className="space-y-1">
@@ -252,7 +252,7 @@ export function ManageTeamsModal({ projectId, onClose, onViewTeamTasks }: Props)
                 onClick={startCreate}
               >
                 <IconPlus className="h-3.5 w-3.5" />
-                New team
+                New group
               </Button>
             </div>
           ) : null}
@@ -264,13 +264,13 @@ export function ManageTeamsModal({ projectId, onClose, onViewTeamTasks }: Props)
             <div className="min-w-0">
               <h3 className="truncate text-base font-semibold text-ink-50">
                 {selectedId === 'new'
-                  ? 'Create team'
-                  : selectedTeam?.name ?? 'Select a team'}
+                  ? 'Create group'
+                  : selectedTeam?.name ?? 'Select a group'}
               </h3>
               <p className="mt-0.5 text-[11px] text-ink-400">
                 {canManage
-                  ? 'Edit name, add or remove members, and open the team board.'
-                  : 'View team members and tasks. Only project admins can edit.'}
+                  ? 'Optional filter on this project. Does not hide work from other members.'
+                  : 'View group members and tasks. Only project admins can edit.'}
               </p>
             </div>
             <button
@@ -285,14 +285,14 @@ export function ManageTeamsModal({ projectId, onClose, onViewTeamTasks }: Props)
           {!selectedId ? (
             <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 py-12 text-center">
               <IconUsers className="h-8 w-8 text-ink-500" />
-              <p className="text-sm text-ink-300">Select a team or create one to get started.</p>
+              <p className="text-sm text-ink-300">Select a group or create one to get started.</p>
             </div>
           ) : (
             <form onSubmit={onSave} className="flex min-h-0 flex-1 flex-col">
               <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
                 <div>
                   <label className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-ink-300">
-                    Team name
+                    Group name
                   </label>
                   <Input
                     value={name}
@@ -311,7 +311,7 @@ export function ManageTeamsModal({ projectId, onClose, onViewTeamTasks }: Props)
                       <span className="font-semibold text-ink-100">
                         {taskCountFor(selectedTeam.id)}
                       </span>{' '}
-                      tasks on this team
+                      tasks in this group
                     </span>
                     {onViewTeamTasks ? (
                       <Button
@@ -399,7 +399,7 @@ export function ManageTeamsModal({ projectId, onClose, onViewTeamTasks }: Props)
                         <p className="px-2 py-3 text-center text-[11px] text-ink-400">
                           {memberQuery.trim()
                             ? 'No matching members'
-                            : 'Everyone is already on this team'}
+                            : 'Everyone is already in this group'}
                         </p>
                       ) : (
                         availableMembers.map((m) => (
@@ -441,7 +441,7 @@ export function ManageTeamsModal({ projectId, onClose, onViewTeamTasks }: Props)
                     disabled={busy || deleting}
                     onClick={() => setToDelete(selectedTeam)}
                   >
-                    Delete team
+                    Delete group
                   </Button>
                 ) : null}
                 <div className="flex-1" />
@@ -454,7 +454,7 @@ export function ManageTeamsModal({ projectId, onClose, onViewTeamTasks }: Props)
                     {busy
                       ? 'Saving…'
                       : selectedId === 'new'
-                        ? 'Create team'
+                        ? 'Create group'
                         : 'Save changes'}
                   </Button>
                 ) : null}
@@ -466,10 +466,10 @@ export function ManageTeamsModal({ projectId, onClose, onViewTeamTasks }: Props)
 
       <ConfirmModal
         open={Boolean(toDelete)}
-        title="Delete team?"
+        title="Delete group?"
         message={
           toDelete
-            ? `Delete “${toDelete.name}”? Its ${taskCountFor(toDelete.id)} task(s) become project-wide (not deleted).`
+            ? `Delete “${toDelete.name}”? Its ${taskCountFor(toDelete.id)} task(s) stay on the board without a group.`
             : ''
         }
         confirmLabel="Delete"

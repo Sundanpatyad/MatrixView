@@ -10,7 +10,6 @@ import {
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CreateTaskModal } from '@/components/board/CreateTaskModal';
 import { ManageTeamsModal } from '@/components/board/ManageTeamsModal';
-import { MemberBoardPicker } from '@/components/board/MemberBoardPicker';
 import { ProjectAvatar } from '@/components/board/ProjectAvatar';
 import { ProjectSelect } from '@/components/board/ProjectSelect';
 import { TaskDetailModal } from '@/components/board/TaskDetailModal';
@@ -22,9 +21,14 @@ import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { IconUsers, IconX } from '@/components/ui/Icons';
 import { Select } from '@/components/ui/Select';
 import { UserAvatar, avatarFromMembers } from '@/components/ui/UserAvatar';
-import { useAttendance } from '@/lib/attendance/AttendanceContext';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { cn } from '@/lib/cn';
+import {
+  isTaskAssignedTo,
+  isTaskAssignedToUser,
+  isUnassigned,
+  memberForUser,
+} from '@/lib/workspace/taskHelpers';
 import {
   TASK_PRIORITIES,
   TASK_TYPES,
@@ -35,21 +39,10 @@ import {
 } from '@/lib/workspace/types';
 import { useWorkspace } from '@/lib/workspace/WorkspaceContext';
 
-/** 'all' = every task; 'global' = no team; otherwise a team id */
-type TeamFilter = 'all' | 'global' | string;
-
-/** Tasks on a member's personal board = assigned to that member */
-function isMemberBoardTask(
-  task: BoardTask,
-  member: { id: string; name: string } | null,
-) {
-  if (!member) return false;
-  const name = member.name.trim().toLowerCase();
-  return (
-    (member.id && task.assigneeId === member.id) ||
-    task.assigneeName.trim().toLowerCase() === name
-  );
-}
+/** 'all' = every task; 'global' = no group; otherwise a group id */
+type GroupFilter = 'all' | 'global' | string;
+/** everyone = full project; me / unassigned / member id */
+type AssigneeFilter = 'everyone' | 'me' | 'unassigned' | string;
 
 export function BoardWorkspacePage() {
   const { user } = useAuth();
@@ -69,16 +62,21 @@ export function BoardWorkspacePage() {
     uploadProjectAvatar,
     removeProjectAvatar,
   } = useWorkspace();
-  const { checkedIn, onBreak, elapsedLabel, checkIn, checkOut, toggleBreak } = useAttendance();
 
   const queryProjectId = searchParams.get('project') ?? '';
   const queryTaskId = searchParams.get('task') ?? '';
+  const queryAssignee = searchParams.get('assignee') ?? 'everyone';
+  const queryGroup = searchParams.get('group') ?? 'all';
   const [projectId, setProjectId] = useState(queryProjectId || projects[0]?.id || '');
   const [query, setQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<TaskType | 'all'>('all');
   const [priorityFilter, setPriorityFilter] = useState<TaskPriority | 'all'>('all');
   const [statusFilter, setStatusFilter] = useState<TaskStatus | 'all'>('all');
-  const [teamFilter, setTeamFilter] = useState<TeamFilter>('all');
+  const [groupFilter, setGroupFilter] = useState<GroupFilter>(queryGroup);
+  const [assigneeFilter, setAssigneeFilter] = useState<AssigneeFilter>(
+    queryAssignee || 'everyone',
+  );
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const [showCreateProject, setShowCreateProject] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
@@ -88,7 +86,6 @@ export function BoardWorkspacePage() {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<TaskStatus | null>(null);
   const draggingIdRef = useRef<string | null>(null);
-  const [boardMemberIds, setBoardMemberIds] = useState<string[]>([]);
   const [editingColumnId, setEditingColumnId] = useState<string | null>(null);
   const [editingColumnLabel, setEditingColumnLabel] = useState('');
   const [addingColumn, setAddingColumn] = useState(false);
@@ -97,13 +94,10 @@ export function BoardWorkspacePage() {
   const [columnToRemove, setColumnToRemove] = useState<{ id: string; label: string } | null>(
     null,
   );
-  const [memberSearch, setMemberSearch] = useState('');
-  const [sidebarMembersOpen, setSidebarMembersOpen] = useState(false);
   const [membersPanelOpen, setMembersPanelOpen] = useState(false);
   const [avatarBusy, setAvatarBusy] = useState(false);
   const renameInputRef = useRef<HTMLInputElement>(null);
   const addColumnInputRef = useRef<HTMLInputElement>(null);
-  const SIDEBAR_VISIBLE = 5;
 
   useEffect(() => {
     if (queryProjectId && projects.some((p) => p.id === queryProjectId)) {
@@ -121,13 +115,52 @@ export function BoardWorkspacePage() {
     setSelectedId(queryTaskId);
   }, [queryTaskId]);
 
+  function writeBoardParams(patch: {
+    project?: string;
+    task?: string | null;
+    assignee?: AssigneeFilter;
+    group?: GroupFilter;
+  }) {
+    const next = new URLSearchParams(searchParams);
+    const project = patch.project ?? projectId;
+    if (project) next.set('project', project);
+    else next.delete('project');
+
+    const task = patch.task !== undefined ? patch.task : selectedId;
+    if (task) next.set('task', task);
+    else next.delete('task');
+
+    const assignee = patch.assignee ?? assigneeFilter;
+    if (assignee && assignee !== 'everyone') next.set('assignee', assignee);
+    else next.delete('assignee');
+
+    const group = patch.group ?? groupFilter;
+    if (group && group !== 'all') next.set('group', group);
+    else next.delete('group');
+
+    setSearchParams(next, { replace: true });
+  }
+
   function selectProject(id: string) {
     setProjectId(id);
-    if (searchParams.has('project')) {
-      const next = new URLSearchParams(searchParams);
-      next.set('project', id);
-      setSearchParams(next, { replace: true });
-    }
+    setAssigneeFilter('everyone');
+    setGroupFilter('all');
+    writeBoardParams({ project: id, assignee: 'everyone', group: 'all', task: null });
+  }
+
+  function openTask(id: string | null) {
+    setSelectedId(id);
+    writeBoardParams({ task: id });
+  }
+
+  function onAssigneeChange(value: AssigneeFilter) {
+    setAssigneeFilter(value);
+    writeBoardParams({ assignee: value });
+  }
+
+  function onGroupChange(value: GroupFilter) {
+    setGroupFilter(value);
+    writeBoardParams({ group: value });
   }
 
   const project = projectId ? getProject(projectId) : undefined;
@@ -137,24 +170,21 @@ export function BoardWorkspacePage() {
     () => (projectId ? getProjectTeams(projectId) : []),
     [getProjectTeams, projectId],
   );
-  const hasTeams = projectTeams.length > 0;
+  const hasGroups = projectTeams.length > 0;
   const canEditColumns = Boolean(project && user && isProjectAdmin(project.id));
   const canManageProject = Boolean(project && user && isProjectAdmin(project.id));
+  const meMember = memberForUser(project, user);
 
-  const teamNameById = useMemo(() => {
+  const groupNameById = useMemo(() => {
     const map = new Map<string, string>();
     for (const t of projectTeams) map.set(t.id, t.name);
     return map;
   }, [projectTeams]);
 
   useEffect(() => {
-    setTeamFilter('all');
-  }, [projectId]);
-
-  useEffect(() => {
-    if (teamFilter === 'all' || teamFilter === 'global') return;
-    if (!projectTeams.some((t) => t.id === teamFilter)) setTeamFilter('all');
-  }, [projectTeams, teamFilter]);
+    if (groupFilter === 'all' || groupFilter === 'global') return;
+    if (!projectTeams.some((t) => t.id === groupFilter)) setGroupFilter('all');
+  }, [projectTeams, groupFilter]);
 
   useEffect(() => {
     if (editingColumnId) renameInputRef.current?.focus();
@@ -240,119 +270,71 @@ export function BoardWorkspacePage() {
     }
   }
 
-  // Default / repair selected board members when project or team changes
+  // Keep assignee filter valid when members change
   useEffect(() => {
-    if (!members.length) {
-      setBoardMemberIds([]);
+    if (
+      assigneeFilter === 'everyone' ||
+      assigneeFilter === 'me' ||
+      assigneeFilter === 'unassigned'
+    ) {
       return;
     }
-    const valid = boardMemberIds.filter((id) => members.some((m) => m.id === id));
-    if (valid.length > 0) {
-      if (valid.length !== boardMemberIds.length) setBoardMemberIds(valid);
-      return;
-    }
-    const me = members.find(
-      (m) =>
-        m.email.toLowerCase() === (user?.email ?? '').toLowerCase() ||
-        m.name.toLowerCase() === (user?.name ?? '').toLowerCase(),
-    );
-    setBoardMemberIds([me?.id ?? members[0].id]);
-  }, [members, boardMemberIds, user?.email, user?.name]);
+    if (!members.some((m) => m.id === assigneeFilter)) setAssigneeFilter('everyone');
+  }, [members, assigneeFilter]);
 
-  const selectedMembers = useMemo(
-    () => members.filter((m) => boardMemberIds.includes(m.id)),
-    [members, boardMemberIds],
-  );
-
-  const filteredSidebarMembers = useMemo(() => {
-    const q = memberSearch.trim().toLowerCase();
-    if (!q) return members;
-    return members.filter(
-      (m) =>
-        m.name.toLowerCase().includes(q) ||
-        m.email.toLowerCase().includes(q),
-    );
-  }, [members, memberSearch]);
-
-  const isMemberSearching = memberSearch.trim().length > 0;
-  const sidebarVisibleMembers =
-    isMemberSearching || sidebarMembersOpen
-      ? filteredSidebarMembers
-      : filteredSidebarMembers.slice(0, SIDEBAR_VISIBLE);
-  const sidebarOverflow =
-    isMemberSearching || sidebarMembersOpen
-      ? 0
-      : Math.max(0, filteredSidebarMembers.length - SIDEBAR_VISIBLE);
-
-  function toggleBoardMember(memberId: string) {
-    setBoardMemberIds((prev) => {
-      if (prev.includes(memberId)) {
-        // Keep at least one selected
-        if (prev.length <= 1) return prev;
-        return prev.filter((id) => id !== memberId);
-      }
-      return [...prev, memberId];
-    });
-  }
+  const selectedMember = useMemo(() => {
+    if (assigneeFilter === 'me') return meMember;
+    if (assigneeFilter === 'everyone' || assigneeFilter === 'unassigned') return null;
+    return members.find((m) => m.id === assigneeFilter) ?? null;
+  }, [assigneeFilter, meMember, members]);
 
   const boardLabel = useMemo(() => {
-    if (hasTeams && teamFilter !== 'all' && teamFilter !== 'global') {
-      const team = projectTeams.find((t) => t.id === teamFilter);
-      return team ? `${team.name} team` : 'Team';
+    const parts: string[] = [];
+    if (hasGroups && groupFilter !== 'all' && groupFilter !== 'global') {
+      parts.push(groupNameById.get(groupFilter) ?? 'Group');
+    } else if (groupFilter === 'global') {
+      parts.push('No group');
     }
-    if (teamFilter === 'global') return 'Project-wide';
-    if (selectedMembers.length === 0) return null;
-    if (selectedMembers.length === members.length && members.length > 1) return 'Everyone';
-    const names = selectedMembers.map((m) => {
-      const isYou =
-        m.email.toLowerCase() === (user?.email ?? '').toLowerCase() ||
-        m.name.toLowerCase() === (user?.name ?? '').toLowerCase();
-      return isYou ? 'You' : m.name.split(' ')[0];
-    });
-    if (names.length <= 2) return names.join(' + ');
-    return `${names[0]} + ${names.length - 1} more`;
-  }, [
-    selectedMembers,
-    members.length,
-    user?.email,
-    user?.name,
-    hasTeams,
-    teamFilter,
-    projectTeams,
-  ]);
+    if (assigneeFilter === 'me') parts.push('Assigned to you');
+    else if (assigneeFilter === 'unassigned') parts.push('Unassigned');
+    else if (selectedMember) parts.push(`Assigned to ${selectedMember.name.split(' ')[0]}`);
+    else parts.push('Everyone');
+    return parts.join(' · ');
+  }, [hasGroups, groupFilter, groupNameById, assigneeFilter, selectedMember]);
 
   const defaultAssignee = useMemo(() => {
-    const me = selectedMembers.find(
-      (m) =>
-        m.email.toLowerCase() === (user?.email ?? '').toLowerCase() ||
-        m.name.toLowerCase() === (user?.name ?? '').toLowerCase(),
-    );
-    return me ?? selectedMembers[0] ?? null;
-  }, [selectedMembers, user?.email, user?.name]);
+    if (selectedMember) return selectedMember;
+    return meMember;
+  }, [selectedMember, meMember]);
 
   const boardTasks = useMemo(() => {
     if (!projectId) return [];
     return getProjectTasks(projectId).filter((t) => {
-      if (hasTeams) {
-        if (teamFilter === 'global' && t.teamId) return false;
-        if (teamFilter !== 'all' && teamFilter !== 'global' && t.teamId !== teamFilter) {
+      if (hasGroups) {
+        if (groupFilter === 'global' && t.teamId) return false;
+        if (groupFilter !== 'all' && groupFilter !== 'global' && t.teamId !== groupFilter) {
           return false;
         }
       }
-      // Specific team view: show every task on that team (including unassigned)
-      if (hasTeams && teamFilter !== 'all' && teamFilter !== 'global') {
-        return true;
-      }
-      if (selectedMembers.length === 0) return false;
-      return selectedMembers.some((m) => isMemberBoardTask(t, m));
+      if (assigneeFilter === 'everyone') return true;
+      if (assigneeFilter === 'unassigned') return isUnassigned(t);
+      if (assigneeFilter === 'me') return isTaskAssignedToUser(t, user, project);
+      return isTaskAssignedTo(t, selectedMember);
     });
-  }, [getProjectTasks, projectId, selectedMembers, hasTeams, teamFilter]);
+  }, [
+    getProjectTasks,
+    projectId,
+    hasGroups,
+    groupFilter,
+    assigneeFilter,
+    user,
+    project,
+    selectedMember,
+  ]);
 
-  function viewTeamOnBoard(teamId: string, memberIds: string[]) {
-    setTeamFilter(teamId);
-    if (memberIds.length > 0) {
-      setBoardMemberIds(memberIds);
-    }
+  function viewGroupOnBoard(teamId: string) {
+    setGroupFilter(teamId);
+    writeBoardParams({ group: teamId });
     setShowTeams(false);
   }
 
@@ -382,9 +364,32 @@ export function BoardWorkspacePage() {
   }, [filtered, columns]);
 
   const selected = useMemo(
-    () => boardTasks.find((t) => t.id === selectedId) ?? null,
-    [boardTasks, selectedId],
+    () =>
+      projectId
+        ? (getProjectTasks(projectId).find((t) => t.id === selectedId) ?? null)
+        : null,
+    [getProjectTasks, projectId, selectedId],
   );
+
+  useEffect(() => {
+    function onKey(e: globalThis.KeyboardEvent) {
+      const el = e.target as HTMLElement | null;
+      const tag = el?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || el?.isContentEditable) return;
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') return;
+      if (e.key === '/' ) {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        return;
+      }
+      if (e.key.toLowerCase() === 'c' && projectId) {
+        e.preventDefault();
+        setShowCreateTask(true);
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [projectId]);
 
   function allowDrop(e: DragEvent, status: TaskStatus) {
     e.preventDefault();
@@ -443,20 +448,6 @@ export function BoardWorkspacePage() {
     return (
       <div className="flex h-full min-h-0 flex-col">
         <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-ink-600 bg-ink-800 px-3 py-2.5 sm:px-4">
-          {!checkedIn ? (
-            <Button size="sm" onClick={() => void checkIn()}>
-              Check in
-            </Button>
-          ) : (
-            <>
-              <Button size="sm" variant="secondary" onClick={toggleBreak}>
-                {onBreak ? 'End break' : 'Break'}
-              </Button>
-              <Button size="sm" variant="danger" onClick={() => void checkOut()}>
-                Check out
-              </Button>
-            </>
-          )}
           <Button size="sm" onClick={() => setShowCreateProject(true)}>
             New project
           </Button>
@@ -464,18 +455,14 @@ export function BoardWorkspacePage() {
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
           <p className="text-sm font-semibold text-ink-50">No project yet</p>
           <p className="max-w-sm text-xs leading-relaxed text-ink-400">
-            Create a project for boards and tasks. Dashboard and Chat work without one — use the
-            sidebar or the links below anytime.
+            Create a project, invite people, then add tasks. Assigned work also shows on My Work.
           </p>
           <div className="mt-2 flex flex-wrap items-center justify-center gap-2">
             <Button size="sm" onClick={() => setShowCreateProject(true)}>
               New project
             </Button>
             <Button size="sm" variant="secondary" onClick={() => navigate('/')}>
-              Dashboard
-            </Button>
-            <Button size="sm" variant="secondary" onClick={() => navigate('/chat')}>
-              Chat
+              My Work
             </Button>
           </div>
         </div>
@@ -497,26 +484,6 @@ export function BoardWorkspacePage() {
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Toolbar */}
         <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-ink-600 bg-ink-800 px-3 py-2.5 sm:px-4">
-          <div className="flex items-center gap-1.5">
-            {!checkedIn ? (
-              <Button size="sm" onClick={() => void checkIn()}>
-                Check in
-              </Button>
-            ) : (
-              <>
-                <Button size="sm" variant="secondary" onClick={toggleBreak}>
-                  {onBreak ? 'End break' : 'Break'}
-                </Button>
-                <Button size="sm" variant="danger" onClick={() => void checkOut()}>
-                  <span className="sm:hidden">Out</span>
-                  <span className="hidden sm:inline">Check out</span>
-                </Button>
-              </>
-            )}
-          </div>
-
-          <div className="hidden h-5 w-px bg-ink-600 sm:block" aria-hidden />
-
           <div className="flex flex-wrap items-center gap-1.5">
             {canManageProject ? (
               <Button
@@ -534,7 +501,7 @@ export function BoardWorkspacePage() {
               disabled={!project}
               onClick={() => setShowTeams(true)}
             >
-              Teams
+              Groups
             </Button>
             <Button size="sm" variant="secondary" onClick={() => setShowCreateProject(true)}>
               <span className="sm:hidden">New</span>
@@ -604,25 +571,11 @@ export function BoardWorkspacePage() {
               variant="secondary"
               disabled={!project}
               onClick={() => setMembersPanelOpen(true)}
-              title="Project & members"
+              title="People on this project"
             >
               <IconUsers className="h-3.5 w-3.5" />
-              Members
+              People
             </Button>
-            <div className="hidden h-8 items-center gap-2 rounded-md border border-ink-600 bg-ink-900/80 px-2.5 sm:flex">
-              <span
-                className={cn(
-                  'h-1.5 w-1.5 rounded-full',
-                  !checkedIn ? 'bg-ink-400' : onBreak ? 'bg-[#f0b232]' : 'bg-[#4BDE80]',
-                )}
-              />
-              <span className="text-[11px] font-semibold tracking-wide text-ink-300 uppercase">
-                {!checkedIn ? 'Out' : onBreak ? 'Break' : 'In'}
-              </span>
-              <span className="text-xs font-semibold tabular-nums text-ink-50">
-                {checkedIn ? elapsedLabel : '00:00:00'}
-              </span>
-            </div>
           </div>
         </div>
 
@@ -670,29 +623,42 @@ export function BoardWorkspacePage() {
                   </p>
                 ) : null}
               </div>
-              <div className="hidden shrink-0 sm:block">
-                <MemberBoardPicker
-                  members={members}
-                  selectedIds={boardMemberIds}
-                  onToggle={toggleBoardMember}
-                />
-              </div>
             </div>
 
             {project ? (
               <div className="flex items-center gap-2 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                {hasTeams ? (
+                <div className="w-[148px] shrink-0">
+                  <Select
+                    size="sm"
+                    value={assigneeFilter}
+                    onChange={(v) => onAssigneeChange(v as AssigneeFilter)}
+                    options={[
+                      { value: 'everyone', label: 'Everyone' },
+                      { value: 'me', label: 'Assigned to me' },
+                      { value: 'unassigned', label: 'Unassigned' },
+                      ...members
+                        .filter((m) => m.status !== 'pending')
+                        .map((m) => ({
+                          value: m.id,
+                          label:
+                            meMember?.id === m.id ? `${m.name} (you)` : m.name,
+                        })),
+                    ]}
+                    aria-label="Assigned to"
+                  />
+                </div>
+                {hasGroups ? (
                   <div className="w-[132px] shrink-0">
                     <Select
                       size="sm"
-                      value={teamFilter}
-                      onChange={(v) => setTeamFilter(v as TeamFilter)}
+                      value={groupFilter}
+                      onChange={(v) => onGroupChange(v as GroupFilter)}
                       options={[
-                        { value: 'all', label: 'All teams' },
-                        { value: 'global', label: 'Project-wide' },
+                        { value: 'all', label: 'All groups' },
+                        { value: 'global', label: 'No group' },
                         ...projectTeams.map((t) => ({ value: t.id, label: t.name })),
                       ]}
-                      aria-label="Filter by team"
+                      aria-label="Filter by group"
                     />
                   </div>
                 ) : null}
@@ -709,9 +675,10 @@ export function BoardWorkspacePage() {
                     <path d="m20 20-3.5-3.5" />
                   </svg>
                   <input
+                    ref={searchInputRef}
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
-                    placeholder="Search tasks…"
+                    placeholder="Search tasks…  /"
                     className="h-8 w-full rounded-md border border-ink-600 bg-ink-900 pr-2.5 pl-8 text-xs text-ink-50 outline-none placeholder:text-ink-400 focus:border-brand-500"
                   />
                 </label>
@@ -761,18 +728,14 @@ export function BoardWorkspacePage() {
               <div className="flex h-full flex-col items-center justify-center border border-dashed border-ink-600 bg-ink-800/60 px-6 py-12 text-center">
                 <p className="text-sm font-semibold text-ink-50">No project yet</p>
                 <p className="mt-1 max-w-sm text-xs leading-relaxed text-ink-400">
-                  Boards need a project for tasks and teams. Chat and Dashboard work without one —
-                  use the sidebar anytime.
+                  Boards need a project. Chat and My Work work without one.
                 </p>
                 <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
                   <Button size="sm" onClick={() => setShowCreateProject(true)}>
                     New project
                   </Button>
                   <Button size="sm" variant="secondary" onClick={() => navigate('/')}>
-                    Dashboard
-                  </Button>
-                  <Button size="sm" variant="secondary" onClick={() => navigate('/chat')}>
-                    Chat
+                    My Work
                   </Button>
                 </div>
               </div>
@@ -895,7 +858,7 @@ export function BoardWorkspacePage() {
                           key={task.id}
                           task={task}
                           teamName={
-                            task.teamId ? teamNameById.get(task.teamId) ?? null : null
+                            task.teamId ? groupNameById.get(task.teamId) ?? null : null
                           }
                           avatarUrl={avatarFromMembers(
                             members,
@@ -903,7 +866,7 @@ export function BoardWorkspacePage() {
                             task.assigneeName,
                           )}
                           dragging={draggingId === task.id}
-                          onOpen={() => setSelectedId(task.id)}
+                          onOpen={() => openTask(task.id)}
                           onDragStart={beginDrag}
                           onDragEnd={endDrag}
                           onDropOnCard={(e) => void handleDrop(e, col.id)}
@@ -929,187 +892,127 @@ export function BoardWorkspacePage() {
         <>
           <button
             type="button"
-            aria-label="Close members panel"
+            aria-label="Close people panel"
             className="absolute inset-0 z-30 bg-black/50"
             onClick={() => setMembersPanelOpen(false)}
           />
           <aside className="absolute inset-y-0 right-0 z-40 flex w-[min(18rem,92vw)] flex-col border-l border-ink-600 bg-ink-800 sm:w-60">
-        <div className="border-b border-ink-600 px-3 py-3">
-          <div className="flex items-start justify-between gap-2">
-            <p className="text-[11px] font-medium tracking-wide text-ink-300 uppercase">
-              Project
-            </p>
-            <div className="flex items-center gap-2">
-              {canManageProject ? (
-                <button
-                  type="button"
-                  disabled={!project}
-                  onClick={() => setShowInvite(true)}
-                  className="shrink-0 text-xs font-semibold text-brand-800 disabled:opacity-40"
-                >
-                  + Add
-                </button>
-              ) : null}
-              <button
-                type="button"
-                aria-label="Close"
-                onClick={() => setMembersPanelOpen(false)}
-                className="flex h-7 w-7 items-center justify-center rounded-md text-ink-400 hover:bg-ink-700 hover:text-ink-100"
-              >
-                <IconX className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-          <div className="mt-2">
-            <ProjectSelect
-              projects={projects}
-              value={projectId}
-              onChange={(id) => {
-                selectProject(id);
-                setMembersPanelOpen(false);
-              }}
-              className="w-full min-w-0 max-w-none"
-              placeholder="Select project"
-            />
-          </div>
-        </div>
-
-        <div className="border-b border-ink-700 px-3 py-2">
-          <p className="text-[11px] font-medium tracking-wide text-ink-300 uppercase">
-            Team boards · {members.length}
-          </p>
-          <p className="mt-0.5 text-[11px] text-ink-400">
-            Multi-select to combine · {selectedMembers.length} selected
-          </p>
-          <label className="relative mt-2 block">
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              className="pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-ink-400"
-              aria-hidden
-            >
-              <circle cx="11" cy="11" r="7" />
-              <path d="m20 20-3.5-3.5" />
-            </svg>
-            <input
-              value={memberSearch}
-              onChange={(e) => {
-                setMemberSearch(e.target.value);
-                setSidebarMembersOpen(false);
-              }}
-              placeholder="Search members…"
-              className="h-8 w-full rounded-lg border border-ink-600 bg-ink-900 pr-2 pl-8 text-xs text-ink-50 outline-none placeholder:text-ink-400 focus:border-brand-500"
-            />
-          </label>
-        </div>
-
-        <div className="flex-1 overflow-y-auto px-2 py-2">
-          {!project ? (
-            <p className="px-1 py-4 text-xs text-ink-400">Select or create a project.</p>
-          ) : members.length === 0 ? (
-            <p className="px-1 py-4 text-xs text-ink-400">No members yet.</p>
-          ) : filteredSidebarMembers.length === 0 ? (
-            <p className="px-1 py-4 text-xs text-ink-400">No members match.</p>
-          ) : (
-            <ul className="space-y-1">
-              {sidebarVisibleMembers.map((m) => {
-                const isYou =
-                  m.email.toLowerCase() === (user?.email ?? '').toLowerCase() ||
-                  m.name.toLowerCase() === (user?.name ?? '').toLowerCase();
-                const active = boardMemberIds.includes(m.id);
-                const count = getProjectTasks(project.id).filter((t) =>
-                  isMemberBoardTask(t, m),
-                ).length;
-                return (
-                  <li key={m.id}>
+            <div className="border-b border-ink-600 px-3 py-3">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="text-[11px] font-medium tracking-wide text-ink-300 uppercase">
+                    People
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-ink-400">
+                    Filter the board by assignee
+                  </p>
+                </div>
+                <div className="flex items-center gap-1">
+                  {canManageProject ? (
                     <button
                       type="button"
-                      onClick={() => toggleBoardMember(m.id)}
-                      aria-pressed={active}
-                      title={active ? `Remove ${m.name}` : `Add ${m.name}`}
+                      disabled={!project}
+                      onClick={() => setShowInvite(true)}
+                      className="shrink-0 px-1 text-xs font-semibold text-brand-800 disabled:opacity-40"
+                    >
+                      Invite
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    aria-label="Close"
+                    onClick={() => setMembersPanelOpen(false)}
+                    className="flex h-7 w-7 items-center justify-center rounded-md text-ink-400 hover:bg-ink-700 hover:text-ink-100"
+                  >
+                    <IconX className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-2 py-2">
+              {!project ? (
+                <p className="px-1 py-4 text-xs text-ink-400">Select or create a project.</p>
+              ) : (
+                <ul className="space-y-1">
+                  <li>
+                    <button
+                      type="button"
+                      onClick={() => onAssigneeChange('everyone')}
                       className={cn(
-                        'flex w-full items-center gap-2.5 rounded-lg px-1.5 py-2 text-left transition',
-                        active ? 'bg-brand-500/10' : 'hover:bg-ink-700',
+                        'flex w-full items-center rounded-lg px-2 py-2 text-left text-xs font-semibold',
+                        assigneeFilter === 'everyone'
+                          ? 'bg-brand-500/10 text-ink-50'
+                          : 'text-ink-200 hover:bg-ink-700',
                       )}
                     >
-                      <span
-                        className={cn(
-                          'relative h-9 w-9 shrink-0 rounded-full',
-                          active ? 'opacity-100' : 'opacity-45',
-                        )}
-                      >
-                        <UserAvatar
-                          name={m.name}
-                          src={m.avatarUrl}
-                          seed={m.email || m.name}
-                          size="lg"
-                          bare
-                          className="!h-9 !w-9 !text-[11px]"
-                        />
-                        {active ? (
-                          <span className="absolute -right-0.5 -bottom-0.5 h-2.5 w-2.5 rounded-full border-2 border-ink-800 bg-brand-500" />
-                        ) : null}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-xs font-semibold text-ink-50">
-                          {m.name}
-                          {isYou ? (
-                            <span className="ml-1 font-medium text-ink-400">(you)</span>
-                          ) : null}
-                        </p>
-                        <p className="truncate text-[11px] text-ink-300">
-                          {count} task{count === 1 ? '' : 's'} · {m.role}
-                        </p>
-                      </div>
-                      <span
-                        className={cn(
-                          'flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] font-bold',
-                          active
-                            ? 'border-brand-500 bg-brand-500 text-[#062816]'
-                            : 'border-ink-500 text-transparent',
-                        )}
-                      >
-                        ✓
-                      </span>
+                      Everyone
                     </button>
                   </li>
-                );
-              })}
-              {!sidebarMembersOpen && sidebarOverflow > 0 ? (
-                <li>
-                  <button
-                    type="button"
-                    onClick={() => setSidebarMembersOpen(true)}
-                    className="mt-1 flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-ink-600 px-2 py-2 text-xs font-semibold text-ink-200 transition hover:border-brand-500 hover:bg-brand-500/10 hover:text-brand-600 dark:hover:text-brand-300"
-                  >
-                    +{sidebarOverflow} more
-                  </button>
-                </li>
-              ) : null}
-              {sidebarMembersOpen &&
-              !isMemberSearching &&
-              filteredSidebarMembers.length > SIDEBAR_VISIBLE ? (
-                <li>
-                  <button
-                    type="button"
-                    onClick={() => setSidebarMembersOpen(false)}
-                    className="mt-1 flex w-full items-center justify-center rounded-lg px-2 py-1.5 text-[11px] font-semibold text-ink-400 hover:text-ink-200"
-                  >
-                    Show less
-                  </button>
-                </li>
-              ) : null}
-            </ul>
-          )}
-        </div>
+                  <li>
+                    <button
+                      type="button"
+                      onClick={() => onAssigneeChange('unassigned')}
+                      className={cn(
+                        'flex w-full items-center rounded-lg px-2 py-2 text-left text-xs font-semibold',
+                        assigneeFilter === 'unassigned'
+                          ? 'bg-brand-500/10 text-ink-50'
+                          : 'text-ink-200 hover:bg-ink-700',
+                      )}
+                    >
+                      Unassigned
+                    </button>
+                  </li>
+                  {members
+                    .filter((m) => m.status !== 'pending')
+                    .map((m) => {
+                      const isYou = meMember?.id === m.id;
+                      const active = assigneeFilter === m.id || (assigneeFilter === 'me' && isYou);
+                      const count = getProjectTasks(project.id).filter((t) =>
+                        isTaskAssignedTo(t, m),
+                      ).length;
+                      return (
+                        <li key={m.id}>
+                          <button
+                            type="button"
+                            onClick={() => onAssigneeChange(isYou ? 'me' : m.id)}
+                            className={cn(
+                              'flex w-full items-center gap-2.5 rounded-lg px-1.5 py-2 text-left transition',
+                              active ? 'bg-brand-500/10' : 'hover:bg-ink-700',
+                            )}
+                          >
+                            <UserAvatar
+                              name={m.name}
+                              src={m.avatarUrl}
+                              seed={m.email || m.name}
+                              size="lg"
+                              bare
+                              className="!h-8 !w-8 !text-[11px]"
+                            />
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-xs font-semibold text-ink-50">
+                                {m.name}
+                                {isYou ? (
+                                  <span className="ml-1 font-medium text-ink-400">(you)</span>
+                                ) : null}
+                              </p>
+                              <p className="truncate text-[11px] text-ink-300">
+                                {count} task{count === 1 ? '' : 's'} · {m.role}
+                              </p>
+                            </div>
+                          </button>
+                        </li>
+                      );
+                    })}
+                </ul>
+              )}
+            </div>
 
-        {project && selectedMembers.length > 0 ? (
-          <p className="border-t border-ink-700 px-3 py-2 text-[11px] text-ink-400">
-            {filtered.length} task{filtered.length === 1 ? '' : 's'} · {boardLabel}
-          </p>
-        ) : null}
+            {project ? (
+              <p className="border-t border-ink-700 px-3 py-2 text-[11px] text-ink-400">
+                {filtered.length} task{filtered.length === 1 ? '' : 's'} · {boardLabel}
+              </p>
+            ) : null}
           </aside>
         </>
       ) : null}
@@ -1127,15 +1030,19 @@ export function BoardWorkspacePage() {
         <ManageTeamsModal
           projectId={projectId}
           onClose={() => setShowTeams(false)}
-          onViewTeamTasks={viewTeamOnBoard}
+          onViewTeamTasks={(teamId) => viewGroupOnBoard(teamId)}
         />
       ) : null}
-      {showCreateTask && projectId && defaultAssignee ? (
+      {showCreateTask && projectId ? (
         <CreateTaskModal
           projectId={projectId}
-          defaultAssignee={{ id: defaultAssignee.id, name: defaultAssignee.name }}
+          defaultAssignee={
+            defaultAssignee
+              ? { id: defaultAssignee.id, name: defaultAssignee.name }
+              : undefined
+          }
           defaultTeamId={
-            hasTeams && teamFilter !== 'all' && teamFilter !== 'global' ? teamFilter : null
+            hasGroups && groupFilter !== 'all' && groupFilter !== 'global' ? groupFilter : null
           }
           onClose={() => setShowCreateTask(false)}
         />
@@ -1145,7 +1052,7 @@ export function BoardWorkspacePage() {
           task={selected}
           projectName={project.name}
           columns={columns}
-          onClose={() => setSelectedId(null)}
+          onClose={() => openTask(null)}
         />
       ) : null}
 

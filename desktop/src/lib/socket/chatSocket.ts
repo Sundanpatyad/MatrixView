@@ -174,6 +174,7 @@ type Handlers = {
   onTaskCreated?: (payload: BoardTaskEventPayload) => void;
   onTaskUpdated?: (payload: BoardTaskEventPayload) => void;
   onProjectColumns?: (payload: BoardColumnsEventPayload) => void;
+  onProjectUpdated?: (payload: BoardColumnsEventPayload) => void;
   onTeamUpserted?: (payload: BoardTeamEventPayload) => void;
   onTeamDeleted?: (payload: BoardTeamEventPayload) => void;
   onNotificationNew?: (notification: import('@/lib/api/notifications').AppNotification) => void;
@@ -348,6 +349,9 @@ function bindSocket(s: Socket) {
   });
   s.on('project:columns', (payload: BoardColumnsEventPayload) => {
     if (payload?.project?.id) handlers.onProjectColumns?.(payload);
+  });
+  s.on('project:updated', (payload: BoardColumnsEventPayload) => {
+    if (payload?.project?.id) handlers.onProjectUpdated?.(payload);
   });
   s.on('team:upserted', (payload: BoardTeamEventPayload) => {
     if (payload?.team?.id) handlers.onTeamUpserted?.(payload);

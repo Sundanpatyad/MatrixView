@@ -456,16 +456,16 @@ export function TaskDetailModal({ task, projectName, columns, onClose }: Props) 
 
             {teams.length > 0 ? (
               <div>
-                <p className={labelClass}>Team</p>
+                <p className={labelClass}>Group</p>
                 <div className="mt-1">
                   <Select
                     value={liveTask.teamId ?? ''}
                     onChange={(v) => patch({ teamId: v || null })}
                     options={[
-                      { value: '', label: 'Project-wide' },
+                      { value: '', label: 'No group' },
                       ...teams.map((t) => ({ value: t.id, label: t.name })),
                     ]}
-                    aria-label="Team"
+                    aria-label="Group"
                   />
                 </div>
               </div>
@@ -500,7 +500,7 @@ export function TaskDetailModal({ task, projectName, columns, onClose }: Props) 
               ) : (
                 <div className="mt-2 border border-ink-600 bg-ink-800 px-2.5 py-2">
                   <p className="text-xs font-semibold text-ink-100">{liveTask.assigneeName}</p>
-                  <p className="text-[10px] text-ink-400">Not in team list</p>
+                  <p className="text-[10px] text-ink-400">Not a project member</p>
                 </div>
               )}
 

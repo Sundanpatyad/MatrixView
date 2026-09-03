@@ -11,17 +11,24 @@ export async function sendInviteEmail(input: {
   projectName: string;
   orgName: string;
   inviteLink: string;
+  hasAccount?: boolean;
 }): Promise<{ sent: boolean; preview?: string }> {
   const subject = `You're invited to ${input.projectName} on DockX`;
+  const action = input.hasAccount
+    ? `Sign in and Accept to join the project:`
+    : `Create your account. That accepts the invite:`;
+  const after = input.hasAccount
+    ? `You will not see the board until you Accept.`
+    : `After you create your account you'll land on the project.`;
   const text = [
     `Hi,`,
     ``,
-    `${input.inviterName} invited you to join “${input.projectName}” at ${input.orgName} on DockX.`,
+    `${input.inviterName} invited you to join “${input.projectName}” on DockX.`,
     ``,
-    `Create your account using this link:`,
+    action,
     input.inviteLink,
     ``,
-    `After you sign up, you'll already be on that project.`,
+    after,
     ``,
     `— DockX`,
   ].join('\n');
@@ -29,10 +36,9 @@ export async function sendInviteEmail(input: {
   const html = `
     <p>Hi,</p>
     <p><strong>${escapeHtml(input.inviterName)}</strong> invited you to join
-      <strong>${escapeHtml(input.projectName)}</strong> at
-      <strong>${escapeHtml(input.orgName)}</strong> on DockX.</p>
-    <p><a href="${input.inviteLink}">Create your account</a></p>
-    <p>After you sign up, you'll already be on that project.</p>
+      <strong>${escapeHtml(input.projectName)}</strong> on DockX.</p>
+    <p><a href="${input.inviteLink}">${input.hasAccount ? 'Accept invite' : 'Create your account'}</a></p>
+    <p>${escapeHtml(after)}</p>
   `;
 
   console.log(`[mail] Invite for ${input.to}`);

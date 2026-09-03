@@ -5,6 +5,7 @@ import {
   IconBoard,
   IconChat,
   IconDashboard,
+  IconInbox,
   IconLogout,
   IconMenu,
   IconProfile,
@@ -32,8 +33,9 @@ type NavItem = {
 };
 
 const nav: NavItem[] = [
-  { to: '/', label: 'Dashboard', Icon: IconDashboard, end: true },
+  { to: '/', label: 'My Work', Icon: IconInbox, end: true },
   { to: '/board', label: 'Board', Icon: IconBoard },
+  { to: '/dashboard', label: 'Dashboard', Icon: IconDashboard },
   { to: '/chat', label: 'Chat', Icon: IconChat },
 ];
 

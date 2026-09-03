@@ -31,7 +31,6 @@ import { fileToAttachment, newId } from './upload.js';
 import {
   boardTaskHref,
   createAndEmit,
-  projectHref,
   resolveMemberUserId,
 } from '../notifications/service.js';
 
@@ -63,6 +62,9 @@ async function getAccessibleProject(projectId: string, actor: Actor): Promise<Pr
 function requireMembership(project: ProjectDoc, email: string) {
   const member = project.members.find((m) => m.email.toLowerCase() === email.toLowerCase());
   if (!member) throw new AuthError('Not a project member', 403, 'FORBIDDEN');
+  if ((member as { status?: string }).status === 'pending') {
+    throw new AuthError('Accept this project invite first', 403, 'INVITE_PENDING');
+  }
   return member;
 }
 
@@ -74,12 +76,17 @@ function requireAdmin(project: ProjectDoc, email: string) {
   return member;
 }
 
-/** Projects the user belongs to — visibility is by project role, not org admin. */
+/** Projects the user belongs to — pending invites are not visible here. */
 export async function getWorkspace(actor: Actor) {
   const email = actor.email.toLowerCase();
-  const visible = await Project.find({
+  const candidates = await Project.find({
     'members.email': email,
   }).sort({ createdAt: -1 });
+
+  const visible = candidates.filter((p) => {
+    const member = p.members.find((m) => m.email.toLowerCase() === email);
+    return member && (member as { status?: string }).status !== 'pending';
+  });
 
   const visibleIds = visible.map((p) => p._id);
   const tasks =
@@ -238,69 +245,29 @@ export async function addMember(
 
   const email = input.email.trim().toLowerCase();
   if (!email) throw new AuthError('Email required', 400);
+  if (email === actor.email.toLowerCase()) {
+    throw new AuthError('You are already on this project', 409, 'MEMBER_EXISTS');
+  }
 
   const existingOnProject = project.members.find((m) => m.email === email);
   if (existingOnProject && existingOnProject.status !== 'pending') {
     throw new AuthError('Member already on project', 409, 'MEMBER_EXISTS');
   }
 
-  // Any existing DockX account can be added (personal workspaces are separate)
   const existingUser = await User.findOne({ email });
-
   const displayName =
     existingUser?.name ??
     (input.name?.trim() || email.split('@')[0] || 'Invited user');
 
-  // Existing user → add to project immediately with chosen role
-  if (existingUser) {
-    if (existingOnProject) {
-      existingOnProject.userId = existingUser._id;
-      existingOnProject.name = existingUser.name;
-      existingOnProject.role = input.role;
-      existingOnProject.status = 'active';
-    } else {
-      project.members.push({
-        id: newId('mem'),
-        userId: existingUser._id,
-        name: existingUser.name,
-        email,
-        role: input.role,
-        status: 'active',
-        addedAt: new Date(),
-      } as (typeof project.members)[number]);
-    }
-    await project.save();
-    const name = await actorName(actor);
-    void createAndEmit({
-      orgId: String(project.orgId),
-      recipientId: String(existingUser._id),
-      actorId: actor.sub,
-      actorName: name,
-      type: 'project.added',
-      title: 'Added to project',
-      body: `${name} added you to ${project.name}`,
-      href: projectHref(String(project._id)),
-      projectId: String(project._id),
-      meta: { projectName: project.name, role: input.role },
-    }).catch((err) => console.error('[notifications] project.added', err));
-    return {
-      project: await presentProject(project),
-      result: 'added' as const,
-      emailSent: false,
-      inviteLink: null as string | null,
-    };
-  }
-
-  // New email → pending member + invite email
   if (existingOnProject) {
     existingOnProject.name = displayName;
     existingOnProject.role = input.role;
     existingOnProject.status = 'pending';
-    existingOnProject.userId = null;
+    existingOnProject.userId = existingUser?._id ?? null;
   } else {
     project.members.push({
       id: newId('mem'),
-      userId: null,
+      userId: existingUser?._id ?? null,
       name: displayName,
       email,
       role: input.role,
@@ -319,7 +286,7 @@ export async function addMember(
     { $set: { status: 'revoked' } },
   );
 
-  await ProjectInvite.create({
+  const invite = await ProjectInvite.create({
     orgId: project.orgId,
     projectId: project._id,
     email,
@@ -331,25 +298,53 @@ export async function addMember(
     expiresAt,
   });
 
-  const inviteLink = `${config.appUrl}/register?invite=${encodeURIComponent(rawToken)}`;
+  const inviteLink = `${config.appUrl}/invite?token=${encodeURIComponent(rawToken)}`;
   const inviter = await User.findById(actor.sub).lean();
+  const inviterName = inviter?.name ?? actor.email;
 
   let emailSent = false;
   try {
     const mail = await sendInviteEmail({
       to: email,
-      inviterName: inviter?.name ?? actor.email,
+      inviterName,
       projectName: project.name,
       orgName: project.name,
       inviteLink,
+      hasAccount: Boolean(existingUser),
     });
     emailSent = mail.sent;
   } catch (err) {
     console.error('[mail] Failed to send invite email', err);
   }
 
+  if (existingUser) {
+    const name = await actorName(actor);
+    void createAndEmit({
+      orgId: String(existingUser.orgId),
+      recipientId: String(existingUser._id),
+      actorId: actor.sub,
+      actorName: name,
+      type: 'project.invited',
+      title: 'Project invite',
+      body: `${name} invited you to ${project.name}. Accept to join.`,
+      href: '/',
+      projectId: String(project._id),
+      meta: {
+        inviteId: String(invite._id),
+        projectName: project.name,
+        role: input.role,
+      },
+    }).catch((err) => console.error('[notifications] project.invited', err));
+  }
+
+  const presented = await presentProject(project);
+  await broadcastProjectEvent(project, 'project:updated', {
+    project: presented,
+    actorId: actor.sub,
+  });
+
   return {
-    project: await presentProject(project),
+    project: presented,
     result: 'invited' as const,
     emailSent,
     inviteLink,
@@ -371,46 +366,172 @@ export async function getInvitePreview(rawToken: string) {
     throw new AuthError('Invite is invalid or expired', 404, 'INVITE_INVALID');
   }
   const project = await Project.findById(invite.projectId).lean();
+  const inviter = await User.findById(invite.invitedBy).lean();
+  const existingUser = await User.findOne({ email: invite.email }).select('_id').lean();
   return {
+    id: String(invite._id),
     email: invite.email,
     name: invite.name || '',
     role: invite.role as 'admin' | 'member',
     projectName: project?.name ?? 'Project',
     orgName: project?.name ?? 'DockX',
+    inviterName: inviter?.name ?? 'A teammate',
+    hasAccount: Boolean(existingUser),
     expiresAt: invite.expiresAt.toISOString(),
   };
 }
 
-/** After signup/login — attach user to any pending project seats for this email. */
-export async function claimPendingProjectInvites(user: {
-  _id: Types.ObjectId;
-  orgId: Types.ObjectId | string;
-  email: string;
-  name: string;
-}) {
-  const email = user.email.toLowerCase().trim();
+export type PendingInviteView = {
+  id: string;
+  projectId: string;
+  projectName: string;
+  projectKey: string;
+  role: 'admin' | 'member';
+  inviterName: string;
+  expiresAt: string;
+};
 
-  const projects = await Project.find({ 'members.email': email });
+async function presentPendingInvite(
+  invite: { _id: unknown; projectId: unknown; role: string; invitedBy: unknown; expiresAt: Date },
+): Promise<PendingInviteView | null> {
+  const project = await Project.findById(invite.projectId).lean();
+  if (!project) return null;
+  const inviter = await User.findById(invite.invitedBy).lean();
+  return {
+    id: String(invite._id),
+    projectId: String(invite.projectId),
+    projectName: project.name,
+    projectKey: project.key,
+    role: invite.role as 'admin' | 'member',
+    inviterName: inviter?.name ?? 'A teammate',
+    expiresAt: invite.expiresAt.toISOString(),
+  };
+}
 
-  for (const project of projects) {
-    const member = project.members.find((m) => m.email === email);
-    if (!member) continue;
+export async function listMyInvites(actor: Actor): Promise<PendingInviteView[]> {
+  const email = actor.email.toLowerCase();
+  const invites = await ProjectInvite.find({
+    email,
+    status: 'pending',
+    expiresAt: { $gt: new Date() },
+  }).sort({ createdAt: -1 });
+  const out: PendingInviteView[] = [];
+  for (const invite of invites) {
+    const view = await presentPendingInvite(invite);
+    if (view) out.push(view);
+  }
+  return out;
+}
+
+async function activateInviteForUser(
+  invite: InstanceType<typeof ProjectInvite>,
+  user: { _id: Types.ObjectId; email: string; name: string },
+) {
+  const project = await Project.findById(invite.projectId);
+  if (!project) throw new AuthError('Project not found', 404, 'NOT_FOUND');
+
+  let member = project.members.find((m) => m.email === user.email.toLowerCase());
+  if (!member) {
+    member = {
+      id: newId('mem'),
+      userId: user._id,
+      name: user.name,
+      email: user.email.toLowerCase(),
+      role: invite.role as 'admin' | 'member',
+      status: 'active',
+      addedAt: new Date(),
+    } as (typeof project.members)[number];
+    project.members.push(member);
+  } else {
     member.userId = user._id;
     member.name = user.name;
+    member.role = invite.role as 'admin' | 'member';
     member.status = 'active';
-    await project.save();
+  }
+  await project.save();
+
+  invite.status = 'accepted';
+  invite.acceptedAt = new Date();
+  invite.acceptedUserId = user._id;
+  await invite.save();
+
+  const presented = await presentProject(project);
+  await broadcastProjectEvent(project, 'project:updated', {
+    project: presented,
+    actorId: String(user._id),
+  });
+  return presented;
+}
+
+export async function acceptMyInvite(actor: Actor, inviteId: string) {
+  if (!Types.ObjectId.isValid(inviteId)) {
+    throw new AuthError('Invite not found', 404, 'NOT_FOUND');
+  }
+  const invite = await ProjectInvite.findById(inviteId);
+  if (!invite || invite.status !== 'pending' || invite.expiresAt.getTime() < Date.now()) {
+    throw new AuthError('Invite is invalid or expired', 404, 'INVITE_INVALID');
+  }
+  if (invite.email !== actor.email.toLowerCase()) {
+    throw new AuthError('This invite is for a different email', 403, 'FORBIDDEN');
+  }
+  const project = await activateInviteForUser(invite, {
+    _id: oid(actor.sub),
+    email: actor.email,
+    name: await actorName(actor),
+  });
+  return { project, inviteId: String(invite._id) };
+}
+
+export async function acceptInviteByToken(actor: Actor, rawToken: string) {
+  const tokenHash = hashToken(rawToken);
+  const invite = await ProjectInvite.findOne({ tokenHash, status: 'pending' });
+  if (!invite || invite.expiresAt.getTime() < Date.now()) {
+    throw new AuthError('Invite is invalid or expired', 404, 'INVITE_INVALID');
+  }
+  if (invite.email !== actor.email.toLowerCase()) {
+    throw new AuthError('Sign in with the invited email to accept', 403, 'FORBIDDEN');
+  }
+  const project = await activateInviteForUser(invite, {
+    _id: oid(actor.sub),
+    email: actor.email,
+    name: await actorName(actor),
+  });
+  return { project, inviteId: String(invite._id) };
+}
+
+export async function declineMyInvite(actor: Actor, inviteId: string) {
+  if (!Types.ObjectId.isValid(inviteId)) {
+    throw new AuthError('Invite not found', 404, 'NOT_FOUND');
+  }
+  const invite = await ProjectInvite.findById(inviteId);
+  if (!invite || invite.status !== 'pending') {
+    throw new AuthError('Invite not found', 404, 'NOT_FOUND');
+  }
+  if (invite.email !== actor.email.toLowerCase()) {
+    throw new AuthError('This invite is for a different email', 403, 'FORBIDDEN');
   }
 
-  await ProjectInvite.updateMany(
-    { email, status: 'pending' },
-    {
-      $set: {
-        status: 'accepted',
-        acceptedAt: new Date(),
-        acceptedUserId: user._id,
-      },
-    },
-  );
+  invite.status = 'revoked';
+  await invite.save();
+
+  const project = await Project.findById(invite.projectId);
+  if (project) {
+    project.members = project.members.filter(
+      (m) =>
+        !(
+          m.email === actor.email.toLowerCase() &&
+          (m as { status?: string }).status === 'pending'
+        ),
+    ) as typeof project.members;
+    await project.save();
+    const presented = await presentProject(project);
+    await broadcastProjectEvent(project, 'project:updated', {
+      project: presented,
+      actorId: actor.sub,
+    });
+  }
+
+  return { ok: true as const, inviteId: String(invite._id) };
 }
 
 export async function acceptInviteAndCreateUser(input: {
@@ -459,34 +580,7 @@ export async function acceptInviteAndCreateUser(input: {
     status: 'active',
   });
 
-  const project = await Project.findById(invite.projectId);
-  if (project) {
-    let member = project.members.find((m) => m.email === email);
-    if (!member) {
-      project.members.push({
-        id: newId('mem'),
-        userId: user._id,
-        name: user.name,
-        email,
-        role: invite.role,
-        status: 'active',
-        addedAt: new Date(),
-      } as (typeof project.members)[number]);
-    } else {
-      member.userId = user._id;
-      member.name = user.name;
-      member.role = invite.role as 'admin' | 'member';
-      member.status = 'active';
-    }
-    await project.save();
-  }
-
-  invite.status = 'accepted';
-  invite.acceptedAt = new Date();
-  invite.acceptedUserId = user._id;
-  await invite.save();
-
-  await claimPendingProjectInvites(user);
+  await activateInviteForUser(invite, user);
 
   return user;
 }

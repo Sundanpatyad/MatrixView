@@ -32,7 +32,7 @@
     "android": {
       "package": "dev.dockx.mobile",
       "adaptiveIcon": {
-        "backgroundColor": "#5865F2",
+        "backgroundColor": "#0F1014",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -56,6 +56,8 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
+      "expo-dev-client",
+      "./plugins/withQuotedRnXcodeScript",
       "expo-secure-store",
       "expo-image",
       "@react-native-community/datetimepicker",
@@ -72,7 +74,7 @@
         {
           "image": "./assets/splash-icon.png",
           "resizeMode": "contain",
-          "backgroundColor": "#111214"
+          "backgroundColor": "#0F1014"
         }
       ],
       [

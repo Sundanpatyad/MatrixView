@@ -250,3 +250,33 @@ export function assignTimelineRequest(itemId: string, assignee: { id: string; na
 export function deleteTimelineRequest(itemId: string) {
   return apiFetch<{ ok: true }>(`/api/timeline/${itemId}`, { method: 'DELETE', auth: true });
 }
+
+export type PendingInvite = {
+  id: string;
+  projectId: string;
+  projectName: string;
+  projectKey: string;
+  role: 'admin' | 'member';
+  inviterName: string;
+  expiresAt: string;
+};
+
+export function listInvitesRequest() {
+  return apiFetch<{ invites: PendingInvite[] }>('/api/invites', { auth: true });
+}
+
+export function acceptInviteRequest(inviteId: string) {
+  return apiFetch<{ project: Project; inviteId: string }>(`/api/invites/${inviteId}/accept`, {
+    method: 'POST',
+    body: {},
+    auth: true,
+  });
+}
+
+export function declineInviteRequest(inviteId: string) {
+  return apiFetch<{ ok: true; inviteId: string }>(`/api/invites/${inviteId}/decline`, {
+    method: 'POST',
+    body: {},
+    auth: true,
+  });
+}

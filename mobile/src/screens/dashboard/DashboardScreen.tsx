@@ -7,6 +7,7 @@ import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'r
 import { TaskCard } from '@/components/board/TaskCard';
 import {
   Avatar,
+  Button,
   EmptyState,
   LoadingView,
   OptionSheet,
@@ -18,6 +19,7 @@ import {
 import { useAuth } from '@/context/AuthContext';
 import { useChat } from '@/context/ChatContext';
 import { useNotifications } from '@/context/NotificationContext';
+import { useToast } from '@/context/ToastContext';
 import { useWorkspace } from '@/context/WorkspaceContext';
 import { formatRelative, isOverdue } from '@/lib/format';
 import type { RootStackParamList } from '@/navigation/types';
@@ -37,8 +39,19 @@ export function DashboardScreen() {
   const navigation = useNavigation<Nav>();
   const colors = useColors();
   const { user } = useAuth();
-  const { projects, visibleTasks, timeline, activeProjectId, setActiveProjectId, isLoading, refresh } =
-    useWorkspace();
+  const {
+    projects,
+    visibleTasks,
+    timeline,
+    activeProjectId,
+    setActiveProjectId,
+    isLoading,
+    refresh,
+    pendingInvites,
+    acceptInvite,
+    declineInvite,
+  } = useWorkspace();
+  const toast = useToast();
   const { unreadCount } = useNotifications();
   const { connected } = useChat();
   const tabBarHeight = useTabBarPadding();
@@ -46,6 +59,7 @@ export function DashboardScreen() {
   const [filter, setFilter] = useState<TaskFilter>('mine');
   const [projectSheet, setProjectSheet] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [inviteBusyId, setInviteBusyId] = useState<string | null>(null);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -146,7 +160,7 @@ export function DashboardScreen() {
   const statusTotal = statusBreakdown.reduce((sum, entry) => sum + entry.count, 0) || 1;
   const pct = Math.round(stats.completion * 100);
 
-  if (isLoading && projects.length === 0) {
+  if (isLoading && projects.length === 0 && pendingInvites.length === 0) {
     return (
       <Screen>
         <LoadingView label="Loading your workspace…" />
@@ -192,6 +206,67 @@ export function DashboardScreen() {
             <Avatar name={user?.name} uri={user?.avatarUrl} size={40} online={connected} />
           </Pressable>
         </View>
+
+        {pendingInvites.length > 0 ? (
+          <View style={[styles.invitePanel, { backgroundColor: colors.warningSoft, borderColor: colors.warning }]}>
+            <Text style={[styles.panelTitle, { color: colors.text }]}>
+              {pendingInvites.length === 1 ? 'Project invite' : 'Project invites'}
+            </Text>
+            <Text style={[styles.panelHint, { color: colors.textSubtle, marginTop: 4 }]}>
+              Accept to join. You will not see the board until then.
+            </Text>
+            {pendingInvites.map((invite) => {
+              const busy = inviteBusyId === invite.id;
+              return (
+                <View key={invite.id} style={styles.inviteRow}>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={[styles.projectLabel, { color: colors.text }]} numberOfLines={1}>
+                      {invite.projectName}
+                    </Text>
+                    <Text style={[styles.projectEyebrow, { color: colors.textSubtle }]} numberOfLines={1}>
+                      {invite.inviterName} · {invite.role}
+                    </Text>
+                  </View>
+                  <Button
+                    size="sm"
+                    label={busy ? '…' : 'Accept'}
+                    disabled={busy}
+                    onPress={async () => {
+                      setInviteBusyId(invite.id);
+                      try {
+                        const project = await acceptInvite(invite.id);
+                        setActiveProjectId(project.id);
+                        toast.success(`You joined ${project.name}.`);
+                        navigation.navigate('Tabs', { screen: 'Board' });
+                      } catch (error) {
+                        toast.fromError(error, 'Could not accept invite');
+                      } finally {
+                        setInviteBusyId(null);
+                      }
+                    }}
+                  />
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    label="Decline"
+                    disabled={busy}
+                    onPress={async () => {
+                      setInviteBusyId(invite.id);
+                      try {
+                        await declineInvite(invite.id);
+                        toast.success('Invite declined.');
+                      } catch (error) {
+                        toast.fromError(error, 'Could not decline invite');
+                      } finally {
+                        setInviteBusyId(null);
+                      }
+                    }}
+                  />
+                </View>
+              );
+            })}
+          </View>
+        ) : null}
 
         {/* Project scope */}
         <Pressable
@@ -595,6 +670,18 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     padding: 16,
     gap: 10,
+  },
+  invitePanel: {
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    padding: 14,
+    gap: 10,
+  },
+  inviteRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 4,
   },
   progressTop: {
     flexDirection: 'row',

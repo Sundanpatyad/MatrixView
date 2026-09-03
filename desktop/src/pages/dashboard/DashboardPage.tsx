@@ -4,6 +4,7 @@ import { AddUserModal } from '@/components/dashboard/AddUserModal';
 import { AdminActivityPanel } from '@/components/dashboard/AdminActivityPanel';
 import { CreateProjectModal } from '@/components/dashboard/CreateProjectModal';
 import { TimelinePanel } from '@/components/dashboard/TimelinePanel';
+import { OnboardingChecklist } from '@/components/onboarding/OnboardingChecklist';
 import { Button } from '@/components/ui/Button';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { Select } from '@/components/ui/Select';
@@ -21,7 +22,7 @@ const BASE_TABS: { id: DashTab; label: string }[] = [
   { id: 'overview', label: 'Overview' },
   { id: 'tasks', label: 'Tasks' },
   { id: 'users', label: 'Users' },
-  { id: 'timeline', label: 'Timeline' },
+  { id: 'timeline', label: 'Backlog' },
 ];
 
 function greeting() {
@@ -596,6 +597,11 @@ export function DashboardPage() {
                   Delete
                 </Button>
               ) : null}
+              <Link to="/">
+                <Button size="sm" variant="secondary">
+                  My Work
+                </Button>
+              </Link>
               <Link
                 to={
                   activeProjectId !== 'all'
@@ -1005,6 +1011,9 @@ export function DashboardPage() {
 
       {tab === 'overview' ? (
         <>
+      <div className="shrink-0 px-4 pt-3 empty:hidden">
+        <OnboardingChecklist onCreateProject={() => setShowCreateProject(true)} />
+      </div>
       {/* KPI strip */}
       <section className="grid shrink-0 grid-cols-2 border-b border-ink-600 bg-ink-800 sm:grid-cols-4">
         {[

@@ -23,6 +23,9 @@ import {
   deleteTeamRequest,
   deleteTimelineRequest,
   fetchWorkspace,
+  listInvitesRequest,
+  acceptInviteRequest,
+  declineInviteRequest,
   removeProjectAvatarRequest,
   updateTimelineRequest,
   updateTeamRequest,
@@ -62,6 +65,7 @@ import {
   type TaskType,
   type TimelineItem,
 } from './types';
+import type { PendingInvite } from '@/lib/api/workspace';
 
 type WorkspaceState = {
   projects: Project[];
@@ -122,11 +126,14 @@ type WorkspaceContextValue = {
   tasks: BoardTask[];
   timeline: TimelineItem[];
   teams: ProjectTeam[];
+  pendingInvites: PendingInvite[];
   isLoading: boolean;
   /** Currently focused project on dashboard / filters (`all` = every membership). */
   activeProjectId: ActiveProjectId;
   setActiveProjectId: (id: ActiveProjectId) => void;
   refresh: () => Promise<void>;
+  acceptInvite: (inviteId: string) => Promise<Project>;
+  declineInvite: (inviteId: string) => Promise<void>;
   createProject: (input: CreateProjectInput) => Promise<Project>;
   deleteProject: (projectId: string) => Promise<void>;
   uploadProjectAvatar: (projectId: string, file: File) => Promise<Project>;
@@ -221,6 +228,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     timeline: [],
     teams: [],
   });
+  const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [activeProjectId, setActiveProjectIdState] = useState<ActiveProjectId>(readStoredActiveProject);
 
@@ -236,11 +244,15 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback(async () => {
     if (!isAuthenticated) {
       setState({ projects: [], tasks: [], timeline: [], teams: [] });
+      setPendingInvites([]);
       return;
     }
     setIsLoading(true);
     try {
-      const data = await fetchWorkspace();
+      const [data, inviteData] = await Promise.all([
+        fetchWorkspace(),
+        listInvitesRequest().catch(() => ({ invites: [] as PendingInvite[] })),
+      ]);
       setState({
         projects: data.projects.map(ensureProjectColumns),
         tasks: data.tasks.map(ensureTaskFields),
@@ -250,6 +262,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         })),
         teams: data.teams ?? [],
       });
+      setPendingInvites(inviteData.invites ?? []);
     } finally {
       setIsLoading(false);
     }
@@ -259,6 +272,21 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     if (isBootstrapping) return;
     void refresh();
   }, [isBootstrapping, refresh, user?.id]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const pullInvites = () => {
+      void listInvitesRequest()
+        .then((data) => setPendingInvites(data.invites ?? []))
+        .catch(() => undefined);
+    };
+    window.addEventListener('dockx:pending-invites', pullInvites);
+    window.addEventListener('focus', pullInvites);
+    return () => {
+      window.removeEventListener('dockx:pending-invites', pullInvites);
+      window.removeEventListener('focus', pullInvites);
+    };
+  }, [isAuthenticated]);
 
   const projectIds = useMemo(
     () => state.projects.map((p) => p.id).sort().join(','),
@@ -325,6 +353,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       onTaskCreated: applyTask,
       onTaskUpdated: applyTask,
       onProjectColumns: applyColumns,
+      onProjectUpdated: applyColumns,
       onTeamUpserted: applyTeamUpsert,
       onTeamDeleted: applyTeamDeleted,
     });
@@ -349,6 +378,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         'onTaskCreated',
         'onTaskUpdated',
         'onProjectColumns',
+        'onProjectUpdated',
         'onTeamUpserted',
         'onTeamDeleted',
       ]);
@@ -523,6 +553,18 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       ...prev,
       projects: upsertProject(prev.projects, ensureProjectColumns(project)),
     }));
+  }, []);
+
+  const acceptInvite = useCallback(async (inviteId: string) => {
+    const { project } = await acceptInviteRequest(inviteId);
+    setPendingInvites((prev) => prev.filter((i) => i.id !== inviteId));
+    await refresh();
+    return ensureProjectColumns(project);
+  }, [refresh]);
+
+  const declineInvite = useCallback(async (inviteId: string) => {
+    await declineInviteRequest(inviteId);
+    setPendingInvites((prev) => prev.filter((i) => i.id !== inviteId));
   }, []);
 
   const addMember = useCallback(
@@ -720,10 +762,13 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       tasks: state.tasks.map(ensureTaskFields),
       timeline: state.timeline,
       teams: state.teams,
+      pendingInvites,
       isLoading,
       activeProjectId,
       setActiveProjectId,
       refresh,
+      acceptInvite,
+      declineInvite,
       createProject,
       deleteProject,
       uploadProjectAvatar,
@@ -765,10 +810,13 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     }),
     [
       state,
+      pendingInvites,
       isLoading,
       activeProjectId,
       setActiveProjectId,
       refresh,
+      acceptInvite,
+      declineInvite,
       createProject,
       deleteProject,
       uploadProjectAvatar,

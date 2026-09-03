@@ -234,13 +234,6 @@ export async function login(input: {
   user.lockedUntil = null;
   await user.save();
 
-  try {
-    const { claimPendingProjectInvites } = await import('../workspace/service.js');
-    await claimPendingProjectInvites(user);
-  } catch (err) {
-    console.error('[auth] claim pending invites failed', err);
-  }
-
   return issueSession(user, {
     deviceType: input.deviceType ?? 'web',
     deviceId: input.deviceId,
@@ -297,13 +290,6 @@ export async function loginWithGoogle(input: {
       role: 'Admin',
       status: 'active',
     });
-  }
-
-  try {
-    const { claimPendingProjectInvites } = await import('../workspace/service.js');
-    await claimPendingProjectInvites(user);
-  } catch (err) {
-    console.error('[auth] claim pending invites failed', err);
   }
 
   return issueSession(user, {

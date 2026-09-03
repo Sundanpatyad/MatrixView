@@ -26,25 +26,34 @@ import type { RootStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-const linking: LinkingOptions<RootStackParamList> = {
-  prefixes: [Linking.createURL('/'), 'dockx://'],
-  config: {
-    screens: {
-      Register: 'register',
-      Tabs: {
-        screens: {
-          Home: 'home',
-          Board: 'board',
-          Chat: 'chat',
-          Alerts: 'notifications',
-          Profile: 'profile',
-        },
+const linkingConfig: LinkingOptions<RootStackParamList>['config'] = {
+  screens: {
+    Register: 'register',
+    Tabs: {
+      screens: {
+        Home: 'home',
+        Board: 'board',
+        Chat: 'chat',
+        Alerts: 'notifications',
+        Profile: 'profile',
       },
-      TaskDetail: 'task/:taskId',
-      ChatThread: 'conversation/:conversationId',
     },
+    TaskDetail: 'task/:taskId',
+    ChatThread: 'conversation/:conversationId',
   },
 };
+
+function getLinkingPrefixes(): string[] {
+  const prefixes = ['dockx://', 'exp://'];
+  try {
+    const expoUrl = Linking.createURL('/');
+    if (expoUrl) prefixes.unshift(expoUrl);
+  } catch {
+    // Expo Go can evaluate JS before expo-constants injects the manifest.
+    // Keep static prefixes so the navigator still mounts.
+  }
+  return prefixes;
+}
 
 function BootstrapScreen() {
   const { colors } = useTheme();
@@ -59,6 +68,11 @@ function BootstrapScreen() {
 export function RootNavigator() {
   const { isAuthenticated, isBootstrapping } = useAuth();
   const { colors, isDark } = useTheme();
+
+  const linking = useMemo<LinkingOptions<RootStackParamList>>(
+    () => ({ prefixes: getLinkingPrefixes(), config: linkingConfig }),
+    [],
+  );
 
   const navigationTheme = useMemo(() => {
     const base = isDark ? DarkTheme : DefaultTheme;

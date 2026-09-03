@@ -64,7 +64,7 @@ export type Project = {
   members: ProjectMember[];
 };
 
-/** Sub-group inside a project — tasks can be scoped to a team when teams exist. */
+/** Sub-group inside a project — optional filter on tasks, not a permission boundary. */
 export type ProjectTeam = {
   id: string;
   projectId: string;

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { AuthLayout } from '@/components/auth/AuthLayout';
 import { Button } from '@/components/ui/Button';
+import { postAuthPath } from '@/lib/auth/inviteToken';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { dockxGoogleDeepLink } from '@/lib/auth/googleSignIn';
 import { isTauriApp } from '@/lib/webrtc/screenShare';
@@ -47,7 +48,7 @@ export function GoogleCallbackPage() {
     void (async () => {
       try {
         await completeOAuth(code);
-        if (!cancelled) navigate('/', { replace: true });
+        if (!cancelled) navigate(postAuthPath(), { replace: true });
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : 'Google sign-in failed.');
@@ -68,7 +69,7 @@ export function GoogleCallbackPage() {
     setError(null);
     try {
       await completeOAuth(code);
-      navigate('/', { replace: true });
+      navigate(postAuthPath(), { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Google sign-in failed.');
     } finally {
@@ -110,7 +111,7 @@ export function GoogleCallbackPage() {
     );
   }
 
-  if (isAuthenticated && !error) return <Navigate to="/" replace />;
+  if (isAuthenticated && !error) return <Navigate to={postAuthPath()} replace />;
 
   if (error) {
     return (

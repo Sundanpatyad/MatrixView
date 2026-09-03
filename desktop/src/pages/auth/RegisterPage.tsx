@@ -6,6 +6,7 @@ import {
   AuthLayout,
 } from '@/components/auth/AuthLayout';
 import { Button } from '@/components/ui/Button';
+import { peekInviteToken, postAuthPath, rememberInviteToken } from '@/lib/auth/inviteToken';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { apiFetch } from '@/lib/api/client';
 import { useToast } from '@/lib/toast/ToastContext';
@@ -24,7 +25,11 @@ export function RegisterPage() {
   const toast = useToast();
   const navigate = useNavigate();
   const [params] = useSearchParams();
-  const inviteToken = params.get('invite')?.trim() || '';
+  const inviteToken = params.get('invite')?.trim() || peekInviteToken();
+
+  useEffect(() => {
+    if (inviteToken) rememberInviteToken(inviteToken);
+  }, [inviteToken]);
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -66,7 +71,9 @@ export function RegisterPage() {
     );
   }
 
-  if (isAuthenticated) return <Navigate to="/" replace />;
+  if (isAuthenticated) {
+    return <Navigate to={inviteToken ? postAuthPath(inviteToken) : '/'} replace />;
+  }
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -104,7 +111,7 @@ export function RegisterPage() {
         <p className="text-sm text-ink-300">
           Already have an account?{' '}
           <Link
-            to="/login"
+            to={inviteToken ? `/login?invite=${encodeURIComponent(inviteToken)}` : '/login'}
             className="font-semibold text-brand-300 transition hover:text-brand-200"
           >
             Sign in

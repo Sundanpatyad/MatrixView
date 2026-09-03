@@ -155,6 +155,52 @@ router.delete('/projects/:projectId/members/:memberId', async (req, res, next) =
   }
 });
 
+router.get('/invites', async (req, res, next) => {
+  try {
+    const invites = await workspace.listMyInvites(await actorFrom(req as AuthedRequest));
+    res.json({ invites });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/invites/accept', async (req, res, next) => {
+  try {
+    const body = z.object({ token: z.string().min(8).max(200) }).parse(req.body);
+    const result = await workspace.acceptInviteByToken(
+      await actorFrom(req as AuthedRequest),
+      body.token,
+    );
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/invites/:inviteId/accept', async (req, res, next) => {
+  try {
+    const result = await workspace.acceptMyInvite(
+      await actorFrom(req as AuthedRequest),
+      param(req.params.inviteId),
+    );
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/invites/:inviteId/decline', async (req, res, next) => {
+  try {
+    const result = await workspace.declineMyInvite(
+      await actorFrom(req as AuthedRequest),
+      param(req.params.inviteId),
+    );
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.post('/projects/:projectId/teams', async (req, res, next) => {
   try {
     const body = z

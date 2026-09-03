@@ -178,6 +178,7 @@ export interface SocketHandlers {
   onTaskCreated: (payload: BoardTaskEvent) => void;
   onTaskUpdated: (payload: BoardTaskEvent) => void;
   onProjectColumns: (payload: BoardColumnsEvent) => void;
+  onProjectUpdated: (payload: BoardColumnsEvent) => void;
   onTeamUpserted: (payload: BoardTeamEvent) => void;
   onTeamDeleted: (payload: BoardTeamEvent) => void;
 
@@ -306,6 +307,7 @@ function bindListeners(active: Socket) {
   active.on('task:created', (payload) => call('onTaskCreated', payload));
   active.on('task:updated', (payload) => call('onTaskUpdated', payload));
   active.on('project:columns', (payload) => call('onProjectColumns', payload));
+  active.on('project:updated', (payload) => call('onProjectUpdated', payload));
   active.on('team:upserted', (payload) => call('onTeamUpserted', payload));
   active.on('team:deleted', (payload) => call('onTeamDeleted', payload));
 

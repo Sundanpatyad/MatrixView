@@ -13,7 +13,7 @@ const FILTERS: { id: 'all' | 'unread' | NotificationType; label: string }[] = [
   { id: 'task.assigned', label: 'Tasks' },
   { id: 'message.new', label: 'Messages' },
   { id: 'project.added', label: 'Projects' },
-  { id: 'team.added', label: 'Team' },
+  { id: 'team.added', label: 'Group' },
   { id: 'task.commented', label: 'Comments' },
 ];
 

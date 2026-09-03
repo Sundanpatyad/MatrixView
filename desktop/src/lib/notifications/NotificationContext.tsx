@@ -99,6 +99,9 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     patchChatSocketHandlers({
       onNotificationNew: (notification) => {
         setItems((prev) => upsertFront(prev, notification));
+        if (notification.type === 'project.invited') {
+          window.dispatchEvent(new Event('dockx:pending-invites'));
+        }
       },
       onNotificationUnreadCount: (count) => {
         setUnreadCount(count);

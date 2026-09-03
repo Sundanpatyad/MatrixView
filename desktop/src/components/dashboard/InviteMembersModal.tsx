@@ -43,16 +43,12 @@ export function InviteMembersModal({ project, onClose }: Props) {
       }
       setEmail('');
       setRole('member');
-      if (res.result === 'added') {
-        toast.success('User found in DockX — added to the project.');
-      } else {
-        toast.success(
-          res.emailSent
-            ? 'Invite email sent. They’ll join after creating an account.'
-            : 'Invite created. Copy the link below (email SMTP not configured).',
-        );
-        setInviteLink(res.inviteLink);
-      }
+      toast.success(
+        res.emailSent
+          ? 'Invite sent. They must Accept before they can see the board.'
+          : 'Invite created. Copy the link below — they must Accept to join.',
+      );
+      if (res.inviteLink) setInviteLink(res.inviteLink);
     } catch (err) {
       toast.fromError(err, 'Could not invite member');
     } finally {
@@ -81,8 +77,8 @@ export function InviteMembersModal({ project, onClose }: Props) {
       >
         <h2 className="text-base font-semibold text-ink-50">Invite members</h2>
         <p className="mt-1 text-xs text-ink-300">
-          {live.name} · If the email already exists, they join now. Otherwise we email an invite
-          link; after they sign up they’re already on this project.
+          {live.name} · They stay Pending until they Accept (in DockX or via the email link).
+          They cannot see the board until then.
         </p>
 
         <form onSubmit={onAdd} className="mt-4 grid gap-2 sm:grid-cols-[1fr_120px_auto]">

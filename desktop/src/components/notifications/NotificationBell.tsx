@@ -51,7 +51,7 @@ function typeLabel(type: NotificationType) {
     case 'project.invited':
       return 'Invite';
     case 'team.added':
-      return 'Team';
+      return 'Group';
     default:
       return 'Update';
   }

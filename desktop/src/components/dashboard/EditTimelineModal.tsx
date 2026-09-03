@@ -153,17 +153,17 @@ export function EditTimelineModal({ item, onClose }: Props) {
           {teams.length > 0 ? (
             <div>
               <p className="mb-1.5 text-[10px] font-bold tracking-wide text-ink-300 uppercase">
-                Team
+                Group
               </p>
               <Select
                 size="sm"
                 value={teamId}
                 onChange={setTeamId}
                 options={[
-                  { value: '', label: 'Project-wide' },
+                  { value: '', label: 'No group' },
                   ...teams.map((t) => ({ value: t.id, label: t.name })),
                 ]}
-                aria-label="Team"
+                aria-label="Group"
               />
             </div>
           ) : null}
