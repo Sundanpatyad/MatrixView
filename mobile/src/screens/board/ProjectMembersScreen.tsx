@@ -1,9 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import React, { useState } from 'react';
-import { Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppHeader, Avatar, Badge, Button, EmptyState, Input, Screen, Sheet } from '@/components/ui';
+import { useConfirm } from '@/context/ConfirmContext';
 import { useToast } from '@/context/ToastContext';
 import { useWorkspace } from '@/context/WorkspaceContext';
 import type { ProjectRole } from '@/lib/api';
@@ -17,6 +18,7 @@ export function ProjectMembersScreen({ route }: Props) {
   const { projectId } = route.params;
   const colors = useColors();
   const toast = useToast();
+  const confirm = useConfirm();
   const { getProject, isProjectAdmin, addMember, removeMember, updateMemberRole } = useWorkspace();
 
   const project = getProject(projectId);
@@ -53,24 +55,20 @@ export function ProjectMembersScreen({ route }: Props) {
     }
   };
 
-  const confirmRemove = (memberId: string, memberName: string) => {
-    Alert.alert(
-      'Remove member',
-      `Remove ${memberName} from ${project.name}? Their tasks will move to the backlog (unassigned).`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Remove',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await removeMember(projectId, memberId);
-            toast.success(`${memberName} removed`);
-          } catch (error) {
-            toast.fromError(error, 'Could not remove the member.');
-          }
-        },
-      },
-    ]);
+  const confirmRemove = async (memberId: string, memberName: string) => {
+    const ok = await confirm({
+      title: 'Remove member',
+      message: `Remove ${memberName} from ${project.name}? Their tasks will move to the backlog (unassigned).`,
+      confirmLabel: 'Remove',
+      destructive: true,
+    });
+    if (!ok) return;
+    try {
+      await removeMember(projectId, memberId);
+      toast.success(`${memberName} removed`);
+    } catch (error) {
+      toast.fromError(error, 'Could not remove the member.');
+    }
   };
 
   const toggleRole = async (memberId: string, current: ProjectRole) => {
@@ -137,7 +135,7 @@ export function ProjectMembersScreen({ route }: Props) {
                     color={item.role === 'admin' ? colors.brand : colors.textSubtle}
                   />
                 </Pressable>
-                <Pressable onPress={() => confirmRemove(item.id, item.name || item.email)} hitSlop={8}>
+                <Pressable onPress={() => void confirmRemove(item.id, item.name || item.email)} hitSlop={8}>
                   <Ionicons name="person-remove-outline" size={19} color={colors.danger} />
                 </Pressable>
               </View>

@@ -3,7 +3,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import * as Haptics from 'expo-haptics';
 import React, { useMemo, useState } from 'react';
-import { Alert, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
 import {
   AppHeader,
@@ -18,6 +18,7 @@ import {
 import { MessagePreview } from '@/components/chat/MessagePreview';
 import { useAuth } from '@/context/AuthContext';
 import { useChat } from '@/context/ChatContext';
+import { useConfirm } from '@/context/ConfirmContext';
 import { useToast } from '@/context/ToastContext';
 import type { ChatConversation } from '@/lib/api';
 import { formatListTimestamp } from '@/lib/format';
@@ -30,6 +31,7 @@ export function ChatListScreen() {
   const navigation = useNavigation<Nav>();
   const colors = useColors();
   const toast = useToast();
+  const confirm = useConfirm();
   const { user } = useAuth();
   const {
     conversations,
@@ -108,64 +110,49 @@ export function ChatListScreen() {
     }
   };
 
-  const confirmClearMessages = (conversation: ChatConversation) => {
-    Alert.alert(
-      'Delete messages?',
-      `Clear all messages in “${titleFor(conversation)}” for you. Others keep their history.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete messages',
-          style: 'destructive',
-          onPress: () =>
-            void runAction('clear messages', async () => {
-              await clearMessages(conversation.id);
-              toast.success('Messages deleted');
-            }),
-        },
-      ],
-    );
+  const confirmClearMessages = async (conversation: ChatConversation) => {
+    const ok = await confirm({
+      title: 'Delete messages?',
+      message: `Clear all messages in “${titleFor(conversation)}” for you. Others keep their history.`,
+      confirmLabel: 'Delete messages',
+      destructive: true,
+    });
+    if (!ok) return;
+    await runAction('clear messages', async () => {
+      await clearMessages(conversation.id);
+      toast.success('Messages deleted');
+    });
   };
 
-  const confirmDeleteChat = (conversation: ChatConversation) => {
+  const confirmDeleteChat = async (conversation: ChatConversation) => {
     const isGroup = conversation.type === 'group';
-    Alert.alert(
-      isGroup ? 'Leave and delete chat?' : 'Delete chat?',
-      isGroup
+    const ok = await confirm({
+      title: isGroup ? 'Leave and delete chat?' : 'Delete chat?',
+      message: isGroup
         ? `You’ll leave “${titleFor(conversation)}” and it will be removed from your list.`
         : `“${titleFor(conversation)}” will be removed from your list. New messages will bring it back.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete chat',
-          style: 'destructive',
-          onPress: () =>
-            void runAction('delete chat', async () => {
-              await deleteChat(conversation.id);
-              toast.success(isGroup ? 'Left group' : 'Chat deleted');
-            }),
-        },
-      ],
-    );
+      confirmLabel: 'Delete chat',
+      destructive: true,
+    });
+    if (!ok) return;
+    await runAction('delete chat', async () => {
+      await deleteChat(conversation.id);
+      toast.success(isGroup ? 'Left group' : 'Chat deleted');
+    });
   };
 
-  const confirmDeleteGroup = (conversation: ChatConversation) => {
-    Alert.alert(
-      'Delete group?',
-      `Permanently delete “${titleFor(conversation)}” for everyone. This cannot be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete group',
-          style: 'destructive',
-          onPress: () =>
-            void runAction('delete group', async () => {
-              await deleteGroup(conversation.id);
-              toast.success('Group deleted');
-            }),
-        },
-      ],
-    );
+  const confirmDeleteGroup = async (conversation: ChatConversation) => {
+    const ok = await confirm({
+      title: 'Delete group?',
+      message: `Permanently delete “${titleFor(conversation)}” for everyone. This cannot be undone.`,
+      confirmLabel: 'Delete group',
+      destructive: true,
+    });
+    if (!ok) return;
+    await runAction('delete group', async () => {
+      await deleteGroup(conversation.id);
+      toast.success('Group deleted');
+    });
   };
 
   if (isLoading && conversations.length === 0) {
@@ -387,7 +374,7 @@ export function ChatListScreen() {
             onPress={() => {
               const target = menuTarget;
               afterMenuClose(() => {
-                if (target) confirmClearMessages(target);
+                if (target) void confirmClearMessages(target);
               });
             }}
           />
@@ -403,7 +390,7 @@ export function ChatListScreen() {
             onPress={() => {
               const target = menuTarget;
               afterMenuClose(() => {
-                if (target) confirmDeleteChat(target);
+                if (target) void confirmDeleteChat(target);
               });
             }}
           />
@@ -416,7 +403,7 @@ export function ChatListScreen() {
               onPress={() => {
                 const target = menuTarget;
                 afterMenuClose(() => {
-                  if (target) confirmDeleteGroup(target);
+                  if (target) void confirmDeleteGroup(target);
                 });
               }}
             />

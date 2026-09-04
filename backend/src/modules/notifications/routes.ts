@@ -21,6 +21,35 @@ function param(value: string | string[]): string {
   return Array.isArray(value) ? value[0] : value;
 }
 
+router.post('/notifications/device-token', async (req, res, next) => {
+  try {
+    const body = z
+      .object({
+        token: z.string().min(1).max(4096),
+        platform: z.enum(['android', 'ios']),
+        deviceId: z.string().max(256).optional().nullable(),
+      })
+      .parse(req.body);
+    const data = await notifications.registerDeviceToken(actorFrom(req as AuthedRequest), body);
+    res.json(data);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete('/notifications/device-token', async (req, res, next) => {
+  try {
+    const body = z.object({ token: z.string().min(1).max(4096) }).parse(req.body);
+    const data = await notifications.unregisterDeviceToken(
+      actorFrom(req as AuthedRequest),
+      body.token,
+    );
+    res.json(data);
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.get('/notifications', async (req, res, next) => {
   try {
     const q = z

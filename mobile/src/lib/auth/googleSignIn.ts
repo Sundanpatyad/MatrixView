@@ -8,16 +8,15 @@ const IOS_CLIENT_ID =
   '569448299007-1gm4uv3qh7e78m2g3bod169dm93hkoi5.apps.googleusercontent.com';
 
 /**
- * Web / installed client used by the DockX API. Passing it as webClientId asks
- * Google to mint an ID token the backend can verify with GOOGLE_CLIENT_ID.
+ * Web application OAuth client. Android Google Sign-In requires this type
+ * (not Desktop / Android) so Google mints an ID token the API can verify.
  */
 const WEB_CLIENT_ID =
-  '569448299007-cdg0qbh5bmphaun5tr8jbdlkkg2rso6q.apps.googleusercontent.com';
+  '569448299007-djn2v1re676r3rjcqm84fbrjraddbdnp.apps.googleusercontent.com';
 
 type GoogleSignInModule = typeof import('@react-native-google-signin/google-signin');
 
 let cached: GoogleSignInModule | null | undefined;
-let configured = false;
 
 /**
  * The package throws at import time when RNGoogleSignin is absent (Expo Go or a
@@ -41,20 +40,50 @@ function getGoogleSignIn(): GoogleSignInModule | null {
 }
 
 function ensureConfigured(mod: GoogleSignInModule) {
-  if (configured) return;
   mod.GoogleSignin.configure({
     iosClientId: IOS_CLIENT_ID,
     webClientId: WEB_CLIENT_ID,
     offlineAccess: false,
     scopes: ['openid', 'profile', 'email'],
   });
-  configured = true;
+}
+
+/** Drop the Google session so the next sign-in shows the account picker. */
+export async function signOutGoogleNative(options?: { revoke?: boolean }): Promise<void> {
+  const mod = getGoogleSignIn();
+  if (!mod) return;
+  ensureConfigured(mod);
+  if (options?.revoke !== false) {
+    try {
+      await mod.GoogleSignin.revokeAccess();
+    } catch {
+      /* already signed out */
+    }
+  }
+  try {
+    await mod.GoogleSignin.signOut();
+  } catch {
+    /* ignore */
+  }
 }
 
 export class GoogleSignInCancelledError extends Error {
   constructor() {
     super('Google sign-in was cancelled.');
     this.name = 'GoogleSignInCancelledError';
+  }
+}
+
+/** Native Android DEVELOPER_ERROR (code 10) — Google Cloud OAuth client mismatch. */
+export class GoogleAndroidSetupError extends Error {
+  readonly packageName = 'dev.dockx.mobile';
+  readonly sha1 = '5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25';
+
+  constructor() {
+    super(
+      'Google Sign-In is blocked on this Android build. The Android OAuth client must use package dev.dockx.mobile and SHA-1 5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25. You also need a Web application OAuth client (not Android or Desktop) as webClientId.',
+    );
+    this.name = 'GoogleAndroidSetupError';
   }
 }
 
@@ -81,6 +110,10 @@ export async function signInWithGoogleNative(): Promise<string> {
     await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
   }
 
+  // Clear any leftover Google session without revoking (revoke right before
+  // sign-in can fail). Logout still revokes via signOutGoogleNative().
+  await signOutGoogleNative({ revoke: false });
+
   try {
     const result = await GoogleSignin.signIn();
     if (result.type === 'cancelled') {
@@ -105,6 +138,11 @@ export async function signInWithGoogleNative(): Promise<string> {
       }
       if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
         throw new Error('Google Play Services is not available on this device.');
+      }
+      // Android ApiException 10 — package name / SHA-1 missing from Google Cloud.
+      const code = String(error.code);
+      if (code === '10' || code === 'DEVELOPER_ERROR' || /DEVELOPER_ERROR/i.test(error.message)) {
+        throw new GoogleAndroidSetupError();
       }
     }
     throw error instanceof Error ? error : new Error('Google sign-in failed.');

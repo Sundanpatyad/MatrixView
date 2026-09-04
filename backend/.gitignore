@@ -4,3 +4,4 @@ dist/
 *.log
 .mongodb-binaries/
 uploads/
+*firebase-adminsdk*.json

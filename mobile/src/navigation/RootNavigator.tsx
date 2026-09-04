@@ -22,6 +22,7 @@ import { SettingsScreen } from '@/screens/profile/SettingsScreen';
 import { useTheme } from '@/theme';
 
 import { TabNavigator } from './TabNavigator';
+import { navigationRef } from './navigationRef';
 import type { RootStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -95,7 +96,12 @@ export function RootNavigator() {
   }
 
   return (
-    <NavigationContainer theme={navigationTheme} linking={linking} fallback={<BootstrapScreen />}>
+    <NavigationContainer
+      ref={navigationRef}
+      theme={navigationTheme}
+      linking={linking}
+      fallback={<BootstrapScreen />}
+    >
       <Stack.Navigator
         screenOptions={{
           headerShown: false,

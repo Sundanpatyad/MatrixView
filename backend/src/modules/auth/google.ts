@@ -180,17 +180,29 @@ export async function exchangeGoogleCode(
 }
 
 export async function verifyGoogleIdToken(idToken: string): Promise<GoogleProfile> {
-  const audiences = [config.google.clientId, config.google.iosClientId].filter(Boolean);
+  const audiences = [
+    config.google.clientId,
+    config.google.webClientId,
+    config.google.iosClientId,
+    config.google.androidClientId,
+  ].filter(Boolean);
   if (!audiences.length) {
     throw new AuthError('Google sign-in is not configured', 503, 'GOOGLE_NOT_CONFIGURED');
   }
   const client = new OAuth2Client(config.google.clientId || audiences[0]);
-  const ticket = await client.verifyIdToken({
-    idToken,
-    // Native iOS tokens are minted for the iOS client; web/desktop use the web client.
-    audience: audiences.length === 1 ? audiences[0] : audiences,
-  });
-  const payload = ticket.getPayload();
+  let payload;
+  try {
+    const ticket = await client.verifyIdToken({
+      idToken,
+      // Native Android tokens are minted for the Web client; iOS may use the iOS client.
+      audience: audiences.length === 1 ? audiences[0] : audiences,
+    });
+    payload = ticket.getPayload();
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : '';
+    console.error('[google] id token verify failed', detail);
+    throw new AuthError('Invalid Google token', 401, 'GOOGLE_AUTH_FAILED');
+  }
   if (!payload?.sub || !payload.email) {
     throw new AuthError('Invalid Google token', 401, 'GOOGLE_AUTH_FAILED');
   }

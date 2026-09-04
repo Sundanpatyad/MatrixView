@@ -1,11 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import React, { useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { AppHeader, Avatar, Badge, Button, Card, EmptyState, Input, Screen, Sheet } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
 import { useChat } from '@/context/ChatContext';
+import { useConfirm } from '@/context/ConfirmContext';
 import { useToast } from '@/context/ToastContext';
 import { formatDate } from '@/lib/format';
 import { pickImages } from '@/lib/pickers';
@@ -18,6 +19,7 @@ export function ConversationInfoScreen({ route, navigation }: Props) {
   const { conversationId } = route.params;
   const colors = useColors();
   const toast = useToast();
+  const confirm = useConfirm();
   const { user } = useAuth();
   const { conversations, users, presence, connected, renameGroup, setGroupAvatar, addMembers, removeMember } = useChat();
 
@@ -88,28 +90,22 @@ export function ConversationInfoScreen({ route, navigation }: Props) {
     }
   };
 
-  const confirmRemove = (memberId: string, memberName: string) => {
+  const confirmRemove = async (memberId: string, memberName: string) => {
     const leaving = memberId === user?.id;
-    Alert.alert(
-      leaving ? 'Leave group' : 'Remove member',
-      leaving ? `Leave ${conversation.name}?` : `Remove ${memberName} from ${conversation.name}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: leaving ? 'Leave' : 'Remove',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await removeMember(conversationId, memberId);
-              if (leaving) navigation.navigate('Tabs', { screen: 'Chat' });
-              else toast.success(`${memberName} removed`);
-            } catch (error) {
-              toast.fromError(error, 'Could not update members.');
-            }
-          },
-        },
-      ],
-    );
+    const ok = await confirm({
+      title: leaving ? 'Leave group' : 'Remove member',
+      message: leaving ? `Leave ${conversation.name}?` : `Remove ${memberName} from ${conversation.name}?`,
+      confirmLabel: leaving ? 'Leave' : 'Remove',
+      destructive: true,
+    });
+    if (!ok) return;
+    try {
+      await removeMember(conversationId, memberId);
+      if (leaving) navigation.navigate('Tabs', { screen: 'Chat' });
+      else toast.success(`${memberName} removed`);
+    } catch (error) {
+      toast.fromError(error, 'Could not update members.');
+    }
   };
 
   return (
@@ -189,7 +185,7 @@ export function ConversationInfoScreen({ route, navigation }: Props) {
                 {conversation.createdBy === member.id ? <Badge label="Owner" color={colors.brand} /> : null}
 
                 {isGroup && (isCreator || isSelf) ? (
-                  <Pressable onPress={() => confirmRemove(member.id, member.name)} hitSlop={8}>
+                  <Pressable onPress={() => void confirmRemove(member.id, member.name)} hitSlop={8}>
                     <Ionicons name={isSelf ? 'exit-outline' : 'close-circle-outline'} size={20} color={colors.danger} />
                   </Pressable>
                 ) : null}

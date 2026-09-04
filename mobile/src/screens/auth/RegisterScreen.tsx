@@ -1,6 +1,6 @@
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import React, { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AuthPrimaryButton, AuthSocialGroup } from '@/components/auth/AuthActions';
 import { AuthField } from '@/components/auth/AuthField';
@@ -8,6 +8,7 @@ import { AuthLayout } from '@/components/auth/AuthLayout';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { authApi, messageFromError, type InvitePreview } from '@/lib/api';
+import { GoogleAndroidSetupError } from '@/lib/auth/googleSignIn';
 import type { RootStackParamList } from '@/navigation/types';
 import { useColors, useTheme } from '@/theme';
 
@@ -76,6 +77,22 @@ export function RegisterScreen({ navigation, route }: Props) {
     try {
       await loginWithGoogle();
     } catch (err) {
+      if (err instanceof GoogleAndroidSetupError) {
+        Alert.alert(
+          'Google Sign-In setup',
+          [
+            'Google rejected this Android app (error 10).',
+            '',
+            `Package: ${err.packageName}`,
+            `SHA-1: ${err.sha1}`,
+            '',
+            'In Google Cloud → Credentials, open the Android OAuth client and set that exact SHA-1 (not SHA-256).',
+            '',
+            'Also create an OAuth client of type Web application. Android/Desktop clients cannot be used as webClientId.',
+          ].join('\n'),
+        );
+        return;
+      }
       toast.fromError(err, 'Google sign-in failed.');
     } finally {
       setGoogleSubmitting(false);

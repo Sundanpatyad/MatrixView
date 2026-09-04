@@ -3,7 +3,6 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   KeyboardAvoidingView,
   Platform,
@@ -30,6 +29,7 @@ import {
 import { useAuth } from '@/context/AuthContext';
 import { useCall } from '@/context/CallContext';
 import { useChat } from '@/context/ChatContext';
+import { useConfirm } from '@/context/ConfirmContext';
 import { useToast } from '@/context/ToastContext';
 import type { ChatMessage, PickedFile } from '@/lib/api';
 import { formatDayDivider } from '@/lib/format';
@@ -51,6 +51,7 @@ export function ChatThreadScreen({ route, navigation }: Props) {
   const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const toast = useToast();
+  const confirm = useConfirm();
   const { user } = useAuth();
   const {
     conversations,
@@ -269,22 +270,20 @@ export function ChatThreadScreen({ route, navigation }: Props) {
     }
   };
 
-  const confirmDelete = (message: ChatMessage) => {
-    Alert.alert('Delete message', 'This removes the message for everyone in the chat.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await remove(message.id);
-            toast.success('Message deleted');
-          } catch (error) {
-            toast.fromError(error, 'Could not delete the message.');
-          }
-        },
-      },
-    ]);
+  const confirmDelete = async (message: ChatMessage) => {
+    const ok = await confirm({
+      title: 'Delete message',
+      message: 'This removes the message for everyone in the chat.',
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (!ok) return;
+    try {
+      await remove(message.id);
+      toast.success('Message deleted');
+    } catch (error) {
+      toast.fromError(error, 'Could not delete the message.');
+    }
   };
 
   const beginEdit = (message: ChatMessage) => {
@@ -635,7 +634,7 @@ export function ChatThreadScreen({ route, navigation }: Props) {
                 onPress={() => {
                   const target = actionTarget;
                   afterActionSheetClose(() => {
-                    if (target) confirmDelete(target);
+                    if (target) void confirmDelete(target);
                   });
                 }}
               />

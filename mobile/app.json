@@ -31,6 +31,7 @@
     },
     "android": {
       "package": "dev.dockx.mobile",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#0F1014",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -49,7 +50,10 @@
         "ACCESS_NETWORK_STATE",
         "BLUETOOTH",
         "BLUETOOTH_CONNECT",
-        "WAKE_LOCK"
+        "WAKE_LOCK",
+        "VIBRATE",
+        "RECEIVE_BOOT_COMPLETED",
+        "POST_NOTIFICATIONS"
       ]
     },
     "web": {
@@ -69,6 +73,14 @@
         }
       ],
       "expo-font",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/android-icon-monochrome.png",
+          "color": "#3B82F6",
+          "defaultChannel": "default"
+        }
+      ],
       [
         "expo-splash-screen",
         {

@@ -1,10 +1,11 @@
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import React from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { AppHeader, ListRow, Screen } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
 import { useChat } from '@/context/ChatContext';
+import { useConfirm } from '@/context/ConfirmContext';
 import { useToast } from '@/context/ToastContext';
 import { API_BASE } from '@/lib/config';
 import { ensureSocketConnected } from '@/lib/socket/socket';
@@ -23,24 +24,21 @@ export function SettingsScreen({ navigation }: Props) {
   const colors = useColors();
   const { preference, setPreference } = useTheme();
   const toast = useToast();
+  const confirm = useConfirm();
   const { user, logout, logoutEverywhere } = useAuth();
   const { connected, refresh } = useChat();
 
-  const confirmLogout = (everywhere: boolean) => {
-    Alert.alert(
-      everywhere ? 'Sign out everywhere' : 'Sign out',
-      everywhere
+  const confirmLogout = async (everywhere: boolean) => {
+    const ok = await confirm({
+      title: everywhere ? 'Sign out everywhere' : 'Sign out',
+      message: everywhere
         ? 'This revokes every active session, including desktop and web.'
         : 'You will need to sign in again on this device.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: everywhere ? 'Sign out everywhere' : 'Sign out',
-          style: 'destructive',
-          onPress: () => void (everywhere ? logoutEverywhere() : logout()),
-        },
-      ],
-    );
+      confirmLabel: everywhere ? 'Sign out everywhere' : 'Sign out',
+      destructive: true,
+    });
+    if (!ok) return;
+    await (everywhere ? logoutEverywhere() : logout());
   };
 
   return (
@@ -145,7 +143,7 @@ export function SettingsScreen({ navigation }: Props) {
             icon="log-out-outline"
             title="Sign out"
             destructive
-            onPress={() => confirmLogout(false)}
+            onPress={() => void confirmLogout(false)}
             showChevron={false}
           />
           <Separator />
@@ -154,7 +152,7 @@ export function SettingsScreen({ navigation }: Props) {
             title="Sign out everywhere"
             subtitle="Revoke every device session"
             destructive
-            onPress={() => confirmLogout(true)}
+            onPress={() => void confirmLogout(true)}
             showChevron={false}
           />
         </Section>

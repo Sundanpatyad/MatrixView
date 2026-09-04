@@ -1,9 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import React, { useMemo, useState } from 'react';
-import { Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppHeader, Avatar, Button, EmptyState, Input, Screen, Sheet } from '@/components/ui';
+import { useConfirm } from '@/context/ConfirmContext';
 import { useToast } from '@/context/ToastContext';
 import { useWorkspace } from '@/context/WorkspaceContext';
 import type { ProjectTeam } from '@/lib/api';
@@ -16,6 +17,7 @@ export function ManageTeamsScreen({ route }: Props) {
   const { projectId } = route.params;
   const colors = useColors();
   const toast = useToast();
+  const confirm = useConfirm();
   const { getProject, teamsForProject, isProjectAdmin, createTeam, updateTeam, deleteTeam, tasks } = useWorkspace();
 
   const project = getProject(projectId);
@@ -84,22 +86,20 @@ export function ManageTeamsScreen({ route }: Props) {
     }
   };
 
-  const confirmDelete = (team: ProjectTeam) => {
-    Alert.alert('Delete team', `Delete ${team.name}? Tasks stay on the board.`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await deleteTeam(team.id);
-            toast.success('Team deleted');
-          } catch (error) {
-            toast.fromError(error, 'Could not delete the team.');
-          }
-        },
-      },
-    ]);
+  const confirmDelete = async (team: ProjectTeam) => {
+    const ok = await confirm({
+      title: 'Delete team',
+      message: `Delete ${team.name}? Tasks stay on the board.`,
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (!ok) return;
+    try {
+      await deleteTeam(team.id);
+      toast.success('Team deleted');
+    } catch (error) {
+      toast.fromError(error, 'Could not delete the team.');
+    }
   };
 
   return (
@@ -142,7 +142,7 @@ export function ManageTeamsScreen({ route }: Props) {
                     <Pressable onPress={() => openEdit(item)} hitSlop={8}>
                       <Ionicons name="create-outline" size={19} color={colors.textMuted} />
                     </Pressable>
-                    <Pressable onPress={() => confirmDelete(item)} hitSlop={8}>
+                    <Pressable onPress={() => void confirmDelete(item)} hitSlop={8}>
                       <Ionicons name="trash-outline" size={19} color={colors.danger} />
                     </Pressable>
                   </View>

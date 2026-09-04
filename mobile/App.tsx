@@ -8,8 +8,10 @@ import { AuthProvider } from '@/context/AuthContext';
 import { CallProvider } from '@/context/CallContext';
 import { ChatProvider } from '@/context/ChatContext';
 import { NotificationProvider } from '@/context/NotificationContext';
+import { ConfirmProvider } from '@/context/ConfirmContext';
 import { ToastProvider } from '@/context/ToastContext';
 import { WorkspaceProvider } from '@/context/WorkspaceContext';
+import { PushTokenRegistrar } from '@/lib/push/PushTokenRegistrar';
 import { RootNavigator } from '@/navigation/RootNavigator';
 import { ThemeProvider, useTheme } from '@/theme';
 
@@ -24,20 +26,23 @@ export default function App() {
       <SafeAreaProvider>
         <ThemeProvider>
           <ToastProvider>
-            <AuthProvider>
-              <WorkspaceProvider>
-                <ChatProvider>
-                  <NotificationProvider>
-                    {/* Calls live above the navigator so they survive screen changes. */}
-                    <CallProvider>
-                      <ThemedStatusBar />
-                      <RootNavigator />
-                      <CallOverlay />
-                    </CallProvider>
-                  </NotificationProvider>
-                </ChatProvider>
-              </WorkspaceProvider>
-            </AuthProvider>
+            <ConfirmProvider>
+              <AuthProvider>
+                <WorkspaceProvider>
+                  <ChatProvider>
+                    <NotificationProvider>
+                      {/* Calls live above the navigator so they survive screen changes. */}
+                      <CallProvider>
+                        <ThemedStatusBar />
+                        <PushTokenRegistrar />
+                        <RootNavigator />
+                        <CallOverlay />
+                      </CallProvider>
+                    </NotificationProvider>
+                  </ChatProvider>
+                </WorkspaceProvider>
+              </AuthProvider>
+            </ConfirmProvider>
           </ToastProvider>
         </ThemeProvider>
       </SafeAreaProvider>

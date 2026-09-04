@@ -2,7 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import { AppState, type AppStateStatus } from 'react-native';
 
 import { authApi, configureApiAuth, type AuthResponse, type AuthUser, type PickedFile } from '@/lib/api';
-import { GoogleSignInCancelledError, signInWithGoogleNative } from '@/lib/auth/googleSignIn';
+import { GoogleSignInCancelledError, signInWithGoogleNative, signOutGoogleNative } from '@/lib/auth/googleSignIn';
 import { connectSocket, disconnectSocket, ensureSocketConnected } from '@/lib/socket/socket';
 import { clearSession, loadSession, saveSession, saveUser } from '@/lib/storage/authStorage';
 
@@ -55,6 +55,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
     disconnectSocket();
     await clearSession();
+    await signOutGoogleNative();
   }, []);
 
   /**

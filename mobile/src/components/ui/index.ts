@@ -15,4 +15,5 @@ export { ProgressBar } from './ProgressBar';
 export { Screen, ScreenBody } from './Screen';
 export { useGlassScreenPadding, useTabBarPadding, useNativeScrollInsets } from './screenInsets';
 export { SegmentedControl, type SegmentOption } from './SegmentedControl';
+export { ConfirmModal, type ConfirmModalProps } from './ConfirmModal';
 export { Sheet } from './Sheet';

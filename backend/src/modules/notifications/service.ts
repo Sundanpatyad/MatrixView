@@ -2,6 +2,8 @@ import { Types } from 'mongoose';
 import { emitToUser } from '../../gateway/io.js';
 import { loadAvatarMap } from '../auth/avatars.js';
 import { AuthError } from '../auth/errors.js';
+import { sendPushToUser } from './fcm.js';
+import { DeviceToken } from './models/DeviceToken.js';
 import {
   Notification,
   type NotificationDoc,
@@ -115,6 +117,7 @@ export async function createAndEmit(
 
   emitToUser(input.recipientId, 'notification:new', { notification });
   emitToUser(input.recipientId, 'notification:unread-count', { count: unreadCount });
+  void sendPushToUser(input.recipientId, notification);
 
   return notification;
 }
@@ -159,6 +162,38 @@ export async function listNotifications(
   const unreadCount = await countUnread(actor.sub);
 
   return { notifications, nextCursor, unreadCount };
+}
+
+export async function registerDeviceToken(
+  actor: Actor,
+  input: { token: string; platform: 'android' | 'ios'; deviceId?: string | null },
+) {
+  const token = input.token.trim();
+  if (!token) throw new AuthError('Push token is required', 400);
+
+  await DeviceToken.findOneAndUpdate(
+    { token },
+    {
+      $set: {
+        userId: oid(actor.sub),
+        orgId: oid(actor.orgId),
+        token,
+        platform: input.platform,
+        deviceId: input.deviceId?.trim() || null,
+        lastSeenAt: new Date(),
+      },
+    },
+    { upsert: true, new: true },
+  );
+
+  return { ok: true as const };
+}
+
+export async function unregisterDeviceToken(actor: Actor, token: string) {
+  const value = token.trim();
+  if (!value) return { ok: true as const };
+  await DeviceToken.deleteOne({ token: value, userId: oid(actor.sub) });
+  return { ok: true as const };
 }
 
 export async function getNotification(actor: Actor, id: string) {

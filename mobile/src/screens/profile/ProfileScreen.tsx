@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import {
   AppHeader,
@@ -13,6 +13,7 @@ import {
 } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
 import { useChat } from '@/context/ChatContext';
+import { useConfirm } from '@/context/ConfirmContext';
 import { useToast } from '@/context/ToastContext';
 import { pickImages } from '@/lib/pickers';
 import type { RootStackParamList } from '@/navigation/types';
@@ -25,6 +26,7 @@ export function ProfileScreen() {
   const colors = useColors();
   const { isDark, toggle } = useTheme();
   const toast = useToast();
+  const confirm = useConfirm();
   const { user, logout, logoutEverywhere, uploadAvatar } = useAuth();
   const { connected } = useChat();
   const pad = useGlassScreenPadding();
@@ -46,36 +48,29 @@ export function ProfileScreen() {
     }
   };
 
-  const confirmLogout = () => {
-    Alert.alert('Sign out', 'You will need to sign in again on this device.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Sign out',
-        style: 'destructive',
-        onPress: async () => {
-          setSigningOut(true);
-          await logout();
-        },
-      },
-    ]);
+  const confirmLogout = async () => {
+    const ok = await confirm({
+      title: 'Sign out',
+      message: 'You will need to sign in again on this device.',
+      confirmLabel: 'Sign out',
+      destructive: true,
+    });
+    if (!ok) return;
+    setSigningOut(true);
+    await logout();
   };
 
-  const confirmLogoutAll = () => {
-    Alert.alert(
-      'Sign out everywhere',
-      'This ends every active session, including desktop and web. You will need to sign in again on each device.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Sign out everywhere',
-          style: 'destructive',
-          onPress: async () => {
-            setSigningOut(true);
-            await logoutEverywhere();
-          },
-        },
-      ],
-    );
+  const confirmLogoutAll = async () => {
+    const ok = await confirm({
+      title: 'Sign out everywhere',
+      message:
+        'This ends every active session, including desktop and web. You will need to sign in again on each device.',
+      confirmLabel: 'Sign out everywhere',
+      destructive: true,
+    });
+    if (!ok) return;
+    setSigningOut(true);
+    await logoutEverywhere();
   };
 
   return (
@@ -145,7 +140,7 @@ export function ProfileScreen() {
             icon="log-out-outline"
             title={signingOut ? 'Signing out…' : 'Sign out'}
             destructive
-            onPress={signingOut ? undefined : confirmLogout}
+            onPress={signingOut ? undefined : () => void confirmLogout()}
             showChevron={false}
           />
           <Separator />
@@ -154,7 +149,7 @@ export function ProfileScreen() {
             title="Sign out everywhere"
             subtitle="End sessions on all devices"
             destructive
-            onPress={signingOut ? undefined : confirmLogoutAll}
+            onPress={signingOut ? undefined : () => void confirmLogoutAll()}
             showChevron={false}
           />
         </Section>

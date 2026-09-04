@@ -9,6 +9,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { messageFromError } from '@/lib/api';
 import { API_BASE } from '@/lib/config';
+import { GoogleAndroidSetupError } from '@/lib/auth/googleSignIn';
 import type { RootStackParamList } from '@/navigation/types';
 import { useColors } from '@/theme';
 
@@ -47,6 +48,22 @@ export function LoginScreen({ navigation }: Props) {
     try {
       await loginWithGoogle();
     } catch (err) {
+      if (err instanceof GoogleAndroidSetupError) {
+        Alert.alert(
+          'Google Sign-In setup',
+          [
+            'Google rejected this Android app (error 10).',
+            '',
+            `Package: ${err.packageName}`,
+            `SHA-1: ${err.sha1}`,
+            '',
+            'In Google Cloud → Credentials, open the Android OAuth client and set that exact SHA-1 (not SHA-256).',
+            '',
+            'Also create an OAuth client of type Web application. Android/Desktop clients cannot be used as webClientId.',
+          ].join('\n'),
+        );
+        return;
+      }
       toast.fromError(err, 'Google sign-in failed.');
     } finally {
       setGoogleSubmitting(false);

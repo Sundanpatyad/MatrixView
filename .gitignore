@@ -1,6 +1,8 @@
-# Secrets — never commit OAuth client JSON or env files
+# Secrets — never commit OAuth client JSON, Firebase Admin keys, or env files
 client_secret*.json
 **/client_secret*.json
+*firebase-adminsdk*.json
+**/*firebase-adminsdk*.json
 .env
 **/.env
 !**/.env.example
