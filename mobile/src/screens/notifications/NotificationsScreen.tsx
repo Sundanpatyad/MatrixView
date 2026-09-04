@@ -7,6 +7,7 @@ import { FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View
 import {
   AppHeader,
   Avatar,
+  Button,
   EmptyState,
   LoadingView,
   Screen,
@@ -15,6 +16,7 @@ import {
 import { MessagePreview } from '@/components/chat/MessagePreview';
 import { useNotifications } from '@/context/NotificationContext';
 import { useToast } from '@/context/ToastContext';
+import { useWorkspace } from '@/context/WorkspaceContext';
 import type { AppNotification, NotificationType } from '@/lib/api';
 import { formatRelative } from '@/lib/format';
 import type { RootStackParamList } from '@/navigation/types';
@@ -45,6 +47,8 @@ export function NotificationsScreen() {
   const toast = useToast();
   const { items, unreadCount, isLoading, hasMore, refresh, loadMore, markRead, markAllRead, remove } =
     useNotifications();
+  const { pendingInvites, acceptInvite, declineInvite, setActiveProjectId, isLoading: workspaceLoading } = useWorkspace();
+  const [inviteBusyId, setInviteBusyId] = useState<string | null>(null);
   const pad = useGlassScreenPadding();
 
   const [filter, setFilter] = useState<Filter>('all');
@@ -81,6 +85,7 @@ export function NotificationsScreen() {
 
   const open = async (notification: AppNotification) => {
     if (!notification.readAt) void markRead([notification.id]);
+    if (notification.type === 'project.invited') return;
 
     if (notification.conversationId) {
       navigation.navigate('ChatThread', { conversationId: notification.conversationId });
@@ -93,6 +98,11 @@ export function NotificationsScreen() {
     if (notification.projectId) {
       navigation.navigate('ProjectMembers', { projectId: notification.projectId });
     }
+  };
+
+  const inviteIdOf = (item: AppNotification) => {
+    const raw = item.meta?.inviteId;
+    return typeof raw === 'string' && raw.trim() ? raw.trim() : null;
   };
 
   if (isLoading && items.length === 0) {
@@ -181,8 +191,12 @@ export function NotificationsScreen() {
           const accent = accentFor(item.type, colors);
           const unread = !item.readAt;
           const name = item.actorName || item.title;
+          const inviteId = item.type === 'project.invited' ? inviteIdOf(item) : null;
+          const pending = inviteId ? pendingInvites.find((invite) => invite.id === inviteId) : undefined;
+          const inviteBusy = inviteBusyId === inviteId;
 
           return (
+            <View>
             <Pressable
               onPress={() => open(item)}
               style={({ pressed }) => [
@@ -239,6 +253,56 @@ export function NotificationsScreen() {
                 <Ionicons name="close" size={16} color={colors.textSubtle} />
               </Pressable>
             </Pressable>
+            {item.type === 'project.invited' ? (
+              <View style={styles.inviteActions}>
+                {pending && inviteId ? (
+                  <>
+                    <Button
+                      size="sm"
+                      label={inviteBusy ? '…' : 'Accept'}
+                      disabled={Boolean(inviteBusyId)}
+                      onPress={async () => {
+                        setInviteBusyId(inviteId);
+                        try {
+                          const project = await acceptInvite(inviteId);
+                          setActiveProjectId(project.id);
+                          await remove(item.id);
+                          toast.success(`You joined ${project.name}.`);
+                          navigation.navigate('Tabs', { screen: 'Board' });
+                        } catch (error) {
+                          toast.fromError(error, 'Could not accept invite');
+                        } finally {
+                          setInviteBusyId(null);
+                        }
+                      }}
+                    />
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      label="Decline"
+                      disabled={Boolean(inviteBusyId)}
+                      onPress={async () => {
+                        setInviteBusyId(inviteId);
+                        try {
+                          await declineInvite(inviteId);
+                          await remove(item.id);
+                          toast.success('Invite declined.');
+                        } catch (error) {
+                          toast.fromError(error, 'Could not decline invite');
+                        } finally {
+                          setInviteBusyId(null);
+                        }
+                      }}
+                    />
+                  </>
+                ) : (
+                  <Text style={[styles.inviteHint, { color: colors.textSubtle }]}>
+                    {workspaceLoading ? 'Loading invite…' : 'This invite is no longer pending.'}
+                  </Text>
+                )}
+              </View>
+            ) : null}
+            </View>
           );
         }}
       />
@@ -367,5 +431,16 @@ const styles = StyleSheet.create({
   },
   dismiss: {
     padding: 2,
+  },
+  inviteActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    paddingLeft: 70,
+  },
+  inviteHint: {
+    fontSize: 12,
   },
 });

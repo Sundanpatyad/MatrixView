@@ -14,6 +14,7 @@ import type { CreateTaskInput, UpdateTaskInput } from '@/lib/api/workspace';
 import { patchSocketHandlers, socketActions } from '@/lib/socket/socket';
 
 import { useAuth } from './AuthContext';
+import { useToast } from './ToastContext';
 
 const ACTIVE_PROJECT_KEY = 'dockx.activeProjectId';
 
@@ -81,8 +82,22 @@ function upsertById<T extends { id: string }>(list: T[], item: T): T[] {
   return next;
 }
 
+function isActiveProjectMember(
+  project: { members: Array<{ email: string; userId?: string | null; status?: string }> },
+  viewer?: { email?: string; id?: string } | null,
+) {
+  if (!viewer?.email && !viewer?.id) return true;
+  return project.members.some((member) => {
+    if (member.status === 'pending') return false;
+    if (viewer.id && member.userId && member.userId === viewer.id) return true;
+    if (viewer.email && member.email.toLowerCase() === viewer.email.toLowerCase()) return true;
+    return false;
+  });
+}
+
 export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, user } = useAuth();
+  const toast = useToast();
 
   const [projects, setProjects] = useState<Project[]>([]);
   const [tasks, setTasks] = useState<BoardTask[]>([]);
@@ -94,6 +109,8 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   const [activeProjectId, setActiveProjectIdState] = useState<ActiveProjectId>('all');
 
   const joinedRooms = useRef<Set<string>>(new Set());
+  const projectIdsRef = useRef<Set<string>>(new Set());
+  projectIdsRef.current = new Set(projects.map((project) => project.id));
 
   useEffect(() => {
     AsyncStorage.getItem(ACTIVE_PROJECT_KEY)
@@ -106,6 +123,20 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   const setActiveProjectId = useCallback((id: ActiveProjectId) => {
     setActiveProjectIdState(id);
     AsyncStorage.setItem(ACTIVE_PROJECT_KEY, id).catch(() => undefined);
+  }, []);
+
+  const dropLocalProject = useCallback((projectId: string) => {
+    socketActions.leaveProject(projectId);
+    joinedRooms.current.delete(projectId);
+    setProjects((prev) => prev.filter((p) => p.id !== projectId));
+    setTasks((prev) => prev.filter((t) => t.projectId !== projectId));
+    setTimeline((prev) => prev.filter((t) => t.projectId !== projectId));
+    setTeams((prev) => prev.filter((t) => t.projectId !== projectId));
+    setActiveProjectIdState((cur) => {
+      if (cur !== projectId) return cur;
+      AsyncStorage.setItem(ACTIVE_PROJECT_KEY, 'all').catch(() => undefined);
+      return 'all';
+    });
   }, []);
 
   const refresh = useCallback(async () => {
@@ -163,17 +194,37 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   }, [isAuthenticated, projects]);
 
   useEffect(() => {
+    const applyProject = (project: Project, updatedTasks?: BoardTask[]) => {
+      if (!isActiveProjectMember(project, user)) {
+        dropLocalProject(project.id);
+        return;
+      }
+      setProjects((prev) => upsertById(prev, project));
+      if (updatedTasks?.length) {
+        setTasks((prev) => updatedTasks.reduce((acc, task) => upsertById(acc, task), prev));
+      }
+    };
+
     patchSocketHandlers({
-      onTaskCreated: ({ task }) => setTasks((prev) => upsertById(prev, task)),
-      onTaskUpdated: ({ task }) => setTasks((prev) => upsertById(prev, task)),
+      onTaskCreated: ({ task }) => {
+        if (!projectIdsRef.current.has(task.projectId)) return;
+        setTasks((prev) => upsertById(prev, task));
+      },
+      onTaskUpdated: ({ task }) => {
+        if (!projectIdsRef.current.has(task.projectId)) return;
+        setTasks((prev) => upsertById(prev, task));
+      },
       onProjectColumns: ({ project, tasks: updatedTasks }) => {
-        setProjects((prev) => upsertById(prev, project));
-        if (updatedTasks?.length) {
-          setTasks((prev) => updatedTasks.reduce((acc, task) => upsertById(acc, task), prev));
-        }
+        applyProject(project, updatedTasks);
       },
       onProjectUpdated: ({ project }) => {
-        if (project) setProjects((prev) => upsertById(prev, project));
+        if (project) applyProject(project);
+      },
+      onProjectRemoved: ({ projectId, projectName }) => {
+        dropLocalProject(projectId);
+        toast.info(
+          projectName ? `You were removed from ${projectName}` : 'You were removed from a project',
+        );
       },
       onTeamUpserted: ({ team }) => {
         if (team) setTeams((prev) => upsertById(prev, team));
@@ -182,7 +233,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         if (teamId) setTeams((prev) => prev.filter((team) => team.id !== teamId));
       },
     });
-  }, []);
+  }, [dropLocalProject, toast, user]);
 
   const getProject = useCallback((projectId: string) => projects.find((p) => p.id === projectId), [projects]);
   const getTask = useCallback((taskId: string) => tasks.find((t) => t.id === taskId), [tasks]);
@@ -328,8 +379,30 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   );
 
   const removeMember = useCallback(async (projectId: string, memberId: string) => {
-    const { project } = await workspaceApi.removeMemberRequest(projectId, memberId);
+    const { project, tasks, timeline } = await workspaceApi.removeMemberRequest(projectId, memberId);
     setProjects((prev) => upsertById(prev, project));
+    if (tasks?.length) {
+      setTasks((prev) => tasks.reduce((acc, task) => upsertById(acc, task), prev));
+    } else {
+      setTasks((prev) =>
+        prev.map((task) =>
+          task.projectId === projectId && task.assigneeId === memberId
+            ? { ...task, assigneeId: '', assigneeName: 'Unassigned' }
+            : task,
+        ),
+      );
+    }
+    if (timeline?.length) {
+      setTimeline((prev) => timeline.reduce((acc, item) => upsertById(acc, item), prev));
+    } else {
+      setTimeline((prev) =>
+        prev.map((item) =>
+          item.projectId === projectId && item.assigneeId === memberId
+            ? { ...item, assigneeId: null, assigneeName: null }
+            : item,
+        ),
+      );
+    }
   }, []);
 
   const updateMemberRole = useCallback(async (projectId: string, memberId: string, role: ProjectRole) => {

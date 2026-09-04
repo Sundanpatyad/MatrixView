@@ -201,6 +201,10 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const openNotification = useCallback(
     async (n: AppNotification) => {
       if (!n.readAt) await markRead([n.id]);
+      if (n.type === 'project.invited') {
+        navigate(`/notifications?n=${encodeURIComponent(n.id)}`);
+        return;
+      }
       if (n.href) navigate(n.href);
     },
     [markRead, navigate],

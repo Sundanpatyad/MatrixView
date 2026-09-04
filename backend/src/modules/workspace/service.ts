@@ -22,6 +22,7 @@ import {
   serializeTimeline,
 } from './serialize.js';
 import { broadcastProjectEvent } from './boardRealtime.js';
+import { emitToUser, leaveProjectRoomForUser } from '../../gateway/io.js';
 import {
   deleteStoredMedia,
   deleteStoredMediaMany,
@@ -327,7 +328,7 @@ export async function addMember(
       type: 'project.invited',
       title: 'Project invite',
       body: `${name} invited you to ${project.name}. Accept to join.`,
-      href: '/',
+      href: '/notifications',
       projectId: String(project._id),
       meta: {
         inviteId: String(invite._id),
@@ -623,16 +624,72 @@ export async function removeMember(actor: Actor, projectId: string, memberId: st
     }
   }
 
+  const assigneeIds = [member.id];
+  if (member.userId) assigneeIds.push(String(member.userId));
+
+  let removedUserId = member.userId ? String(member.userId) : null;
+  if (!removedUserId && member.email) {
+    const account = await User.findOne({ email: member.email.toLowerCase() }).select('_id').lean();
+    if (account) removedUserId = String(account._id);
+  }
+  const projectName = project.name;
+  const removedProjectId = String(project._id);
+
   project.members = project.members.filter((m) => m.id !== memberId) as typeof project.members;
   await project.save();
 
-  // Keep team membership in sync when a project member is removed
-  await Team.updateMany(
-    { projectId: project._id },
-    { $pull: { memberIds: memberId } },
+  await Team.updateMany({ projectId: project._id }, { $pull: { memberIds: memberId } });
+
+  await ProjectInvite.updateMany(
+    { projectId: project._id, email: member.email, status: 'pending' },
+    { $set: { status: 'revoked' } },
   );
 
-  return presentProject(project);
+  const assignedTasks = await Task.find({
+    projectId: project._id,
+    assigneeId: { $in: assigneeIds },
+  });
+  for (const task of assignedTasks) {
+    task.assigneeId = '';
+    task.assigneeName = 'Unassigned';
+    await task.save();
+  }
+
+  const assignedTimeline = await TimelineItem.find({
+    projectId: project._id,
+    assigneeId: { $in: assigneeIds },
+  });
+  for (const item of assignedTimeline) {
+    item.assigneeId = null;
+    item.assigneeName = null;
+    await item.save();
+  }
+
+  const presented = await presentProject(project);
+  const presentedTasks = await presentTasks(assignedTasks);
+  const presentedTimeline = assignedTimeline.map(serializeTimeline);
+
+  if (removedUserId) {
+    leaveProjectRoomForUser(removedUserId, removedProjectId);
+    emitToUser(removedUserId, 'project:removed', {
+      projectId: removedProjectId,
+      projectName,
+    });
+  }
+
+  for (const task of presentedTasks) {
+    await broadcastProjectEvent(project, 'task:updated', {
+      task,
+      actorId: actor.sub,
+      changed: ['assigneeId', 'assigneeName'],
+    });
+  }
+  await broadcastProjectEvent(project, 'project:updated', {
+    project: presented,
+    actorId: actor.sub,
+  });
+
+  return { project: presented, tasks: presentedTasks, timeline: presentedTimeline };
 }
 
 export async function addColumn(actor: Actor, projectId: string, label: string) {

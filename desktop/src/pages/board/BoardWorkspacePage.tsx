@@ -23,6 +23,7 @@ import { Select } from '@/components/ui/Select';
 import { UserAvatar, avatarFromMembers } from '@/components/ui/UserAvatar';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { cn } from '@/lib/cn';
+import { useToast } from '@/lib/toast/ToastContext';
 import {
   isTaskAssignedTo,
   isTaskAssignedToUser,
@@ -33,6 +34,7 @@ import {
   TASK_PRIORITIES,
   TASK_TYPES,
   type BoardTask,
+  type ProjectMember,
   type TaskPriority,
   type TaskStatus,
   type TaskType,
@@ -46,6 +48,7 @@ type AssigneeFilter = 'everyone' | 'me' | 'unassigned' | string;
 
 export function BoardWorkspacePage() {
   const { user } = useAuth();
+  const toast = useToast();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const {
@@ -61,6 +64,7 @@ export function BoardWorkspacePage() {
     isProjectAdmin,
     uploadProjectAvatar,
     removeProjectAvatar,
+    removeMember,
   } = useWorkspace();
 
   const queryProjectId = searchParams.get('project') ?? '';
@@ -95,20 +99,37 @@ export function BoardWorkspacePage() {
     null,
   );
   const [membersPanelOpen, setMembersPanelOpen] = useState(false);
+  const [memberToRemove, setMemberToRemove] = useState<ProjectMember | null>(null);
+  const [removingMember, setRemovingMember] = useState(false);
   const [avatarBusy, setAvatarBusy] = useState(false);
   const renameInputRef = useRef<HTMLInputElement>(null);
   const addColumnInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (queryProjectId && projects.some((p) => p.id === queryProjectId)) {
+    const stillHasQuery = Boolean(
+      queryProjectId && projects.some((p) => p.id === queryProjectId),
+    );
+    if (stillHasQuery) {
       setProjectId(queryProjectId);
       return;
     }
+
+    if (queryProjectId) {
+      const next = new URLSearchParams(searchParams);
+      next.delete('project');
+      next.delete('task');
+      setSearchParams(next, { replace: true });
+      setSelectedId(null);
+      setProjectId(projects[0]?.id ?? '');
+      return;
+    }
+
     if (!projectId && projects[0]) setProjectId(projects[0].id);
     if (projectId && !projects.some((p) => p.id === projectId)) {
       setProjectId(projects[0]?.id ?? '');
+      setSelectedId(null);
     }
-  }, [projects, projectId, queryProjectId]);
+  }, [projects, projectId, queryProjectId, searchParams, setSearchParams]);
 
   useEffect(() => {
     if (!queryTaskId) return;
@@ -963,24 +984,31 @@ export function BoardWorkspacePage() {
                       Unassigned
                     </button>
                   </li>
-                  {members
-                    .filter((m) => m.status !== 'pending')
-                    .map((m) => {
+                  {members.map((m) => {
                       const isYou = meMember?.id === m.id;
-                      const active = assigneeFilter === m.id || (assigneeFilter === 'me' && isYou);
+                      const pending = m.status === 'pending';
+                      const active =
+                        !pending &&
+                        (assigneeFilter === m.id || (assigneeFilter === 'me' && isYou));
                       const count = getProjectTasks(project.id).filter((t) =>
                         isTaskAssignedTo(t, m),
                       ).length;
+                      const canRemove =
+                        canManageProject && !(m.role === 'admin' && members.filter((x) => x.role === 'admin' && x.status !== 'pending').length <= 1);
                       return (
                         <li key={m.id}>
-                          <button
-                            type="button"
-                            onClick={() => onAssigneeChange(isYou ? 'me' : m.id)}
+                          <div
                             className={cn(
-                              'flex w-full items-center gap-2.5 rounded-lg px-1.5 py-2 text-left transition',
+                              'flex w-full items-center gap-2.5 rounded-lg px-1.5 py-2',
                               active ? 'bg-brand-500/10' : 'hover:bg-ink-700',
                             )}
                           >
+                            <button
+                              type="button"
+                              disabled={pending}
+                              onClick={() => onAssigneeChange(isYou ? 'me' : m.id)}
+                              className="flex min-w-0 flex-1 items-center gap-2.5 text-left disabled:cursor-default"
+                            >
                             <UserAvatar
                               name={m.name}
                               src={m.avatarUrl}
@@ -995,12 +1023,30 @@ export function BoardWorkspacePage() {
                                 {isYou ? (
                                   <span className="ml-1 font-medium text-ink-400">(you)</span>
                                 ) : null}
+                                {pending ? (
+                                  <span className="ml-1 font-semibold uppercase tracking-wide text-[#fee75c]">
+                                    Pending
+                                  </span>
+                                ) : null}
                               </p>
                               <p className="truncate text-[11px] text-ink-300">
-                                {count} task{count === 1 ? '' : 's'} · {m.role}
+                                {pending
+                                  ? `Invite sent · ${m.role}`
+                                  : `${count} task${count === 1 ? '' : 's'} · ${m.role}`}
                               </p>
                             </div>
-                          </button>
+                            </button>
+                            {canRemove ? (
+                              <button
+                                type="button"
+                                title="Remove from project"
+                                onClick={() => setMemberToRemove(m)}
+                                className="shrink-0 px-1 text-[11px] font-semibold text-[#ed4245] hover:underline"
+                              >
+                                Remove
+                              </button>
+                            ) : null}
+                          </div>
                         </li>
                       );
                     })}
@@ -1055,6 +1101,33 @@ export function BoardWorkspacePage() {
           onClose={() => openTask(null)}
         />
       ) : null}
+
+      <ConfirmModal
+        open={Boolean(memberToRemove)}
+        title="Remove member?"
+        message={
+          memberToRemove
+            ? `Remove ${memberToRemove.name} from this project? Their tasks will move to the backlog (unassigned).`
+            : ''
+        }
+        confirmLabel="Remove"
+        danger
+        busy={removingMember}
+        onCancel={() => setMemberToRemove(null)}
+        onConfirm={async () => {
+          if (!memberToRemove || !project) return;
+          setRemovingMember(true);
+          try {
+            await removeMember(project.id, memberToRemove.id);
+            toast.success(`${memberToRemove.name} removed. Their tasks are in the backlog.`);
+            setMemberToRemove(null);
+          } catch (err) {
+            toast.fromError(err, 'Could not remove member');
+          } finally {
+            setRemovingMember(false);
+          }
+        }}
+      />
 
       <ConfirmModal
         open={Boolean(columnToRemove)}

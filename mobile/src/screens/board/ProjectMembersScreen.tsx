@@ -54,7 +54,9 @@ export function ProjectMembersScreen({ route }: Props) {
   };
 
   const confirmRemove = (memberId: string, memberName: string) => {
-    Alert.alert('Remove member', `Remove ${memberName} from ${project.name}?`, [
+    Alert.alert(
+      'Remove member',
+      `Remove ${memberName} from ${project.name}? Their tasks will move to the backlog (unassigned).`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Remove',

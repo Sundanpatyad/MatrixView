@@ -19,7 +19,7 @@ export function ConversationInfoScreen({ route, navigation }: Props) {
   const colors = useColors();
   const toast = useToast();
   const { user } = useAuth();
-  const { conversations, users, presence, renameGroup, setGroupAvatar, addMembers, removeMember } = useChat();
+  const { conversations, users, presence, connected, renameGroup, setGroupAvatar, addMembers, removeMember } = useChat();
 
   const conversation = conversations.find((entry) => entry.id === conversationId);
 
@@ -169,7 +169,9 @@ export function ConversationInfoScreen({ route, navigation }: Props) {
           </View>
 
           {conversation.members.map((member) => {
-            const online = presence[member.id]?.online ?? false;
+            const online = isSelf
+              ? connected
+              : presence[member.id]?.online ?? false;
             const isSelf = member.id === user?.id;
             return (
               <View key={member.id} style={styles.memberRow}>
@@ -180,7 +182,7 @@ export function ConversationInfoScreen({ route, navigation }: Props) {
                     {isSelf ? ' (you)' : ''}
                   </Text>
                   <Text style={[styles.memberEmail, { color: colors.textSubtle }]} numberOfLines={1}>
-                    {member.email}
+                    {online ? 'Online' : 'Offline'}
                   </Text>
                 </View>
 

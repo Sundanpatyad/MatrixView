@@ -144,12 +144,12 @@ router.patch('/projects/:projectId/members/:memberId', async (req, res, next) =>
 
 router.delete('/projects/:projectId/members/:memberId', async (req, res, next) => {
   try {
-    const project = await workspace.removeMember(
+    const result = await workspace.removeMember(
       await actorFrom(req as AuthedRequest),
       param(req.params.projectId),
       param(req.params.memberId),
     );
-    res.json({ project });
+    res.json(result);
   } catch (err) {
     next(err);
   }

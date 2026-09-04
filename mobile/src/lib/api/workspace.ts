@@ -73,10 +73,10 @@ export function updateMemberRoleRequest(projectId: string, memberId: string, rol
 }
 
 export function removeMemberRequest(projectId: string, memberId: string) {
-  return apiFetch<{ project: Project }>(`/api/projects/${projectId}/members/${memberId}`, {
-    method: 'DELETE',
-    auth: true,
-  });
+  return apiFetch<{ project: Project; tasks?: BoardTask[]; timeline?: TimelineItem[] }>(
+    `/api/projects/${projectId}/members/${memberId}`,
+    { method: 'DELETE', auth: true },
+  );
 }
 
 export function addColumnRequest(projectId: string, label: string) {

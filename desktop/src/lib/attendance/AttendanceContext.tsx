@@ -18,6 +18,7 @@ import {
   type AppUsage,
 } from '@/lib/api/activity';
 import { useAuth } from '@/lib/auth/AuthContext';
+import { useWorkspace } from '@/lib/workspace/WorkspaceContext';
 import {
   randomCheckInConfirmMessage,
   randomCheckInMessage,
@@ -90,6 +91,7 @@ function applyCheckedInSession(
 
 export function AttendanceProvider({ children }: { children: ReactNode }) {
   const { isAuthenticated, user } = useAuth();
+  const { tasks, isLoading: workspaceLoading } = useWorkspace();
 
   useEffect(() => {
     activityTracker.configureUser(user ? { id: user.id, orgId: user.orgId } : null);
@@ -362,6 +364,15 @@ export function AttendanceProvider({ children }: { children: ReactNode }) {
   const setActiveTask = useCallback((id: string | null) => {
     setActiveTaskId(id);
   }, []);
+
+  // If the active task's project was dropped (e.g. this user was removed),
+  // clear it — do not check them out of attendance.
+  useEffect(() => {
+    if (workspaceLoading || !activeTaskId) return;
+    if (!tasks.some((t) => t.id === activeTaskId)) {
+      setActiveTaskId(null);
+    }
+  }, [activeTaskId, tasks, workspaceLoading]);
 
   const value = useMemo(
     () => ({

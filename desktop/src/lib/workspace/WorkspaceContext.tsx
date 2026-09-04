@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from 'react';
 import { useAuth } from '@/lib/auth/AuthContext';
+import { useToast } from '@/lib/toast/ToastContext';
 import {
   addColumnRequest,
   addCommentRequest,
@@ -210,6 +211,19 @@ function upsertTask(tasks: BoardTask[], task: BoardTask) {
   return next;
 }
 
+function isActiveProjectMember(
+  project: { members: Array<{ email: string; userId?: string | null; status?: string }> },
+  viewer?: { email?: string; id?: string } | null,
+) {
+  if (!viewer?.email && !viewer?.id) return true;
+  return project.members.some((m) => {
+    if (m.status === 'pending') return false;
+    if (viewer.id && m.userId && m.userId === viewer.id) return true;
+    if (viewer.email && m.email.toLowerCase() === viewer.email.toLowerCase()) return true;
+    return false;
+  });
+}
+
 function readStoredActiveProject(): ActiveProjectId {
   try {
     const v = localStorage.getItem(ACTIVE_PROJECT_KEY);
@@ -222,6 +236,7 @@ function readStoredActiveProject(): ActiveProjectId {
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const { user, isAuthenticated, isBootstrapping } = useAuth();
+  const toast = useToast();
   const [state, setState] = useState<WorkspaceState>({
     projects: [],
     tasks: [],
@@ -239,6 +254,25 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     } catch {
       /* ignore */
     }
+  }, []);
+
+  const dropLocalProject = useCallback((projectId: string) => {
+    leaveProject(projectId);
+    setState((prev) => ({
+      projects: prev.projects.filter((p) => p.id !== projectId),
+      tasks: prev.tasks.filter((t) => t.projectId !== projectId),
+      timeline: prev.timeline.filter((t) => t.projectId !== projectId),
+      teams: prev.teams.filter((t) => t.projectId !== projectId),
+    }));
+    setActiveProjectIdState((cur) => {
+      const next: ActiveProjectId = cur === projectId ? 'all' : cur;
+      try {
+        localStorage.setItem(ACTIVE_PROJECT_KEY, next);
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
   }, []);
 
   const refresh = useCallback(async () => {
@@ -303,14 +337,21 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       if (!payload?.task?.id) return;
       // Always apply remote state (including own actor) so optimistic status
       // converges to the server payload for every open board.
-      setState((prev) => ({
-        ...prev,
-        tasks: upsertTask(prev.tasks, ensureTaskFields(payload.task)),
-      }));
+      setState((prev) => {
+        if (!prev.projects.some((p) => p.id === payload.task.projectId)) return prev;
+        return {
+          ...prev,
+          tasks: upsertTask(prev.tasks, ensureTaskFields(payload.task)),
+        };
+      });
     };
 
     const applyColumns = (payload: BoardColumnsEventPayload) => {
       if (!payload?.project?.id) return;
+      if (!isActiveProjectMember(payload.project, user)) {
+        dropLocalProject(payload.project.id);
+        return;
+      }
       setState((prev) => {
         let tasks = prev.tasks;
         if (payload.tasks) {
@@ -354,6 +395,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       onTaskUpdated: applyTask,
       onProjectColumns: applyColumns,
       onProjectUpdated: applyColumns,
+      onProjectRemoved: (payload) => {
+        dropLocalProject(payload.projectId);
+        toast.info(
+          payload.projectName
+            ? `You were removed from ${payload.projectName}`
+            : 'You were removed from a project',
+        );
+      },
       onTeamUpserted: applyTeamUpsert,
       onTeamDeleted: applyTeamDeleted,
     });
@@ -379,11 +428,12 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         'onTaskUpdated',
         'onProjectColumns',
         'onProjectUpdated',
+        'onProjectRemoved',
         'onTeamUpserted',
         'onTeamDeleted',
       ]);
     };
-  }, [isAuthenticated, isBootstrapping, user?.id]);
+  }, [dropLocalProject, isAuthenticated, isBootstrapping, toast, user]);
 
   // Re-join when project list changes (new project created / invited)
   useEffect(() => {
@@ -601,16 +651,36 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   );
 
   const removeMember = useCallback(async (projectId: string, memberId: string) => {
-    const { project } = await removeMemberRequest(projectId, memberId);
-    setState((prev) => ({
-      ...prev,
-      projects: upsertProject(prev.projects, ensureProjectColumns(project)),
-      teams: prev.teams.map((t) =>
-        t.projectId === projectId
-          ? { ...t, memberIds: t.memberIds.filter((id) => id !== memberId) }
-          : t,
-      ),
-    }));
+    const { project, tasks, timeline } = await removeMemberRequest(projectId, memberId);
+    setState((prev) => {
+      const taskById = new Map((tasks ?? []).map((t) => [t.id, t]));
+      const timelineById = new Map((timeline ?? []).map((item) => [item.id, item]));
+      return {
+        ...prev,
+        projects: upsertProject(prev.projects, ensureProjectColumns(project)),
+        teams: prev.teams.map((t) =>
+          t.projectId === projectId
+            ? { ...t, memberIds: t.memberIds.filter((id) => id !== memberId) }
+            : t,
+        ),
+        tasks: prev.tasks.map((t) => {
+          const next = taskById.get(t.id);
+          if (next) return ensureTaskFields(next);
+          if (t.projectId === projectId && t.assigneeId === memberId) {
+            return ensureTaskFields({ ...t, assigneeId: '', assigneeName: 'Unassigned' });
+          }
+          return t;
+        }),
+        timeline: prev.timeline.map((item) => {
+          const next = timelineById.get(item.id);
+          if (next) return next;
+          if (item.projectId === projectId && item.assigneeId === memberId) {
+            return { ...item, assigneeId: null, assigneeName: null };
+          }
+          return item;
+        }),
+      };
+    });
   }, []);
 
   const isProjectAdmin = useCallback(

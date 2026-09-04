@@ -1,21 +1,111 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { NotificationRow } from '@/components/notifications/NotificationBell';
 import { Button } from '@/components/ui/Button';
 import { IconBell, IconCheck, IconTrash } from '@/components/ui/Icons';
 import { cn } from '@/lib/cn';
-import type { NotificationType } from '@/lib/api/notifications';
+import type { AppNotification, NotificationType } from '@/lib/api/notifications';
 import { useNotifications } from '@/lib/notifications/NotificationContext';
+import { useToast } from '@/lib/toast/ToastContext';
+import { useWorkspace } from '@/lib/workspace/WorkspaceContext';
 
 const FILTERS: { id: 'all' | 'unread' | NotificationType; label: string }[] = [
   { id: 'all', label: 'All' },
   { id: 'unread', label: 'Unread' },
+  { id: 'project.invited', label: 'Invites' },
   { id: 'task.assigned', label: 'Tasks' },
   { id: 'message.new', label: 'Messages' },
   { id: 'project.added', label: 'Projects' },
   { id: 'team.added', label: 'Group' },
   { id: 'task.commented', label: 'Comments' },
 ];
+
+function inviteIdOf(n: AppNotification): string | null {
+  const raw = n.meta?.inviteId;
+  return typeof raw === 'string' && raw.trim() ? raw.trim() : null;
+}
+
+function InviteActions({
+  notification,
+  onResolved,
+}: {
+  notification: AppNotification;
+  onResolved: () => void;
+}) {
+  const { pendingInvites, acceptInvite, declineInvite, setActiveProjectId, isLoading } = useWorkspace();
+  const toast = useToast();
+  const navigate = useNavigate();
+  const [busy, setBusy] = useState(false);
+  const inviteId = inviteIdOf(notification);
+  const pending = inviteId ? pendingInvites.find((i) => i.id === inviteId) : undefined;
+
+  if (notification.type !== 'project.invited') return null;
+
+  if (!inviteId || !pending) {
+    if (isLoading) {
+      return <p className="mt-4 text-sm text-ink-400">Loading invite…</p>;
+    }
+    return (
+      <p className="mt-4 text-sm text-ink-400">
+        This invite is no longer pending. You may already have joined, or it was declined.
+      </p>
+    );
+  }
+
+  async function onAccept() {
+    if (!inviteId) return;
+    setBusy(true);
+    try {
+      const project = await acceptInvite(inviteId);
+      setActiveProjectId(project.id);
+      toast.success(`You joined ${project.name}.`);
+      onResolved();
+      navigate(`/board?project=${encodeURIComponent(project.id)}`);
+    } catch (err) {
+      toast.fromError(err, 'Could not accept invite');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onDecline() {
+    if (!inviteId) return;
+    setBusy(true);
+    try {
+      await declineInvite(inviteId);
+      toast.info('Invite declined.');
+      onResolved();
+    } catch (err) {
+      toast.fromError(err, 'Could not decline invite');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mt-5 rounded-xl border border-[#f0b232]/35 bg-[#f0b232]/8 p-4">
+      <p className="text-sm font-semibold text-ink-50">{pending.projectName}</p>
+      <p className="mt-0.5 text-xs text-ink-400">
+        {pending.inviterName} invited you as {pending.role}. Accept to join — you will not see the
+        board until then.
+      </p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Button type="button" size="sm" disabled={busy} onClick={() => void onAccept()}>
+          {busy ? '…' : 'Accept'}
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="secondary"
+          disabled={busy}
+          onClick={() => void onDecline()}
+        >
+          Decline
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 export function NotificationsPage() {
   const {
@@ -30,12 +120,18 @@ export function NotificationsPage() {
     openNotification,
     refresh,
   } = useNotifications();
+  const [params, setParams] = useSearchParams();
+  const queryId = params.get('n');
   const [filter, setFilter] = useState<(typeof FILTERS)[number]['id']>('all');
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(queryId);
 
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    if (queryId) setSelectedId(queryId);
+  }, [queryId]);
 
   const filtered = useMemo(() => {
     if (filter === 'all') return items;
@@ -48,7 +144,6 @@ export function NotificationsPage() {
 
   const selected = filtered.find((n) => n.id === selectedId) ?? filtered[0] ?? null;
 
-  // Keep selection valid when filter/list changes
   useEffect(() => {
     if (!selected) {
       setSelectedId(null);
@@ -57,11 +152,19 @@ export function NotificationsPage() {
     if (selectedId !== selected.id) setSelectedId(selected.id);
   }, [selected, selectedId]);
 
-  // Opening / viewing a notification on the detail page marks it read + updates header count
   useEffect(() => {
     if (!selected || selected.readAt) return;
     void markRead([selected.id]);
   }, [selected?.id, selected?.readAt, markRead]);
+
+  function selectItem(id: string) {
+    setSelectedId(id);
+    setParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set('n', id);
+      return next;
+    }, { replace: true });
+  }
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-ink-700">
@@ -70,7 +173,7 @@ export function NotificationsPage() {
           <h1 className="text-[18px] font-semibold tracking-tight text-ink-50">Notifications</h1>
           <p className="mt-0.5 text-[13px] text-ink-400">
             {unreadCount > 0
-              ? `${unreadCount} unread · tasks, messages, and project updates`
+              ? `${unreadCount} unread · tasks, messages, and project invites`
               : 'All caught up'}
           </p>
         </div>
@@ -133,7 +236,7 @@ export function NotificationsPage() {
                   <NotificationRow
                     item={n}
                     onOpen={(item) => {
-                      setSelectedId(item.id);
+                      selectItem(item.id);
                       if (!item.readAt) void markRead([item.id]);
                     }}
                   />
@@ -156,13 +259,15 @@ export function NotificationsPage() {
           )}
         </div>
 
-        <aside className="hidden min-h-0 overflow-y-auto lg:block">
+        <aside className="min-h-0 overflow-y-auto">
           {selected ? (
             <div className="flex h-full flex-col p-5 sm:p-6">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-[11px] font-semibold tracking-wide text-ink-400 uppercase">
-                    {selected.type.replace('.', ' · ')}
+                    {selected.type === 'project.invited'
+                      ? 'Project invite'
+                      : selected.type.replace('.', ' · ')}
                   </p>
                   <h2 className="mt-1 text-lg font-semibold text-ink-50">{selected.title}</h2>
                   <p className="mt-1 text-xs text-ink-400">
@@ -184,7 +289,13 @@ export function NotificationsPage() {
                 {selected.body || 'No additional details.'}
               </p>
 
-              {Object.keys(selected.meta ?? {}).length > 0 ? (
+              <InviteActions
+                notification={selected}
+                onResolved={() => void remove(selected.id)}
+              />
+
+              {selected.type !== 'project.invited' &&
+              Object.keys(selected.meta ?? {}).length > 0 ? (
                 <dl className="mt-6 space-y-2 rounded-xl bg-ink-800/70 p-4 text-sm">
                   {Object.entries(selected.meta).map(([key, value]) => (
                     <div key={key} className="flex justify-between gap-3">
@@ -195,25 +306,27 @@ export function NotificationsPage() {
                 </dl>
               ) : null}
 
-              <div className="mt-auto flex flex-wrap gap-2 pt-8">
-                <Button type="button" onClick={() => void openNotification(selected)}>
-                  Open
-                </Button>
-                {!selected.readAt ? (
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => void markRead([selected.id])}
-                  >
-                    Mark read
+              {selected.type !== 'project.invited' ? (
+                <div className="mt-auto flex flex-wrap gap-2 pt-8">
+                  <Button type="button" onClick={() => void openNotification(selected)}>
+                    Open
                   </Button>
-                ) : null}
-                <Link to={selected.href} className="inline-flex">
-                  <Button type="button" variant="ghost">
-                    Deep link
-                  </Button>
-                </Link>
-              </div>
+                  {!selected.readAt ? (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => void markRead([selected.id])}
+                    >
+                      Mark read
+                    </Button>
+                  ) : null}
+                  <Link to={selected.href} className="inline-flex">
+                    <Button type="button" variant="ghost">
+                      Deep link
+                    </Button>
+                  </Link>
+                </div>
+              ) : null}
             </div>
           ) : (
             <div className="flex h-full items-center justify-center p-8 text-sm text-ink-400">

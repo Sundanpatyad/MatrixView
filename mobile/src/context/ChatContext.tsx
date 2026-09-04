@@ -122,6 +122,17 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       ]);
       setConversations(sortConversations(conversationResult.conversations ?? []));
       setUsers(userResult.users ?? []);
+      setPresence((prev) => {
+        const next = { ...prev };
+        for (const member of userResult.users ?? []) {
+          next[member.id] = {
+            userId: member.id,
+            checkedIn: Boolean(member.checkedIn),
+            online: prev[member.id]?.online ?? Boolean(member.online),
+          };
+        }
+        return next;
+      });
     } finally {
       setIsLoading(false);
     }
@@ -149,13 +160,42 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     patchSocketHandlers({
-      onConnectionChange: (next) => setConnected(next),
+      onConnectionChange: (next) => {
+        setConnected(next);
+        const meId = user?.id;
+        if (!meId) return;
+        setPresence((prev) => ({
+          ...prev,
+          [meId]: {
+            userId: meId,
+            checkedIn: prev[meId]?.checkedIn ?? false,
+            online: next,
+          },
+        }));
+      },
 
       onPresenceSnapshot: ({ users: snapshot }) => {
-        setPresence(Object.fromEntries((snapshot ?? []).map((entry) => [entry.userId, entry])));
+        setPresence((prev) => {
+          const next = { ...prev };
+          for (const entry of snapshot ?? []) {
+            next[entry.userId] = {
+              userId: entry.userId,
+              checkedIn: Boolean(entry.checkedIn),
+              online: Boolean(entry.online),
+            };
+          }
+          return next;
+        });
       },
       onPresenceUpdate: (entry) => {
-        setPresence((prev) => ({ ...prev, [entry.userId]: entry }));
+        setPresence((prev) => ({
+          ...prev,
+          [entry.userId]: {
+            userId: entry.userId,
+            checkedIn: Boolean(entry.checkedIn),
+            online: Boolean(entry.online),
+          },
+        }));
       },
 
       onMessageNew: ({ message }) => {

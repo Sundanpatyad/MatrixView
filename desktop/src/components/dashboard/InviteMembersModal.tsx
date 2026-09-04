@@ -168,7 +168,7 @@ export function InviteMembersModal({ project, onClose }: Props) {
         title="Remove member?"
         message={
           memberToRemove
-            ? `Remove ${memberToRemove.name} from this project? They’ll lose access to the board.`
+            ? `Remove ${memberToRemove.name} from this project? They’ll lose access. Their tasks move to the backlog (unassigned).`
             : ''
         }
         confirmLabel="Remove"

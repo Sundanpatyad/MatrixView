@@ -95,7 +95,7 @@ export function updateMemberRoleRequest(
 export function removeMemberRequest(
   projectId: string,
   memberId: string,
-): Promise<{ project: Project }> {
+): Promise<{ project: Project; tasks: BoardTask[]; timeline: TimelineItem[] }> {
   return apiFetch(`/api/projects/${projectId}/members/${memberId}`, {
     method: 'DELETE',
     auth: true,

@@ -11,6 +11,7 @@ import * as chat from '../modules/chat/service.js';
 import { verifyAccessToken, type AccessTokenPayload } from '../utils/tokens.js';
 import {
   emitPresenceUpdate,
+  presenceSnapshotForUser,
   onlineCounts,
   setIO,
   emitToUser,
@@ -274,28 +275,6 @@ async function authenticateSocket(socket: Socket): Promise<SocketAuth> {
   return payload;
 }
 
-async function orgPresenceSnapshot(orgId: string) {
-  const [users, activeSessions] = await Promise.all([
-    User.find({
-      orgId,
-      status: { $in: ['active', 'invited', 'locked'] },
-    })
-      .select('_id')
-      .lean(),
-    ActivitySession.find({ orgId, status: 'active' }).select('userId').lean(),
-  ]);
-
-  const checkedIn = new Set(activeSessions.map((s) => String(s.userId)));
-  return users.map((u) => {
-    const userId = String(u._id);
-    return {
-      userId,
-      checkedIn: checkedIn.has(userId),
-      online: (onlineCounts.get(userId) ?? 0) > 0,
-    };
-  });
-}
-
 async function isConversationMember(conversationId: string, userId: string, orgId: string) {
   if (!Types.ObjectId.isValid(conversationId)) return false;
   const conversation = await Conversation.findOne({
@@ -351,19 +330,19 @@ export function initSocket(httpServer: HttpServer) {
       status: 'active',
     });
 
-    emitPresenceUpdate(orgId, {
+    await emitPresenceUpdate(orgId, {
       userId,
       checkedIn: Boolean(attendance),
       online: true,
     });
 
     socket.emit('presence:snapshot', {
-      users: await orgPresenceSnapshot(orgId),
+      users: await presenceSnapshotForUser(userId, orgId),
     });
 
     socket.on('presence:request', async (_payload?: unknown, ack?) => {
       try {
-        const users = await orgPresenceSnapshot(orgId);
+        const users = await presenceSnapshotForUser(userId, orgId);
         socket.emit('presence:snapshot', { users });
         ack?.({ ok: true, count: users.length });
       } catch (err) {
@@ -1079,7 +1058,7 @@ export function initSocket(httpServer: HttpServer) {
           orgId,
           status: 'active',
         });
-        emitPresenceUpdate(orgId, {
+        await emitPresenceUpdate(orgId, {
           userId,
           checkedIn: Boolean(stillCheckedIn),
           online: false,

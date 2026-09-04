@@ -674,32 +674,22 @@ function AttachmentBlock({
 }
 
 function PresenceDot({
-  checkedIn,
   online,
   className,
 }: {
-  checkedIn?: boolean;
   online?: boolean;
   className?: string;
 }) {
-  // Socket-online takes priority for call affordances; checked-in is attendance.
   const socketOnline = Boolean(online);
-  const title = socketOnline
-    ? checkedIn
-      ? 'Online · checked in'
-      : 'Online'
-    : checkedIn
-      ? 'Checked in (offline for calls)'
-      : 'Offline';
   return (
     <span
       className={cn(
         'absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-white',
-        socketOnline ? 'bg-[#4BDE80]' : checkedIn ? 'bg-[#f0b232]' : 'bg-ink-300',
+        socketOnline ? 'bg-[#4BDE80]' : 'bg-ink-300',
         socketOnline && 'ring-1 ring-[#4BDE80]/40',
         className,
       )}
-      title={title}
+      title={socketOnline ? 'Online' : 'Offline'}
     />
   );
 }
@@ -868,11 +858,13 @@ function ModalShell({ onClose, children, title, subtitle }: ModalProps) {
 function NewDmModal({
   users,
   meId,
+  presence,
   onClose,
   onCreated,
 }: {
   users: ChatMember[];
   meId: string;
+  presence: Record<string, PresenceUser>;
   onClose: () => void;
   onCreated: (c: ChatConversation) => void;
 }) {
@@ -963,15 +955,22 @@ function NewDmModal({
               onClick={() => openDm({ userId: u.id })}
               className="flex w-full items-center gap-3 border-b border-ink-700 px-1 py-2.5 text-left hover:bg-ink-900 disabled:opacity-50"
             >
-              <UserAvatar name={u.name} src={u.avatarUrl} seed={u.id} size="lg" className="!h-9 !w-9" />
+              <span className="relative shrink-0">
+                <UserAvatar name={u.name} src={u.avatarUrl} seed={u.id} size="lg" className="!h-9 !w-9" />
+                <PresenceDot online={presence[u.id]?.online ?? u.online} />
+              </span>
               <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-2">
                   <span className="block truncate text-sm font-semibold text-ink-50">{u.name}</span>
-                  {u.checkedIn ? (
-                    <span className="shrink-0 text-[10px] font-semibold text-[#6fe99a]">
-                      In
+                  {(presence[u.id]?.online ?? u.online) ? (
+                    <span className="shrink-0 text-[10px] font-semibold text-[#4BDE80]">
+                      Online
                     </span>
-                  ) : null}
+                  ) : (
+                    <span className="shrink-0 text-[10px] font-semibold text-ink-400">
+                      Offline
+                    </span>
+                  )}
                 </span>
                 <span className="block truncate text-xs text-ink-300">{u.email}</span>
               </span>
@@ -986,11 +985,13 @@ function NewDmModal({
 function NewGroupModal({
   users,
   meId,
+  presence,
   onClose,
   onCreated,
 }: {
   users: ChatMember[];
   meId: string;
+  presence: Record<string, PresenceUser>;
   onClose: () => void;
   onCreated: (c: ChatConversation) => void;
 }) {
@@ -1104,7 +1105,10 @@ function NewGroupModal({
                   onChange={() => toggle(u.id)}
                   className="h-4 w-4 accent-brand-700"
                 />
-                <UserAvatar name={u.name} src={u.avatarUrl} seed={u.id} size="sm" />
+                <span className="relative shrink-0">
+                  <UserAvatar name={u.name} src={u.avatarUrl} seed={u.id} size="sm" />
+                  <PresenceDot online={presence[u.id]?.online ?? u.online} />
+                </span>
                 <span className="min-w-0">
                   <span className="block truncate text-sm font-medium text-ink-50">{u.name}</span>
                   <span className="block truncate text-xs text-ink-300">{u.email}</span>
@@ -1130,12 +1134,14 @@ function GroupManagePanel({
   conversation,
   users,
   meId,
+  presence,
   onUpdated,
   onClose,
 }: {
   conversation: ChatConversation;
   users: ChatMember[];
   meId: string;
+  presence: Record<string, PresenceUser>;
   onUpdated: (c: ChatConversation) => void;
   onClose: () => void;
 }) {
@@ -1266,7 +1272,12 @@ function GroupManagePanel({
               key={m.id}
               className="flex items-center justify-between gap-2 border-b border-ink-700 py-2"
             >
-              <div className="min-w-0">
+              <div className="flex min-w-0 items-center gap-2">
+                <span className="relative shrink-0">
+                  <UserAvatar name={m.name} src={m.avatarUrl} seed={m.id} size="sm" />
+                  <PresenceDot online={presence[m.id]?.online} />
+                </span>
+                <div className="min-w-0">
                 <p className="truncate text-sm font-medium text-ink-50">
                   {m.name}
                   {m.id === meId ? ' (you)' : ''}
@@ -1274,7 +1285,10 @@ function GroupManagePanel({
                     <span className="ml-1 text-[10px] font-semibold text-brand-700">Admin</span>
                   ) : null}
                 </p>
-                <p className="truncate text-xs text-ink-300">{m.email}</p>
+                <p className="truncate text-xs text-ink-300">
+                  {presence[m.id]?.online ? 'Online' : 'Offline'}
+                </p>
+                </div>
               </div>
               {(isCreator && m.id !== meId) || m.id === meId ? (
                 <Button
@@ -1536,8 +1550,8 @@ export function ChatPage() {
       return otherId ? presence[otherId] ?? null : null;
     }
     const others = active.memberIds.filter((id) => id !== meId);
-    const checkedInCount = others.filter((id) => presence[id]?.checkedIn).length;
-    return { checkedInCount, total: others.length };
+    const onlineCount = others.filter((id) => presence[id]?.online).length;
+    return { onlineCount, total: others.length };
   }, [active, meId, presence]);
 
   const refreshList = useCallback(
@@ -1634,8 +1648,21 @@ export function ChatPage() {
       onPresenceSnapshot: (users) => {
         setPresence((prev) => {
           const next = { ...prev };
-          for (const u of users) next[u.userId] = u;
+          for (const u of users) {
+            next[u.userId] = {
+              userId: u.userId,
+              checkedIn: Boolean(u.checkedIn),
+              online: Boolean(u.online),
+            };
+          }
           return next;
+        });
+        setOrgUsers((prev) => {
+          const byId = new Map(users.map((u) => [u.userId, u]));
+          return prev.map((m) => {
+            const live = byId.get(m.id);
+            return live ? { ...m, checkedIn: live.checkedIn, online: live.online } : m;
+          });
         });
       },
       onPresenceUpdate: (u) => {
@@ -1885,6 +1912,18 @@ export function ChatPage() {
       joinConversation(c.id);
     }
   }, [conversations, online, socketReady]);
+
+  useEffect(() => {
+    if (!meId) return;
+    setPresence((prev) => ({
+      ...prev,
+      [meId]: {
+        userId: meId,
+        checkedIn: prev[meId]?.checkedIn ?? false,
+        online: Boolean(socketReady),
+      },
+    }));
+  }, [meId, socketReady]);
 
   // Reset the local typing roster when switching threads.
   useEffect(() => {
@@ -2440,7 +2479,7 @@ export function ChatPage() {
                   <span className="relative shrink-0">
                     <ConversationAvatar conversation={c} meId={meId} size="lg" />
                     {c.type === 'dm' ? (
-                      <PresenceDot checkedIn={peer?.checkedIn} online={peer?.online} />
+                      <PresenceDot online={peer?.online} />
                     ) : null}
                   </span>
                   <span className="min-w-0 flex-1">
@@ -2506,11 +2545,8 @@ export function ChatPage() {
                 </button>
                 <span className="relative shrink-0">
                   <ConversationAvatar conversation={active} meId={meId} size="md" />
-                  {active.type === 'dm' && peerPresence && 'checkedIn' in peerPresence ? (
-                    <PresenceDot
-                      checkedIn={peerPresence.checkedIn}
-                      online={peerPresence.online}
-                    />
+                  {active.type === 'dm' && peerPresence && 'online' in peerPresence ? (
+                    <PresenceDot online={peerPresence.online} />
                   ) : null}
                 </span>
                 <div className="min-w-0">
@@ -2523,18 +2559,13 @@ export function ChatPage() {
                     ) : active.type === 'group' ? (
                       <>
                         {active.members.length} members
-                        {peerPresence && 'checkedInCount' in peerPresence
-                          ? ` · ${peerPresence.checkedInCount} checked in`
+                        {peerPresence && 'onlineCount' in peerPresence
+                          ? ` · ${peerPresence.onlineCount} online`
                           : ''}
                       </>
-                    ) : peerPresence && 'checkedIn' in peerPresence ? (
+                    ) : peerPresence && 'online' in peerPresence ? (
                       peerPresence.online ? (
-                        <span className="text-[#4BDE80]">
-                          Online
-                          {peerPresence.checkedIn ? ' · checked in' : ''}
-                        </span>
-                      ) : peerPresence.checkedIn ? (
-                        <span className="text-[#f0b232]">Checked in · offline for calls</span>
+                        <span className="text-[#4BDE80]">Online</span>
                       ) : (
                         'Offline'
                       )
@@ -3342,6 +3373,7 @@ export function ChatPage() {
         <NewDmModal
           users={orgUsers}
           meId={meId}
+          presence={presence}
           onClose={() => setModal(null)}
           onCreated={upsertConversation}
         />
@@ -3350,6 +3382,7 @@ export function ChatPage() {
         <NewGroupModal
           users={orgUsers}
           meId={meId}
+          presence={presence}
           onClose={() => setModal(null)}
           onCreated={upsertConversation}
         />
@@ -3359,6 +3392,7 @@ export function ChatPage() {
           conversation={active}
           users={orgUsers}
           meId={meId}
+          presence={presence}
           onClose={() => setModal(null)}
           onUpdated={(c) => {
             upsertConversation(c);

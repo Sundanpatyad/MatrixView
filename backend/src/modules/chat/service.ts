@@ -423,6 +423,15 @@ export async function listConversations(actor: Actor) {
 
 export async function listChatUsers(actor: Actor) {
   const peerIds = await sharedProjectPeerIds(actor);
+  const conversations = await Conversation.find({ memberIds: oid(actor.sub) })
+    .select('memberIds')
+    .lean();
+  for (const c of conversations) {
+    for (const id of c.memberIds) {
+      const s = String(id);
+      if (s !== actor.sub) peerIds.add(s);
+    }
+  }
   if (peerIds.size === 0) {
     return { users: [] };
   }
@@ -913,6 +922,7 @@ export async function forwardMessage(
   await target.save();
 
   const serialized = await serializeMessage(message);
+  const convSerialized = await serializeConversation(target, actor.sub);
 
   emitToConversation(targetConversationId, 'message:new', { message: serialized });
   for (const memberId of target.memberIds.map(String)) {

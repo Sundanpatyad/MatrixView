@@ -118,7 +118,7 @@ export function NewChatScreen({ navigation }: Props) {
                   {item.name}
                 </Text>
                 <Text style={[styles.email, { color: colors.textSubtle }]} numberOfLines={1}>
-                  {item.email}
+                  {online ? 'Online' : 'Offline'} · {item.email}
                 </Text>
               </View>
               {busyId === item.id ? (
