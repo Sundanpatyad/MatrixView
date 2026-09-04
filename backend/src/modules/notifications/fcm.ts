@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs';
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getMessaging, type Messaging } from 'firebase-admin/messaging';
 import { config } from '../../config.js';
@@ -34,36 +33,13 @@ function resolveCredentials(): {
   clientEmail: string;
   privateKey: string;
 } | null {
-  const { credentialsPath, projectId, clientEmail, privateKey } = config.firebase;
-
-  if (credentialsPath) {
-    try {
-      const raw = JSON.parse(readFileSync(credentialsPath, 'utf8')) as {
-        project_id?: string;
-        client_email?: string;
-        private_key?: string;
-      };
-      if (raw.project_id && raw.client_email && raw.private_key) {
-        return {
-          projectId: raw.project_id,
-          clientEmail: raw.client_email,
-          privateKey: raw.private_key,
-        };
-      }
-    } catch (err) {
-      console.error('[fcm] could not read FIREBASE_CREDENTIALS_PATH', err);
-    }
-  }
-
-  if (projectId && clientEmail && privateKey) {
-    return {
-      projectId,
-      clientEmail,
-      privateKey: privateKey.replace(/\\n/g, '\n'),
-    };
-  }
-
-  return null;
+  const { projectId, clientEmail, privateKey } = config.firebase;
+  if (!projectId || !clientEmail || !privateKey) return null;
+  return {
+    projectId,
+    clientEmail,
+    privateKey: privateKey.replace(/\\n/g, '\n'),
+  };
 }
 
 function asData(notification: SerializedNotification): Record<string, string> {

@@ -1,4 +1,3 @@
-import { resolve } from 'node:path';
 import 'dotenv/config';
 
 function required(name: string, fallback?: string): string {
@@ -67,8 +66,11 @@ export const config = {
     /**
      * iOS OAuth client ID (from the Google Cloud iOS plist). ID tokens from
      * native Google Sign-In may use this as `aud` instead of the web client.
+     * Fallback matches mobile/src/lib/auth/googleSignIn.ts.
      */
-    iosClientId: process.env.GOOGLE_IOS_CLIENT_ID ?? '',
+    iosClientId:
+      process.env.GOOGLE_IOS_CLIENT_ID ??
+      '569448299007-1gm4uv3qh7e78m2g3bod169dm93hkoi5.apps.googleusercontent.com',
     /**
      * Android OAuth client ID (Cloud Console "Android" type). Native Android
      * ID tokens may use this as `aud` instead of the web / desktop client.
@@ -77,8 +79,11 @@ export const config = {
     /**
      * Web application OAuth client ID. Native Android ID tokens are minted
      * for this audience when it is passed as webClientId.
+     * Fallback matches mobile/src/lib/auth/googleSignIn.ts.
      */
-    webClientId: process.env.GOOGLE_WEB_CLIENT_ID ?? '',
+    webClientId:
+      process.env.GOOGLE_WEB_CLIENT_ID ??
+      '569448299007-djn2v1re676r3rjcqm84fbrjraddbdnp.apps.googleusercontent.com',
     /** Must match an authorized redirect URI in Google Cloud Console */
     redirectUri: (
       process.env.GOOGLE_REDIRECT_URI ??
@@ -90,8 +95,5 @@ export const config = {
     clientEmail: process.env.FIREBASE_CLIENT_EMAIL ?? '',
     /** PEM with literal \n sequences in .env is expanded at use time */
     privateKey: process.env.FIREBASE_PRIVATE_KEY ?? '',
-    credentialsPath: process.env.FIREBASE_CREDENTIALS_PATH
-      ? resolve(process.cwd(), process.env.FIREBASE_CREDENTIALS_PATH)
-      : '',
   },
 };

@@ -179,13 +179,51 @@ export async function exchangeGoogleCode(
   return verifyGoogleIdToken(tokens.id_token);
 }
 
-export async function verifyGoogleIdToken(idToken: string): Promise<GoogleProfile> {
-  const audiences = [
+/** GCP / Firebase project numbers whose OAuth clients may mint DockX ID tokens. */
+const TRUSTED_GOOGLE_CLIENT_PREFIXES = [
+  '569448299007-', // MatrixView Cloud project
+  '1063136013781-', // DockX Firebase (google-services.json / FCM)
+];
+
+function peekJwtPayload(idToken: string): Record<string, unknown> | null {
+  const parts = idToken.split('.');
+  if (parts.length < 2) return null;
+  try {
+    return JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8')) as Record<
+      string,
+      unknown
+    >;
+  } catch {
+    return null;
+  }
+}
+
+function isTrustedGoogleClientId(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    value.endsWith('.apps.googleusercontent.com') &&
+    TRUSTED_GOOGLE_CLIENT_PREFIXES.some((prefix) => value.startsWith(prefix))
+  );
+}
+
+function audiencesForIdToken(idToken: string): string[] {
+  const configured = [
     config.google.clientId,
     config.google.webClientId,
     config.google.iosClientId,
     config.google.androidClientId,
   ].filter(Boolean);
+  const peeked = peekJwtPayload(idToken);
+  const fromToken = [peeked?.aud, peeked?.azp].flat().filter(isTrustedGoogleClientId);
+  return [...new Set([...configured, ...fromToken])];
+}
+
+export async function verifyGoogleIdToken(idToken: string): Promise<GoogleProfile> {
+  const peeked = peekJwtPayload(idToken);
+  if (!peeked) {
+    throw new AuthError('Invalid Google token', 401, 'GOOGLE_AUTH_FAILED');
+  }
+  const audiences = audiencesForIdToken(idToken);
   if (!audiences.length) {
     throw new AuthError('Google sign-in is not configured', 503, 'GOOGLE_NOT_CONFIGURED');
   }
@@ -200,7 +238,11 @@ export async function verifyGoogleIdToken(idToken: string): Promise<GoogleProfil
     payload = ticket.getPayload();
   } catch (err) {
     const detail = err instanceof Error ? err.message : '';
-    console.error('[google] id token verify failed', detail);
+    console.error('[google] id token verify failed', detail, {
+      aud: peeked.aud,
+      azp: peeked.azp,
+      iss: peeked.iss,
+    });
     throw new AuthError('Invalid Google token', 401, 'GOOGLE_AUTH_FAILED');
   }
   if (!payload?.sub || !payload.email) {

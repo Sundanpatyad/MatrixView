@@ -48,6 +48,13 @@ function ensureConfigured(mod: GoogleSignInModule) {
   });
 }
 
+/** Google ID tokens are JWTs. Access tokens (`ya29.…`) must never be sent to the API. */
+function isGoogleIdToken(value: string | null | undefined): value is string {
+  if (!value) return false;
+  const parts = value.split('.');
+  return parts.length === 3 && parts.every((part) => part.length > 0);
+}
+
 /** Drop the Google session so the next sign-in shows the account picker. */
 export async function signOutGoogleNative(options?: { revoke?: boolean }): Promise<void> {
   const mod = getGoogleSignIn();
@@ -120,13 +127,24 @@ export async function signInWithGoogleNative(): Promise<string> {
       throw new GoogleSignInCancelledError();
     }
 
-    // Prefer a freshly fetched token; the sign-in payload sometimes omits it.
-    const tokens = await GoogleSignin.getTokens();
-    const idToken = tokens.idToken || result.data?.idToken;
-    if (!idToken) {
-      throw new Error('Google did not return an ID token.');
+    // Use the sign-in ID token first. On Android, getTokens() talks to the
+    // classic Play Services API and often returns a token whose `aud` is the
+    // Android/Firebase client — the API then rejects it as invalid.
+    const fromSignIn = result.data?.idToken;
+    if (isGoogleIdToken(fromSignIn)) {
+      return fromSignIn;
     }
-    return idToken;
+
+    try {
+      const tokens = await GoogleSignin.getTokens();
+      if (isGoogleIdToken(tokens.idToken)) {
+        return tokens.idToken;
+      }
+    } catch {
+      /* fall through */
+    }
+
+    throw new Error('Google did not return an ID token.');
   } catch (error) {
     if (error instanceof GoogleSignInCancelledError) throw error;
     if (isErrorWithCode(error)) {
