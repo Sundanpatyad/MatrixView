@@ -1,9 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import React, { useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { AppHeader, Avatar, Button, Input, Screen } from '@/components/ui';
+import { AppHeader, Avatar, Button, Input, KeyboardAware, Screen } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { pickImages } from '@/lib/pickers';
@@ -56,8 +56,12 @@ export function EditProfileScreen({ navigation }: Props) {
     <Screen>
       <AppHeader title="Edit profile" showBack />
 
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <KeyboardAware>
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
           <View style={styles.avatarBlock}>
             <Pressable onPress={changeAvatar} disabled={uploading}>
               <Avatar name={user?.name} uri={user?.avatarUrl} size={88} />
@@ -97,13 +101,12 @@ export function EditProfileScreen({ navigation }: Props) {
             style={{ marginTop: 8 }}
           />
         </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAware>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1 },
   scroll: {
     padding: 16,
     gap: 16,

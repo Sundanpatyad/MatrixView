@@ -263,6 +263,13 @@ export interface SiteUsage {
   lastSeenAt?: string;
 }
 
+export interface AwayPeriod {
+  kind: 'locked' | 'sleep' | 'lid_closed' | 'away';
+  startedAt: string;
+  endedAt: string;
+  durationMs: number;
+}
+
 export interface ActivitySession {
   id: string;
   userId: string;
@@ -274,6 +281,31 @@ export interface ActivitySession {
   totalAwayMs?: number;
   apps: AppUsage[];
   sites?: SiteUsage[];
+  awayPeriods?: AwayPeriod[];
+}
+
+export interface MemberActivity {
+  userId: string;
+  name: string;
+  email: string;
+  role: string;
+  avatarUrl?: string | null;
+  tracking: boolean;
+  totalTrackedMs: number;
+  totalWebsiteMs?: number;
+  apps: AppUsage[];
+  sites?: SiteUsage[];
+  sessions: ActivitySession[];
+}
+
+export interface OrgActivity {
+  date: string;
+  totalTrackedMs: number;
+  totalWebsiteMs?: number;
+  allApps: AppUsage[];
+  allSites?: SiteUsage[];
+  members: MemberActivity[];
+  projects?: Array<{ id: string; name: string }>;
 }
 
 export interface AttendanceStatus {

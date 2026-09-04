@@ -29,12 +29,22 @@ export function ConversationInfoScreen({ route, navigation }: Props) {
   const [addOpen, setAddOpen] = useState(false);
   const [nameDraft, setNameDraft] = useState(conversation?.rawName ?? conversation?.name ?? '');
   const [selected, setSelected] = useState<string[]>([]);
+  const [memberQuery, setMemberQuery] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   const addable = useMemo(
     () => users.filter((entry) => !conversation?.memberIds.includes(entry.id)),
     [conversation?.memberIds, users],
   );
+
+  const filteredAddable = useMemo(() => {
+    const term = memberQuery.trim().toLowerCase();
+    if (!term) return addable;
+    return addable.filter(
+      (entry) =>
+        entry.name.toLowerCase().includes(term) || entry.email.toLowerCase().includes(term),
+    );
+  }, [addable, memberQuery]);
 
   if (!conversation) {
     return (
@@ -209,7 +219,10 @@ export function ConversationInfoScreen({ route, navigation }: Props) {
 
       <Sheet
         visible={addOpen}
-        onClose={() => setAddOpen(false)}
+        onClose={() => {
+          setAddOpen(false);
+          setMemberQuery('');
+        }}
         title="Add members"
         subtitle={`${selected.length} selected`}
       >
@@ -219,41 +232,53 @@ export function ConversationInfoScreen({ route, navigation }: Props) {
           </Text>
         ) : (
           <View style={styles.addList}>
-            {addable.map((entry) => {
-              const active = selected.includes(entry.id);
-              return (
-                <Pressable
-                  key={entry.id}
-                  onPress={() =>
-                    setSelected((prev) =>
-                      prev.includes(entry.id) ? prev.filter((id) => id !== entry.id) : [...prev, entry.id],
-                    )
-                  }
-                  style={[
-                    styles.addRow,
-                    {
-                      backgroundColor: active ? colors.brandSoft : colors.surfaceAlt,
-                      borderColor: active ? colors.brandBorder : colors.border,
-                    },
-                  ]}
-                >
-                  <Avatar name={entry.name} uri={entry.avatarUrl} size={32} />
-                  <View style={styles.memberText}>
-                    <Text style={[styles.memberName, { color: colors.text }]} numberOfLines={1}>
-                      {entry.name}
-                    </Text>
-                    <Text style={[styles.memberEmail, { color: colors.textSubtle }]} numberOfLines={1}>
-                      {entry.email}
-                    </Text>
-                  </View>
-                  <Ionicons
-                    name={active ? 'checkmark-circle' : 'ellipse-outline'}
-                    size={21}
-                    color={active ? colors.brand : colors.textSubtle}
-                  />
-                </Pressable>
-              );
-            })}
+            <Input
+              placeholder="Search teammates"
+              icon="search-outline"
+              value={memberQuery}
+              onChangeText={setMemberQuery}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            {filteredAddable.length === 0 ? (
+              <Text style={[styles.emptyText, { color: colors.textSubtle }]}>No teammates match that search.</Text>
+            ) : (
+              filteredAddable.map((entry) => {
+                const active = selected.includes(entry.id);
+                return (
+                  <Pressable
+                    key={entry.id}
+                    onPress={() =>
+                      setSelected((prev) =>
+                        prev.includes(entry.id) ? prev.filter((id) => id !== entry.id) : [...prev, entry.id],
+                      )
+                    }
+                    style={[
+                      styles.addRow,
+                      {
+                        backgroundColor: active ? colors.brandSoft : colors.surfaceAlt,
+                        borderColor: active ? colors.brandBorder : colors.border,
+                      },
+                    ]}
+                  >
+                    <Avatar name={entry.name} uri={entry.avatarUrl} size={32} />
+                    <View style={styles.memberText}>
+                      <Text style={[styles.memberName, { color: colors.text }]} numberOfLines={1}>
+                        {entry.name}
+                      </Text>
+                      <Text style={[styles.memberEmail, { color: colors.textSubtle }]} numberOfLines={1}>
+                        {entry.email}
+                      </Text>
+                    </View>
+                    <Ionicons
+                      name={active ? 'checkmark-circle' : 'ellipse-outline'}
+                      size={21}
+                      color={active ? colors.brand : colors.textSubtle}
+                    />
+                  </Pressable>
+                );
+              })
+            )}
           </View>
         )}
 

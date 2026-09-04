@@ -2,9 +2,9 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import React, { useMemo, useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { AppHeader, Button, Input, OptionSheet, Sheet, type SheetOption, Screen } from '@/components/ui';
+import { AppHeader, Button, Input, KeyboardAware, OptionSheet, Sheet, type SheetOption, Screen } from '@/components/ui';
 import { useToast } from '@/context/ToastContext';
 import { useWorkspace } from '@/context/WorkspaceContext';
 import type { TaskPriority, TaskType } from '@/lib/api';
@@ -206,8 +206,12 @@ export function CreateTaskScreen({ route, navigation }: Props) {
     <Screen>
       <AppHeader title="New task" subtitle={project?.name} showBack />
 
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <KeyboardAware>
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
           <Input
             label="Title"
             placeholder="What needs to be done?"
@@ -283,7 +287,7 @@ export function CreateTaskScreen({ route, navigation }: Props) {
             style={{ marginTop: 8 }}
           />
         </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAware>
 
       {/* Android: system date dialog */}
       {showDatePicker && Platform.OS === 'android' ? (

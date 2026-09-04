@@ -405,6 +405,17 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       },
       onTeamUpserted: applyTeamUpsert,
       onTeamDeleted: applyTeamDeleted,
+      onInviteNew: ({ invite }) => {
+        if (!invite?.id) return;
+        setPendingInvites((prev) => {
+          const without = prev.filter((entry) => entry.id !== invite.id);
+          return [invite, ...without];
+        });
+      },
+      onInviteResolved: ({ inviteId }) => {
+        if (!inviteId) return;
+        setPendingInvites((prev) => prev.filter((entry) => entry.id !== inviteId));
+      },
     });
 
     let cancelled = false;
@@ -431,6 +442,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         'onProjectRemoved',
         'onTeamUpserted',
         'onTeamDeleted',
+        'onInviteNew',
+        'onInviteResolved',
       ]);
     };
   }, [dropLocalProject, isAuthenticated, isBootstrapping, toast, user]);
@@ -691,7 +704,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       return project.members.some(
         (m) =>
           m.role === 'admin' &&
-          m.email.toLowerCase() === user.email.toLowerCase(),
+          (m.userId === user.id || m.email.toLowerCase() === user.email.toLowerCase()),
       );
     },
     [state.projects, user],

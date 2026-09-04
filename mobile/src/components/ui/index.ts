@@ -8,6 +8,7 @@ export { BlurTargetRoot, useBlurTargetReady, useBlurTargetRef } from './BlurTarg
 export { GlassButton, GlassButtonGroup } from './GlassButton';
 export { GlassSurface, canUseLiquidGlass, GLASS_BLUR_SUPPORTED } from './GlassSurface';
 export { Input } from './Input';
+export { KeyboardAware } from './KeyboardAware';
 export { ListRow } from './ListRow';
 export { LoadingView, Skeleton } from './Loader';
 export { OptionSheet, type SheetOption } from './OptionSheet';

@@ -3,7 +3,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import React, { useMemo, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { AppHeader, Avatar, EmptyState, Input, Screen } from '@/components/ui';
+import { AppHeader, Avatar, EmptyState, Input, KeyboardAware, Screen } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
 import { useChat } from '@/context/ChatContext';
 import { useToast } from '@/context/ToastContext';
@@ -55,6 +55,7 @@ export function NewChatScreen({ navigation }: Props) {
         ]}
       />
 
+      <KeyboardAware>
       <View style={styles.searchWrap}>
         <Input
           placeholder="Search by name or email"
@@ -130,6 +131,7 @@ export function NewChatScreen({ navigation }: Props) {
           );
         }}
       />
+      </KeyboardAware>
     </Screen>
   );
 }

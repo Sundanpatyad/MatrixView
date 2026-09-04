@@ -4,7 +4,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Easing,
-  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -17,6 +16,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { radius, useTheme } from '@/theme';
+
+import { useKeyboardHeight } from './useKeyboardHeight';
 
 const BACKDROP_MS = 200;
 const SHEET_MS = 280;
@@ -44,13 +45,21 @@ export function Sheet({
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
+  const keyboardHeight = useKeyboardHeight();
 
   /**
    * A percentage would resolve against the auto-height wrapper rather than the
    * screen, letting long option lists grow past the top edge without scrolling.
+   * Subtract the keyboard so the lifted sheet cannot run off the top.
    */
-  const maxHeight = Math.round(windowHeight * maxHeightRatio);
-  const bottomPad = Math.max(insets.bottom, 12);
+  const maxHeight = Math.max(
+    220,
+    Math.min(
+      Math.round(windowHeight * maxHeightRatio),
+      windowHeight - keyboardHeight,
+    ),
+  );
+  const bottomPad = keyboardHeight > 0 ? 12 : Math.max(insets.bottom, 12);
 
   // Keep the Modal mounted through the exit animation so fade/slide can finish.
   const [mounted, setMounted] = useState(false);
@@ -110,6 +119,7 @@ export function Sheet({
   const body = scrollable ? (
     <ScrollView
       keyboardShouldPersistTaps="handled"
+      keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
       showsVerticalScrollIndicator={false}
       bounces={false}
       // Without this the list keeps its full content height and is clipped by
@@ -141,11 +151,7 @@ export function Sheet({
 
         <Pressable style={styles.fill} onPress={onClose} accessibilityLabel="Dismiss" />
 
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          pointerEvents="box-none"
-          style={styles.sheetHost}
-        >
+        <View pointerEvents="box-none" style={styles.sheetHost}>
           <Animated.View
             style={[
               styles.sheet,
@@ -153,6 +159,7 @@ export function Sheet({
                 backgroundColor: colors.bgElevated,
                 borderTopColor: colors.glassBorder,
                 paddingBottom: bottomPad,
+                marginBottom: keyboardHeight,
                 maxHeight,
                 transform: [{ translateY: sheetTranslateY }],
               },
@@ -189,7 +196,7 @@ export function Sheet({
 
             {body}
           </Animated.View>
-        </KeyboardAvoidingView>
+        </View>
       </View>
     </Modal>
   );
@@ -209,6 +216,7 @@ const styles = StyleSheet.create({
   },
   sheetHost: {
     justifyContent: 'flex-end',
+    width: '100%',
   },
   scroll: {
     flexShrink: 1,

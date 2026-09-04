@@ -27,6 +27,7 @@ export function ManageTeamsScreen({ route }: Props) {
   const [editing, setEditing] = useState<ProjectTeam | null>(null);
   const [creating, setCreating] = useState(false);
   const [teamName, setTeamName] = useState('');
+  const [memberQuery, setMemberQuery] = useState('');
   const [selected, setSelected] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
@@ -50,6 +51,7 @@ export function ManageTeamsScreen({ route }: Props) {
   const openCreate = () => {
     setEditing(null);
     setTeamName('');
+    setMemberQuery('');
     setSelected([]);
     setCreating(true);
   };
@@ -57,6 +59,7 @@ export function ManageTeamsScreen({ route }: Props) {
   const openEdit = (team: ProjectTeam) => {
     setEditing(team);
     setTeamName(team.name);
+    setMemberQuery('');
     setSelected(team.memberIds);
     setCreating(true);
   };
@@ -175,8 +178,24 @@ export function ManageTeamsScreen({ route }: Props) {
         <Input label="Team name" placeholder="Platform squad" value={teamName} onChangeText={setTeamName} />
 
         <Text style={[styles.pickerLabel, { color: colors.textMuted }]}>Members</Text>
+        <Input
+          placeholder="Search members"
+          icon="search-outline"
+          value={memberQuery}
+          onChangeText={setMemberQuery}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
         <View style={styles.memberList}>
-          {project.members.map((member) => {
+          {project.members
+            .filter((member) => {
+              const term = memberQuery.trim().toLowerCase();
+              if (!term) return true;
+              return (
+                (member.name || '').toLowerCase().includes(term) || member.email.toLowerCase().includes(term)
+              );
+            })
+            .map((member) => {
             const active = selected.includes(member.id);
             return (
               <Pressable

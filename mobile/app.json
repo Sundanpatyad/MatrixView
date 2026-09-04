@@ -32,6 +32,7 @@
     "android": {
       "package": "dev.dockx.mobile",
       "googleServicesFile": "./google-services.json",
+      "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "backgroundColor": "#0F1014",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -92,9 +93,9 @@
       [
         "expo-build-properties",
         {
-          "android": {
-            "usesCleartextTraffic": true
-          }
+      "android": {
+        "usesCleartextTraffic": true
+      }
         }
       ],
       [

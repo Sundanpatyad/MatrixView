@@ -4,7 +4,7 @@ import React, { useMemo, useState } from 'react';
 import { FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { AppHeader, Avatar, Button, EmptyState, Input, Screen } from '@/components/ui';
+import { AppHeader, Avatar, Button, EmptyState, Input, KeyboardAware, Screen } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
 import { useChat } from '@/context/ChatContext';
 import { useToast } from '@/context/ToastContext';
@@ -58,6 +58,7 @@ export function NewGroupScreen({ navigation }: Props) {
     <Screen>
       <AppHeader title="New group" subtitle={`${selected.length} selected`} showBack />
 
+      <KeyboardAware>
       <View style={styles.top}>
         <Input label="Group name" placeholder="Design team" value={name} onChangeText={setName} autoCapitalize="words" />
 
@@ -138,6 +139,7 @@ export function NewGroupScreen({ navigation }: Props) {
           fullWidth
         />
       </View>
+      </KeyboardAware>
     </Screen>
   );
 }

@@ -23,7 +23,7 @@ import type { RootStackParamList } from '@/navigation/types';
 import { useColors } from '@/theme';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
-type Filter = 'all' | 'unread' | 'tasks' | 'messages' | 'projects';
+type Filter = 'all' | 'unread' | 'invites' | 'tasks' | 'messages' | 'projects';
 
 const TYPE_ICON: Record<NotificationType, keyof typeof Ionicons.glyphMap> = {
   'task.assigned': 'checkbox-outline',
@@ -47,8 +47,10 @@ export function NotificationsScreen() {
   const toast = useToast();
   const { items, unreadCount, isLoading, hasMore, refresh, loadMore, markRead, markAllRead, remove } =
     useNotifications();
-  const { pendingInvites, acceptInvite, declineInvite, setActiveProjectId, isLoading: workspaceLoading } = useWorkspace();
+  const { pendingInvites, acceptInvite, declineInvite, setActiveProjectId, refresh: refreshWorkspace } =
+    useWorkspace();
   const [inviteBusyId, setInviteBusyId] = useState<string | null>(null);
+  const [resolvedInviteIds, setResolvedInviteIds] = useState<string[]>([]);
   const pad = useGlassScreenPadding();
 
   const [filter, setFilter] = useState<Filter>('all');
@@ -56,7 +58,7 @@ export function NotificationsScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await refresh();
+    await Promise.all([refresh(), refreshWorkspace()]);
     setRefreshing(false);
   };
 
@@ -64,6 +66,8 @@ export function NotificationsScreen() {
     switch (filter) {
       case 'unread':
         return items.filter((item) => !item.readAt);
+      case 'invites':
+        return items.filter((item) => item.type === 'project.invited');
       case 'tasks':
         return items.filter((item) => item.type.startsWith('task'));
       case 'messages':
@@ -75,9 +79,13 @@ export function NotificationsScreen() {
     }
   }, [filter, items]);
 
+  const inviteCount = items.filter((item) => item.type === 'project.invited').length;
+  const resolvedInviteSet = useMemo(() => new Set(resolvedInviteIds), [resolvedInviteIds]);
+
   const filterOptions: Array<{ value: Filter; label: string; count?: number }> = [
     { value: 'all', label: 'All' },
     { value: 'unread', label: 'Unread', count: unreadCount },
+    { value: 'invites', label: 'Invites', count: inviteCount },
     { value: 'tasks', label: 'Tasks' },
     { value: 'messages', label: 'Messages' },
     { value: 'projects', label: 'Projects' },
@@ -102,6 +110,11 @@ export function NotificationsScreen() {
 
   const inviteIdOf = (item: AppNotification) => {
     const raw = item.meta?.inviteId;
+    return typeof raw === 'string' && raw.trim() ? raw.trim() : null;
+  };
+
+  const metaString = (item: AppNotification, key: string) => {
+    const raw = item.meta?.[key];
     return typeof raw === 'string' && raw.trim() ? raw.trim() : null;
   };
 
@@ -194,6 +207,12 @@ export function NotificationsScreen() {
           const inviteId = item.type === 'project.invited' ? inviteIdOf(item) : null;
           const pending = inviteId ? pendingInvites.find((invite) => invite.id === inviteId) : undefined;
           const inviteBusy = inviteBusyId === inviteId;
+          const inviteOpen = Boolean(inviteId) && !resolvedInviteSet.has(inviteId ?? '');
+          const projectName =
+            pending?.projectName || metaString(item, 'projectName') || 'this project';
+          const inviterName =
+            pending?.inviterName || metaString(item, 'inviterName') || item.actorName || 'A teammate';
+          const role = pending?.role || metaString(item, 'role') || 'member';
 
           return (
             <View>
@@ -255,49 +274,60 @@ export function NotificationsScreen() {
             </Pressable>
             {item.type === 'project.invited' ? (
               <View style={styles.inviteActions}>
-                {pending && inviteId ? (
+                {inviteOpen && inviteId ? (
                   <>
-                    <Button
-                      size="sm"
-                      label={inviteBusy ? '…' : 'Accept'}
-                      disabled={Boolean(inviteBusyId)}
-                      onPress={async () => {
-                        setInviteBusyId(inviteId);
-                        try {
-                          const project = await acceptInvite(inviteId);
-                          setActiveProjectId(project.id);
-                          await remove(item.id);
-                          toast.success(`You joined ${project.name}.`);
-                          navigation.navigate('Tabs', { screen: 'Board' });
-                        } catch (error) {
-                          toast.fromError(error, 'Could not accept invite');
-                        } finally {
-                          setInviteBusyId(null);
-                        }
-                      }}
-                    />
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      label="Decline"
-                      disabled={Boolean(inviteBusyId)}
-                      onPress={async () => {
-                        setInviteBusyId(inviteId);
-                        try {
-                          await declineInvite(inviteId);
-                          await remove(item.id);
-                          toast.success('Invite declined.');
-                        } catch (error) {
-                          toast.fromError(error, 'Could not decline invite');
-                        } finally {
-                          setInviteBusyId(null);
-                        }
-                      }}
-                    />
+                    <Text style={[styles.inviteHint, { color: colors.textSubtle }]}>
+                      {inviterName} invited you to {projectName} as {role}.
+                    </Text>
+                    <View style={styles.inviteButtons}>
+                      <Button
+                        size="sm"
+                        label={inviteBusy ? '…' : 'Accept'}
+                        disabled={Boolean(inviteBusyId)}
+                        onPress={async () => {
+                          setInviteBusyId(inviteId);
+                          try {
+                            const project = await acceptInvite(inviteId);
+                            setResolvedInviteIds((prev) =>
+                              prev.includes(inviteId) ? prev : [...prev, inviteId],
+                            );
+                            setActiveProjectId(project.id);
+                            await remove(item.id);
+                            toast.success(`You joined ${project.name}.`);
+                            navigation.navigate('Tabs', { screen: 'Board' });
+                          } catch (error) {
+                            toast.fromError(error, 'Could not accept invite');
+                          } finally {
+                            setInviteBusyId(null);
+                          }
+                        }}
+                      />
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        label="Decline"
+                        disabled={Boolean(inviteBusyId)}
+                        onPress={async () => {
+                          setInviteBusyId(inviteId);
+                          try {
+                            await declineInvite(inviteId);
+                            setResolvedInviteIds((prev) =>
+                              prev.includes(inviteId) ? prev : [...prev, inviteId],
+                            );
+                            await remove(item.id);
+                            toast.success('Invite declined.');
+                          } catch (error) {
+                            toast.fromError(error, 'Could not decline invite');
+                          } finally {
+                            setInviteBusyId(null);
+                          }
+                        }}
+                      />
+                    </View>
                   </>
                 ) : (
                   <Text style={[styles.inviteHint, { color: colors.textSubtle }]}>
-                    {workspaceLoading ? 'Loading invite…' : 'This invite is no longer pending.'}
+                    This invite is no longer pending.
                   </Text>
                 )}
               </View>
@@ -433,14 +463,18 @@ const styles = StyleSheet.create({
     padding: 2,
   },
   inviteActions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: 8,
     paddingHorizontal: 16,
     paddingBottom: 12,
     paddingLeft: 70,
   },
+  inviteButtons: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
   inviteHint: {
     fontSize: 12,
+    lineHeight: 16,
   },
 });

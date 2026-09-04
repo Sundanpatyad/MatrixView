@@ -332,10 +332,19 @@ export async function addMember(
       projectId: String(project._id),
       meta: {
         inviteId: String(invite._id),
+        projectId: String(project._id),
         projectName: project.name,
+        projectKey: project.key,
         role: input.role,
+        inviterName: name,
+        expiresAt: invite.expiresAt.toISOString(),
       },
     }).catch((err) => console.error('[notifications] project.invited', err));
+
+    const view = await presentPendingInvite(invite);
+    if (view) {
+      emitToUser(String(existingUser._id), 'invite:new', { invite: view });
+    }
   }
 
   const presented = await presentProject(project);
@@ -480,6 +489,10 @@ export async function acceptMyInvite(actor: Actor, inviteId: string) {
     email: actor.email,
     name: await actorName(actor),
   });
+  emitToUser(actor.sub, 'invite:resolved', {
+    inviteId: String(invite._id),
+    status: 'accepted',
+  });
   return { project, inviteId: String(invite._id) };
 }
 
@@ -496,6 +509,10 @@ export async function acceptInviteByToken(actor: Actor, rawToken: string) {
     _id: oid(actor.sub),
     email: actor.email,
     name: await actorName(actor),
+  });
+  emitToUser(actor.sub, 'invite:resolved', {
+    inviteId: String(invite._id),
+    status: 'accepted',
   });
   return { project, inviteId: String(invite._id) };
 }
@@ -532,6 +549,10 @@ export async function declineMyInvite(actor: Actor, inviteId: string) {
     });
   }
 
+  emitToUser(actor.sub, 'invite:resolved', {
+    inviteId: String(invite._id),
+    status: 'declined',
+  });
   return { ok: true as const, inviteId: String(invite._id) };
 }
 

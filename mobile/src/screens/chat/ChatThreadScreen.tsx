@@ -3,8 +3,8 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
   FlatList,
-  KeyboardAvoidingView,
   Platform,
   Pressable,
   StyleSheet,
@@ -12,10 +12,10 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MessageBubble } from '@/components/chat/MessageBubble';
 import { TypingIndicator } from '@/components/chat/TypingIndicator';
+import { useChatKeyboard } from '@/components/chat/useChatKeyboard';
 import {
   AppHeader,
   Avatar,
@@ -49,7 +49,7 @@ export function ChatThreadScreen({ route, navigation }: Props) {
   const { conversationId } = route.params;
   const colors = useColors();
   const { isDark } = useTheme();
-  const insets = useSafeAreaInsets();
+  const { lift: keyboardLift, composerPadding } = useChatKeyboard();
   const toast = useToast();
   const confirm = useConfirm();
   const { user } = useAuth();
@@ -385,11 +385,7 @@ export function ChatThreadScreen({ route, navigation }: Props) {
         </Pressable>
       ) : null}
 
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
-      >
+      <Animated.View style={[styles.flex, { paddingBottom: keyboardLift }]}>
         <View style={styles.flex}>
           {rows.length === 0 && !loading ? (
             <View style={styles.emptyOverlay} pointerEvents="none">
@@ -410,7 +406,11 @@ export function ChatThreadScreen({ route, navigation }: Props) {
             { paddingBottom: headerHeight + (showJoinBanner ? JOIN_BANNER_HEIGHT : 0) + 8 },
           ]}
           showsVerticalScrollIndicator={false}
-          keyboardDismissMode="interactive"
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+          keyboardShouldPersistTaps="handled"
+          automaticallyAdjustKeyboardInsets={false}
+          automaticallyAdjustContentInsets={false}
+          contentInsetAdjustmentBehavior="never"
           onEndReachedThreshold={0.4}
           onEndReached={() => {
             if (hasMoreIn(conversationId)) void loadOlderMessages(conversationId);
@@ -480,13 +480,13 @@ export function ChatThreadScreen({ route, navigation }: Props) {
           </View>
         ) : null}
 
-        <View
+        <Animated.View
           style={[
             styles.composer,
             {
               backgroundColor: colors.bgElevated,
               borderTopColor: colors.border,
-              paddingBottom: Math.max(insets.bottom, 12),
+              paddingBottom: composerPadding,
             },
           ]}
         >
@@ -511,6 +511,9 @@ export function ChatThreadScreen({ route, navigation }: Props) {
             }}
             onBlur={stopTyping}
             multiline
+            blurOnSubmit={false}
+            textAlignVertical="center"
+            underlineColorAndroid="transparent"
           />
 
           <Pressable
@@ -531,8 +534,8 @@ export function ChatThreadScreen({ route, navigation }: Props) {
               color={editing || draft.trim() ? '#ffffff' : colors.textSubtle}
             />
           </Pressable>
-        </View>
-      </KeyboardAvoidingView>
+        </Animated.View>
+      </Animated.View>
 
       <AppHeader
         floating
@@ -811,8 +814,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: 8,
-    paddingHorizontal: 12,
-    paddingTop: 8,
+    paddingHorizontal: 10,
+    paddingTop: 6,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
   composerIcon: {

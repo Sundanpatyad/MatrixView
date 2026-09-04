@@ -3,7 +3,6 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import * as Linking from 'expo-linking';
 import React, { useMemo, useState } from 'react';
 import {
-  KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
@@ -20,6 +19,7 @@ import {
   Badge,
   Card,
   EmptyState,
+  KeyboardAware,
   OptionSheet,
   Screen,
   type SheetOption,
@@ -158,12 +158,12 @@ export function TaskDetailScreen({ route, navigation }: Props) {
     <Screen>
       <AppHeader title={task.key} subtitle={project?.name} showBack />
 
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
-      >
-        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <KeyboardAware offset={8}>
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
           <Text style={[styles.title, { color: colors.text }]}>{task.title}</Text>
 
           <View style={styles.chipRow}>
@@ -380,7 +380,7 @@ export function TaskDetailScreen({ route, navigation }: Props) {
             </Pressable>
           </View>
         </View>
-      </KeyboardAvoidingView>
+      </KeyboardAware>
 
       <OptionSheet
         visible={statusSheet}

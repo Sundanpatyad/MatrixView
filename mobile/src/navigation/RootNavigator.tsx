@@ -17,6 +17,7 @@ import { ConversationInfoScreen } from '@/screens/chat/ConversationInfoScreen';
 import { NewChatScreen } from '@/screens/chat/NewChatScreen';
 import { NewGroupScreen } from '@/screens/chat/NewGroupScreen';
 import { CreateProjectScreen } from '@/screens/dashboard/CreateProjectScreen';
+import { TeamActivityScreen } from '@/screens/activity/TeamActivityScreen';
 import { EditProfileScreen } from '@/screens/profile/EditProfileScreen';
 import { SettingsScreen } from '@/screens/profile/SettingsScreen';
 import { useTheme } from '@/theme';
@@ -130,6 +131,7 @@ export function RootNavigator() {
 
             <Stack.Screen name="EditProfile" component={EditProfileScreen} />
             <Stack.Screen name="Settings" component={SettingsScreen} />
+            <Stack.Screen name="TeamActivity" component={TeamActivityScreen} />
           </Stack.Group>
         ) : (
           <Stack.Group screenOptions={{ animation: 'fade' }}>

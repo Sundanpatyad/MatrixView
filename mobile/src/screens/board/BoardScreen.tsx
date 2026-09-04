@@ -193,6 +193,15 @@ export function BoardScreen() {
             onPress: () => navigation.navigate('ProjectMembers', { projectId: project.id }),
             accessibilityLabel: 'Project members',
           },
+          ...(isAdmin
+            ? [
+                {
+                  icon: 'pulse-outline' as const,
+                  onPress: () => navigation.navigate('TeamActivity', { projectId: project.id }),
+                  accessibilityLabel: 'Team activity',
+                },
+              ]
+            : []),
           {
             icon: 'git-branch-outline',
             onPress: () => navigation.navigate('ManageTeams', { projectId: project.id }),

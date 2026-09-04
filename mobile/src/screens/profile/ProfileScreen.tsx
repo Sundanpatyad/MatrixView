@@ -15,6 +15,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useChat } from '@/context/ChatContext';
 import { useConfirm } from '@/context/ConfirmContext';
 import { useToast } from '@/context/ToastContext';
+import { useWorkspace } from '@/context/WorkspaceContext';
 import { pickImages } from '@/lib/pickers';
 import type { RootStackParamList } from '@/navigation/types';
 import { useColors, useTheme } from '@/theme';
@@ -29,7 +30,9 @@ export function ProfileScreen() {
   const confirm = useConfirm();
   const { user, logout, logoutEverywhere, uploadAvatar } = useAuth();
   const { connected } = useChat();
+  const { projects, isProjectAdmin } = useWorkspace();
   const pad = useGlassScreenPadding();
+  const adminAnywhere = projects.some((project) => isProjectAdmin(project.id));
 
   const [uploading, setUploading] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
@@ -106,6 +109,19 @@ export function ProfileScreen() {
         </Pressable>
 
         <Section>
+          {adminAnywhere ? (
+            <>
+              <ListRow
+                icon="pulse-outline"
+                iconBackground={colors.successSoft}
+                iconColor={colors.success}
+                title="Team activity"
+                subtitle="Check-ins, software, and websites"
+                onPress={() => navigation.navigate('TeamActivity')}
+              />
+              <Separator />
+            </>
+          ) : null}
           <ListRow
             icon="person-outline"
             iconBackground={colors.brandSoft}

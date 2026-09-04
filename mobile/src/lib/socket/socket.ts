@@ -186,6 +186,8 @@ export interface SocketHandlers {
   onNotificationNew: (payload: { notification: AppNotification }) => void;
   onNotificationUnreadCount: (payload: { count: number }) => void;
   onNotificationRead: (payload: { ids?: string[]; all?: boolean }) => void;
+  onInviteNew: (payload: { invite: import('../api/workspace').PendingInvite }) => void;
+  onInviteResolved: (payload: { inviteId: string; status: 'accepted' | 'declined' }) => void;
 }
 
 type HandlerKey = keyof SocketHandlers;
@@ -316,6 +318,8 @@ function bindListeners(active: Socket) {
   active.on('notification:new', (payload) => call('onNotificationNew', payload));
   active.on('notification:unread-count', (payload) => call('onNotificationUnreadCount', payload));
   active.on('notification:read', (payload) => call('onNotificationRead', payload));
+  active.on('invite:new', (payload) => call('onInviteNew', payload));
+  active.on('invite:resolved', (payload) => call('onInviteResolved', payload));
 
   active.on('call:incoming', (payload) => call('onCallIncoming', payload));
   active.on('call:accepted', (payload) => call('onCallAccepted', payload));

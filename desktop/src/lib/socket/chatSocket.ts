@@ -181,6 +181,8 @@ type Handlers = {
   onNotificationNew?: (notification: import('@/lib/api/notifications').AppNotification) => void;
   onNotificationUnreadCount?: (count: number) => void;
   onNotificationRead?: (payload: { ids?: string[]; all?: boolean }) => void;
+  onInviteNew?: (payload: { invite: import('@/lib/api/workspace').PendingInvite }) => void;
+  onInviteResolved?: (payload: { inviteId: string; status: 'accepted' | 'declined' }) => void;
   onConnect?: () => void;
   onDisconnect?: () => void;
 };
@@ -374,6 +376,17 @@ function bindSocket(s: Socket) {
   });
   s.on('notification:read', (payload: { ids?: string[]; all?: boolean }) => {
     handlers.onNotificationRead?.(payload ?? {});
+  });
+  s.on('invite:new', (payload: { invite?: import('@/lib/api/workspace').PendingInvite }) => {
+    if (payload?.invite?.id) handlers.onInviteNew?.({ invite: payload.invite });
+  });
+  s.on('invite:resolved', (payload: { inviteId?: string; status?: 'accepted' | 'declined' }) => {
+    if (payload?.inviteId) {
+      handlers.onInviteResolved?.({
+        inviteId: payload.inviteId,
+        status: payload.status === 'accepted' ? 'accepted' : 'declined',
+      });
+    }
   });
 }
 

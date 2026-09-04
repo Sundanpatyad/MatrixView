@@ -365,6 +365,8 @@ export function AdminActivityPanel({ projectId }: { projectId?: string } = {}) {
       : orgTotal;
   const scopedAway = detailAway.reduce((s, p) => s + p.durationMs, 0);
   const liveCount = members.filter((m) => m.tracking).length;
+  const checkedInMembers = members.filter((m) => m.sessions.length > 0).length;
+  const notInMembers = members.filter((m) => m.sessions.length === 0).length;
   const scopeName = selectedSession
     ? 'Selected session'
     : selected
@@ -401,7 +403,12 @@ export function AdminActivityPanel({ projectId }: { projectId?: string } = {}) {
       { value: 'all', label: 'Everyone' },
       ...members.map((m) => ({
         value: m.userId,
-        label: m.tracking ? `${m.name} (live)` : m.name,
+        label:
+          m.sessions.length === 0
+            ? `${m.name} (not in)`
+            : m.tracking
+              ? `${m.name} (live)`
+              : m.name,
       })),
     ],
     [members],
@@ -427,6 +434,52 @@ export function AdminActivityPanel({ projectId }: { projectId?: string } = {}) {
   const checkInCount = selected
     ? selected.sessions.length
     : members.reduce((n, m) => n + m.sessions.length, 0);
+  const teamOverview = selectedId === 'all' && !selectedSession;
+  const kpis = teamOverview
+    ? [
+        {
+          label: 'Tracked',
+          value: formatDuration(scopedTracked),
+          hint: scopeName,
+          accent: '#00a8fc',
+        },
+        {
+          label: 'Checked in',
+          value: String(checkedInMembers),
+          hint: `${members.length} members`,
+          accent: '#4BDE80',
+        },
+        {
+          label: 'Not in',
+          value: String(notInMembers),
+          hint: 'no check-in',
+          accent: '#f0b232',
+        },
+      ]
+    : [
+        {
+          label: 'Tracked',
+          value: formatDuration(scopedTracked),
+          hint: scopeName,
+          accent: '#00a8fc',
+        },
+        {
+          label: 'Check-ins',
+          value: String(checkInCount),
+          hint: selectedSession
+            ? '1 selected'
+            : selected && selected.sessions.length === 0
+              ? "didn't check in"
+              : 'this day',
+          accent: '#4BDE80',
+        },
+        {
+          label: 'Away',
+          value: formatDuration(scopedAway),
+          hint: `${detailAway.length} gaps`,
+          accent: '#f0b232',
+        },
+      ];
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-ink-800">
@@ -435,7 +488,7 @@ export function AdminActivityPanel({ projectId }: { projectId?: string } = {}) {
         <div>
           <h2 className="text-sm font-semibold text-ink-50">Activity</h2>
           <p className="text-[10px] text-ink-400">
-            {formatDateLabel(filterDate)} · members of projects you admin
+            {formatDateLabel(filterDate)} · who checked in, software, browsers, and sites
           </p>
         </div>
         <div className="flex w-full flex-wrap items-end gap-2 sm:w-auto">
@@ -514,13 +567,15 @@ export function AdminActivityPanel({ projectId }: { projectId?: string } = {}) {
                     selectedId === 'all' ? 'text-white/60' : 'text-ink-400',
                   )}
                 >
-                  {formatDuration(orgTotal)} · {liveCount} live
+                  {checkedInMembers} in · {notInMembers} not in
+                  {liveCount ? ` · ${liveCount} live` : ''}
                 </span>
               </span>
             </button>
 
             {members.map((m) => {
               const active = m.userId === selectedId;
+              const absent = m.sessions.length === 0;
               return (
                 <button
                   key={m.userId}
@@ -546,9 +601,15 @@ export function AdminActivityPanel({ projectId }: { projectId?: string } = {}) {
                     <span className="block truncate text-xs font-semibold text-ink-50">
                       {m.name}
                     </span>
-                    <span className="block truncate text-[10px] text-ink-400">
-                      {formatDuration(m.totalTrackedMs)}
-                      {m.sessions.length > 0 ? ` · ${m.sessions.length} in` : ''}
+                    <span
+                      className={cn(
+                        'block truncate text-[10px]',
+                        absent ? 'text-[#f0b232]' : 'text-ink-400',
+                      )}
+                    >
+                      {absent
+                        ? "Didn't check in"
+                        : `${formatDuration(m.totalTrackedMs)} · ${m.sessions.length} in`}
                     </span>
                   </span>
                 </button>
@@ -561,26 +622,7 @@ export function AdminActivityPanel({ projectId }: { projectId?: string } = {}) {
         <div className="flex min-h-0 flex-col overflow-hidden">
           {/* KPIs — fixed */}
           <section className="grid shrink-0 grid-cols-3 border-b border-ink-600">
-            {[
-              {
-                label: 'Tracked',
-                value: formatDuration(scopedTracked),
-                hint: scopeName,
-                accent: '#00a8fc',
-              },
-              {
-                label: 'Check-ins',
-                value: String(checkInCount),
-                hint: selectedSession ? '1 selected' : 'this day',
-                accent: '#4BDE80',
-              },
-              {
-                label: 'Away',
-                value: formatDuration(scopedAway),
-                hint: `${detailAway.length} gaps`,
-                accent: '#f0b232',
-              },
-            ].map((k, i) => (
+            {kpis.map((k, i) => (
               <div
                 key={k.label}
                 className={cn('px-3 py-2', i < 2 && 'border-r border-ink-700')}
@@ -656,9 +698,9 @@ export function AdminActivityPanel({ projectId }: { projectId?: string } = {}) {
                   barColor="#00a8fc"
                   empty="No websites recorded"
                   rows={detailSites.map((s) => ({
-                    key: s.host,
+                    key: `${s.host}-${s.browserName}`,
                     label: s.host,
-                    sub: s.browserName || undefined,
+                    sub: s.browserName || s.title || undefined,
                     value: s.durationMs,
                   }))}
                 />
@@ -705,9 +747,11 @@ export function AdminActivityPanel({ projectId }: { projectId?: string } = {}) {
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto">
-              {sessions.length === 0 ? (
+              {sessions.length === 0 && !(teamOverview && notInMembers > 0) ? (
                 <p className="px-3 py-8 text-center text-xs text-ink-400">
-                  No check-ins on this date.
+                  {selected
+                    ? `${selected.name} did not check in on this date.`
+                    : 'No check-ins on this date.'}
                 </p>
               ) : (
                 <ul>
@@ -797,6 +841,37 @@ export function AdminActivityPanel({ projectId }: { projectId?: string } = {}) {
                   })}
                 </ul>
               )}
+              {teamOverview && notInMembers > 0 ? (
+                <div className="border-t border-ink-700 px-3 py-2">
+                  <p className="mb-1.5 text-[10px] font-bold tracking-wide text-ink-400 uppercase">
+                    Didn't check in
+                  </p>
+                  <ul className="space-y-1">
+                    {members
+                      .filter((m) => m.sessions.length === 0)
+                      .map((m) => (
+                        <li key={m.userId}>
+                          <button
+                            type="button"
+                            onClick={() => selectMember(m.userId)}
+                            className="flex w-full items-center gap-2 rounded-md px-1 py-1 text-left hover:bg-ink-700"
+                          >
+                            <UserAvatar
+                              name={m.name}
+                              src={m.avatarUrl}
+                              seed={m.email || m.name}
+                              size="sm"
+                            />
+                            <span className="min-w-0 flex-1 truncate text-xs text-ink-200">
+                              {m.name}
+                            </span>
+                            <span className="text-[10px] font-semibold text-[#f0b232]">Out</span>
+                          </button>
+                        </li>
+                      ))}
+                  </ul>
+                </div>
+              ) : null}
             </div>
           </section>
         </div>

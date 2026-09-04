@@ -232,6 +232,14 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       onTeamDeleted: ({ teamId }) => {
         if (teamId) setTeams((prev) => prev.filter((team) => team.id !== teamId));
       },
+      onInviteNew: ({ invite }) => {
+        if (!invite?.id) return;
+        setPendingInvites((prev) => upsertById(prev, invite));
+      },
+      onInviteResolved: ({ inviteId }) => {
+        if (!inviteId) return;
+        setPendingInvites((prev) => prev.filter((invite) => invite.id !== inviteId));
+      },
     });
   }, [dropLocalProject, toast, user]);
 
@@ -244,12 +252,15 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
 
   const isProjectAdmin = useCallback(
     (projectId: string) => {
-      if ((user?.role ?? '').toLowerCase() === 'admin') return true;
+      if (!user) return false;
       const project = projects.find((p) => p.id === projectId);
       if (!project) return false;
-      return project.members.some(
-        (member) => (member.userId === user?.id || member.email === user?.email) && member.role === 'admin',
-      );
+      const email = user.email.toLowerCase();
+      return project.members.some((member) => {
+        if (member.role !== 'admin') return false;
+        if (member.userId && member.userId === user.id) return true;
+        return member.email.toLowerCase() === email;
+      });
     },
     [projects, user],
   );

@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
+import { InviteActions } from '@/components/notifications/InviteActions';
 import { NotificationRow } from '@/components/notifications/NotificationBell';
 import { Button } from '@/components/ui/Button';
 import { IconBell, IconCheck, IconTrash } from '@/components/ui/Icons';
 import { cn } from '@/lib/cn';
-import type { AppNotification, NotificationType } from '@/lib/api/notifications';
+import type { NotificationType } from '@/lib/api/notifications';
 import { useNotifications } from '@/lib/notifications/NotificationContext';
-import { useToast } from '@/lib/toast/ToastContext';
 import { useWorkspace } from '@/lib/workspace/WorkspaceContext';
 
 const FILTERS: { id: 'all' | 'unread' | NotificationType; label: string }[] = [
@@ -19,93 +19,6 @@ const FILTERS: { id: 'all' | 'unread' | NotificationType; label: string }[] = [
   { id: 'team.added', label: 'Group' },
   { id: 'task.commented', label: 'Comments' },
 ];
-
-function inviteIdOf(n: AppNotification): string | null {
-  const raw = n.meta?.inviteId;
-  return typeof raw === 'string' && raw.trim() ? raw.trim() : null;
-}
-
-function InviteActions({
-  notification,
-  onResolved,
-}: {
-  notification: AppNotification;
-  onResolved: () => void;
-}) {
-  const { pendingInvites, acceptInvite, declineInvite, setActiveProjectId, isLoading } = useWorkspace();
-  const toast = useToast();
-  const navigate = useNavigate();
-  const [busy, setBusy] = useState(false);
-  const inviteId = inviteIdOf(notification);
-  const pending = inviteId ? pendingInvites.find((i) => i.id === inviteId) : undefined;
-
-  if (notification.type !== 'project.invited') return null;
-
-  if (!inviteId || !pending) {
-    if (isLoading) {
-      return <p className="mt-4 text-sm text-ink-400">Loading invite…</p>;
-    }
-    return (
-      <p className="mt-4 text-sm text-ink-400">
-        This invite is no longer pending. You may already have joined, or it was declined.
-      </p>
-    );
-  }
-
-  async function onAccept() {
-    if (!inviteId) return;
-    setBusy(true);
-    try {
-      const project = await acceptInvite(inviteId);
-      setActiveProjectId(project.id);
-      toast.success(`You joined ${project.name}.`);
-      onResolved();
-      navigate(`/board?project=${encodeURIComponent(project.id)}`);
-    } catch (err) {
-      toast.fromError(err, 'Could not accept invite');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function onDecline() {
-    if (!inviteId) return;
-    setBusy(true);
-    try {
-      await declineInvite(inviteId);
-      toast.info('Invite declined.');
-      onResolved();
-    } catch (err) {
-      toast.fromError(err, 'Could not decline invite');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className="mt-5 rounded-xl border border-[#f0b232]/35 bg-[#f0b232]/8 p-4">
-      <p className="text-sm font-semibold text-ink-50">{pending.projectName}</p>
-      <p className="mt-0.5 text-xs text-ink-400">
-        {pending.inviterName} invited you as {pending.role}. Accept to join — you will not see the
-        board until then.
-      </p>
-      <div className="mt-3 flex flex-wrap gap-2">
-        <Button type="button" size="sm" disabled={busy} onClick={() => void onAccept()}>
-          {busy ? '…' : 'Accept'}
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant="secondary"
-          disabled={busy}
-          onClick={() => void onDecline()}
-        >
-          Decline
-        </Button>
-      </div>
-    </div>
-  );
-}
 
 export function NotificationsPage() {
   const {
@@ -120,6 +33,7 @@ export function NotificationsPage() {
     openNotification,
     refresh,
   } = useNotifications();
+  const { refresh: refreshWorkspace } = useWorkspace();
   const [params, setParams] = useSearchParams();
   const queryId = params.get('n');
   const [filter, setFilter] = useState<(typeof FILTERS)[number]['id']>('all');
@@ -127,7 +41,8 @@ export function NotificationsPage() {
 
   useEffect(() => {
     void refresh();
-  }, [refresh]);
+    void refreshWorkspace();
+  }, [refresh, refreshWorkspace]);
 
   useEffect(() => {
     if (queryId) setSelectedId(queryId);
@@ -136,11 +51,10 @@ export function NotificationsPage() {
   const filtered = useMemo(() => {
     if (filter === 'all') return items;
     if (filter === 'unread') return items.filter((n) => !n.readAt);
-    if (filter === 'project.added') {
-      return items.filter((n) => n.type === 'project.added' || n.type === 'project.invited');
-    }
     return items.filter((n) => n.type === filter);
   }, [items, filter]);
+
+  const inviteCount = items.filter((n) => n.type === 'project.invited').length;
 
   const selected = filtered.find((n) => n.id === selectedId) ?? filtered[0] ?? null;
 
@@ -205,6 +119,8 @@ export function NotificationsPage() {
             )}
           >
             {f.label}
+            {f.id === 'unread' && unreadCount > 0 ? ` ${unreadCount}` : ''}
+            {f.id === 'project.invited' && inviteCount > 0 ? ` ${inviteCount}` : ''}
           </button>
         ))}
       </div>
@@ -240,6 +156,15 @@ export function NotificationsPage() {
                       if (!item.readAt) void markRead([item.id]);
                     }}
                   />
+                  {n.type === 'project.invited' ? (
+                    <div className="px-4 pb-3 pl-[3.75rem]">
+                      <InviteActions
+                        notification={n}
+                        compact
+                        onResolved={() => void remove(n.id)}
+                      />
+                    </div>
+                  ) : null}
                 </div>
               ))}
               {hasMore ? (
@@ -289,10 +214,12 @@ export function NotificationsPage() {
                 {selected.body || 'No additional details.'}
               </p>
 
-              <InviteActions
-                notification={selected}
-                onResolved={() => void remove(selected.id)}
-              />
+              <div className="mt-5">
+                <InviteActions
+                  notification={selected}
+                  onResolved={() => void remove(selected.id)}
+                />
+              </div>
 
               {selected.type !== 'project.invited' &&
               Object.keys(selected.meta ?? {}).length > 0 ? (

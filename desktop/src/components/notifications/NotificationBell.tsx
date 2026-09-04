@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { InviteActions } from '@/components/notifications/InviteActions';
 import { IconBell, IconCheck } from '@/components/ui/Icons';
 import { cn } from '@/lib/cn';
 import type { AppNotification, NotificationType } from '@/lib/api/notifications';
@@ -115,7 +116,7 @@ export function NotificationRow({
 }
 
 export function NotificationBell() {
-  const { items, unreadCount, markAllRead, openNotification, refresh } =
+  const { items, unreadCount, markAllRead, openNotification, refresh, remove } =
     useNotifications();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -188,15 +189,28 @@ export function NotificationBell() {
               <p className="px-4 py-10 text-center text-sm text-ink-400">No notifications yet</p>
             ) : (
               preview.map((n) => (
-                <NotificationRow
-                  key={n.id}
-                  item={n}
-                  dense
-                  onOpen={(item) => {
-                    setOpen(false);
-                    void openNotification(item);
-                  }}
-                />
+                <div key={n.id} className="border-b border-ink-700/70 last:border-b-0">
+                  <NotificationRow
+                    item={n}
+                    dense
+                    onOpen={(item) => {
+                      setOpen(false);
+                      void openNotification(item);
+                    }}
+                  />
+                  {n.type === 'project.invited' ? (
+                    <div className="px-3 pb-2.5 pl-14">
+                      <InviteActions
+                        notification={n}
+                        compact
+                        onResolved={() => {
+                          setOpen(false);
+                          void remove(n.id);
+                        }}
+                      />
+                    </div>
+                  ) : null}
+                </div>
               ))
             )}
           </div>

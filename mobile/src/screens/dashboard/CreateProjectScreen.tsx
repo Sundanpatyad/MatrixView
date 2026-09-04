@@ -1,8 +1,8 @@
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import React, { useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text } from 'react-native';
+import { ScrollView, StyleSheet, Text } from 'react-native';
 
-import { AppHeader, Button, Input, Screen } from '@/components/ui';
+import { AppHeader, Button, Input, KeyboardAware, Screen } from '@/components/ui';
 import { useToast } from '@/context/ToastContext';
 import { useWorkspace } from '@/context/WorkspaceContext';
 import type { RootStackParamList } from '@/navigation/types';
@@ -58,8 +58,12 @@ export function CreateProjectScreen({ navigation }: Props) {
     <Screen>
       <AppHeader title="New project" showBack />
 
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <KeyboardAware>
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
           <Text style={[styles.intro, { color: colors.textMuted }]}>
             A project gets its own board, teams and task numbering.
           </Text>
@@ -104,13 +108,12 @@ export function CreateProjectScreen({ navigation }: Props) {
             style={{ marginTop: 8 }}
           />
         </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAware>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1 },
   scroll: {
     padding: 16,
     gap: 16,

@@ -5,7 +5,6 @@ import { TaskDetailModal } from '@/components/board/TaskDetailModal';
 import { CreateProjectModal } from '@/components/dashboard/CreateProjectModal';
 import { InviteMembersModal } from '@/components/dashboard/InviteMembersModal';
 import { OnboardingChecklist } from '@/components/onboarding/OnboardingChecklist';
-import { PendingInvites } from '@/components/work/PendingInvites';
 import { Button } from '@/components/ui/Button';
 import { UserAvatar, avatarFromMembers } from '@/components/ui/UserAvatar';
 import { useAttendance } from '@/lib/attendance/AttendanceContext';
@@ -133,8 +132,6 @@ export function MyWorkPage() {
             )}
           </div>
         </header>
-
-        <PendingInvites />
 
         <OnboardingChecklist
           onCreateProject={() => setShowCreateProject(true)}

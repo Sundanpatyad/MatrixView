@@ -28,6 +28,7 @@ export type RootStackParamList = {
 
   EditProfile: undefined;
   Settings: undefined;
+  TeamActivity: { projectId?: string } | undefined;
 };
 
 declare global {
