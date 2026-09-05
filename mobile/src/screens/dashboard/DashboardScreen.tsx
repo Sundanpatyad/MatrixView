@@ -16,7 +16,6 @@ import {
   type SheetOption,
 } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
-import { useChat } from '@/context/ChatContext';
 import { useNotifications } from '@/context/NotificationContext';
 import { useWorkspace } from '@/context/WorkspaceContext';
 import { formatRelative, isOverdue } from '@/lib/format';
@@ -48,7 +47,6 @@ export function DashboardScreen() {
     isProjectAdmin,
   } = useWorkspace();
   const { unreadCount } = useNotifications();
-  const { connected } = useChat();
   const tabBarHeight = useTabBarPadding();
 
   const [filter, setFilter] = useState<TaskFilter>('mine');
@@ -202,7 +200,7 @@ export function DashboardScreen() {
           </Pressable>
 
           <Pressable onPress={() => navigation.navigate('Tabs', { screen: 'Profile' })} hitSlop={10}>
-            <Avatar name={user?.name} uri={user?.avatarUrl} size={40} online={connected} />
+            <Avatar name={user?.name} uri={user?.avatarUrl} size={40} userId={user?.id} />
           </Pressable>
         </View>
 

@@ -13,6 +13,7 @@ import {
   connectSocket,
   disconnectSocket,
   ensureSocketConnected,
+  hasSocketHold,
   isSocketConnected,
   patchSocketHandlers,
   socketActions,
@@ -25,6 +26,7 @@ type PresenceMap = Record<string, PresenceUser>;
 type SocketContextValue = {
   connected: boolean;
   presence: PresenceMap;
+  isOnline: (userId?: string | null) => boolean;
   reconnect: () => Promise<boolean>;
   seedPresence: (
     users: Array<{ id: string; online?: boolean; checkedIn?: boolean }>,
@@ -32,6 +34,9 @@ type SocketContextValue = {
 };
 
 const SocketContext = createContext<SocketContextValue | null>(null);
+
+/** How long the app may sit in the background before the user reads as Offline. */
+const BACKGROUND_DISCONNECT_MS = 20_000;
 
 function upsertPresence(prev: PresenceMap, entry: PresenceUser): PresenceMap {
   const existing = prev[entry.userId];
@@ -104,13 +109,54 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     });
   }, [isAuthenticated, isBootstrapping, meId]);
 
+  // Presence follows the app: foreground means Online, and leaving the app for
+  // more than a moment means Offline. The delay keeps a quick app switch (or a
+  // permission dialog) from flickering the dot.
   useEffect(() => {
     if (!isAuthenticated) return;
-    const onChange = (state: AppStateStatus) => {
-      if (state === 'active') ensureSocketConnected();
+    let leaveTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const cancelLeave = () => {
+      if (!leaveTimer) return;
+      clearTimeout(leaveTimer);
+      leaveTimer = null;
     };
+
+    const scheduleLeave = () => {
+      cancelLeave();
+      leaveTimer = setTimeout(() => {
+        leaveTimer = null;
+        if (AppState.currentState === 'active') return;
+        // An in-progress call keeps signaling alive in the background; check
+        // again once it has ended.
+        if (hasSocketHold()) {
+          scheduleLeave();
+          return;
+        }
+        disconnectSocket({ preserveRooms: true });
+        setConnected(false);
+      }, BACKGROUND_DISCONNECT_MS);
+    };
+
+    const onChange = (state: AppStateStatus) => {
+      if (state === 'active') {
+        cancelLeave();
+        void connectSocket().then(() => {
+          ensureSocketConnected();
+          setConnected(isSocketConnected());
+          socketActions.requestPresence();
+        });
+        return;
+      }
+      if (state !== 'background') return;
+      scheduleLeave();
+    };
+
     const sub = AppState.addEventListener('change', onChange);
-    return () => sub.remove();
+    return () => {
+      cancelLeave();
+      sub.remove();
+    };
   }, [isAuthenticated]);
 
   const reconnect = useCallback(async () => {
@@ -122,6 +168,15 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     if (ok) socketActions.requestPresence();
     return ok;
   }, [isAuthenticated]);
+
+  const isOnline = useCallback(
+    (userId?: string | null) => {
+      if (!userId) return false;
+      if (userId === meId) return connected || Boolean(presence[userId]?.online);
+      return Boolean(presence[userId]?.online);
+    },
+    [connected, meId, presence],
+  );
 
   const seedPresence = useCallback(
     (users: Array<{ id: string; online?: boolean; checkedIn?: boolean }>) => {
@@ -144,8 +199,8 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   );
 
   const value = useMemo(
-    () => ({ connected, presence, reconnect, seedPresence }),
-    [connected, presence, reconnect, seedPresence],
+    () => ({ connected, presence, isOnline, reconnect, seedPresence }),
+    [connected, presence, isOnline, reconnect, seedPresence],
   );
 
   return <SocketContext.Provider value={value}>{children}</SocketContext.Provider>;
@@ -155,4 +210,8 @@ export function useSocket() {
   const ctx = useContext(SocketContext);
   if (!ctx) throw new Error('useSocket must be used within SocketProvider');
   return ctx;
+}
+
+export function useSocketOptional() {
+  return useContext(SocketContext);
 }

@@ -113,7 +113,7 @@ export function NewChatScreen({ navigation }: Props) {
               onPress={() => open({ userId: item.id }, item.id)}
               style={({ pressed }) => [styles.row, pressed && { backgroundColor: colors.surfaceAlt }]}
             >
-              <Avatar name={item.name} uri={item.avatarUrl} size={44} online={online} />
+              <Avatar name={item.name} uri={item.avatarUrl} size={44} userId={item.id} />
               <View style={styles.rowText}>
                 <Text style={[styles.name, { color: colors.text }]} numberOfLines={1}>
                   {item.name}

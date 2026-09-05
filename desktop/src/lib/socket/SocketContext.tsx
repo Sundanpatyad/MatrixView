@@ -23,6 +23,7 @@ type PresenceMap = Record<string, PresenceUser>;
 type SocketContextValue = {
   connected: boolean;
   presence: PresenceMap;
+  isOnline: (userId?: string | null) => boolean;
   reconnect: () => Promise<boolean>;
   seedPresence: (
     users: Array<{ id: string; online?: boolean; checkedIn?: boolean }>,
@@ -132,6 +133,36 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     return ok;
   }, [isAuthenticated, meId]);
 
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const refresh = () => {
+      if (document.visibilityState === 'hidden') return;
+      void reconnect();
+    };
+    // Closing the tab / quitting the app should read as Offline right away
+    // instead of waiting for the server to notice a half-open socket.
+    const goOffline = () => disconnectChatSocket();
+    document.addEventListener('visibilitychange', refresh);
+    window.addEventListener('focus', refresh);
+    window.addEventListener('online', refresh);
+    window.addEventListener('pagehide', goOffline);
+    return () => {
+      document.removeEventListener('visibilitychange', refresh);
+      window.removeEventListener('focus', refresh);
+      window.removeEventListener('online', refresh);
+      window.removeEventListener('pagehide', goOffline);
+    };
+  }, [isAuthenticated, reconnect]);
+
+  const isOnline = useCallback(
+    (userId?: string | null) => {
+      if (!userId) return false;
+      if (userId === meId) return connected || Boolean(presence[userId]?.online);
+      return Boolean(presence[userId]?.online);
+    },
+    [connected, meId, presence],
+  );
+
   const seedPresence = useCallback(
     (users: Array<{ id: string; online?: boolean; checkedIn?: boolean }>) => {
       setPresence((prev) => {
@@ -153,8 +184,8 @@ export function SocketProvider({ children }: { children: ReactNode }) {
   );
 
   const value = useMemo(
-    () => ({ connected, presence, reconnect, seedPresence }),
-    [connected, presence, reconnect, seedPresence],
+    () => ({ connected, presence, isOnline, reconnect, seedPresence }),
+    [connected, presence, isOnline, reconnect, seedPresence],
   );
 
   return <SocketContext.Provider value={value}>{children}</SocketContext.Provider>;
@@ -164,4 +195,8 @@ export function useSocket() {
   const ctx = useContext(SocketContext);
   if (!ctx) throw new Error('useSocket must be used within SocketProvider');
   return ctx;
+}
+
+export function useSocketOptional() {
+  return useContext(SocketContext);
 }

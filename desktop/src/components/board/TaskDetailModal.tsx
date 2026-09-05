@@ -423,6 +423,7 @@ export function TaskDetailModal({ task, projectName, columns, onClose }: Props) 
                             src={c.authorAvatarUrl}
                             seed={c.authorName}
                             size="sm"
+                            userId={c.authorId}
                           />
                           <p className="text-xs font-semibold text-ink-50">{c.authorName}</p>
                         </div>
@@ -485,6 +486,7 @@ export function TaskDetailModal({ task, projectName, columns, onClose }: Props) 
                         seed={selectedMember.email || selectedMember.name}
                         size="sm"
                         className="!h-7 !w-7 !text-[10px]"
+                        userId={selectedMember.userId || selectedMember.id}
                       />
                       <div className="min-w-0">
                         <p className="truncate text-xs font-semibold text-ink-50">
@@ -548,6 +550,7 @@ export function TaskDetailModal({ task, projectName, columns, onClose }: Props) 
                           src={m.avatarUrl}
                           seed={m.email || m.name}
                           size="sm"
+                          userId={m.userId || m.id}
                         />
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-xs font-semibold text-ink-50">{m.name}</p>

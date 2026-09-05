@@ -13,9 +13,12 @@ import { chatApi } from '@/lib/api';
 import {
   callSocket,
   clearSocketHandlerKeys,
+  connectSocket,
   ensureSocketConnected,
+  holdSocketConnection,
   isSocketConnected,
   patchSocketHandlers,
+  releaseSocketConnection,
   waitUntilSocketConnected,
   type CallIncomingPayload,
   type CallMediaKind,
@@ -119,6 +122,18 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     Vibration.cancel();
   }, []);
 
+  /**
+   * A call can start or be answered while the socket is still asleep — pushed
+   * from the background, resumed from a killed app — so signaling waits for a
+   * live socket instead of failing with "you appear to be offline".
+   */
+  const ensureCallSocket = useCallback(async () => {
+    if (isSocketConnected()) return true;
+    await connectSocket();
+    ensureSocketConnected();
+    return waitUntilSocketConnected();
+  }, []);
+
   const endCall = useCallback(
     (error: string | null = null) => {
       const callId = stateRef.current.callId;
@@ -163,6 +178,19 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     },
     [session],
   );
+
+  // Keep the socket alive across backgrounding for as long as a call is live,
+  // otherwise answering from the lock screen would drop the signaling channel.
+  useEffect(() => {
+    if (call.phase === 'idle') {
+      releaseSocketConnection('call');
+      return undefined;
+    }
+    holdSocketConnection('call');
+    // A call that arrived by push may have woken us with the socket down.
+    void ensureCallSocket();
+    return () => releaseSocketConnection('call');
+  }, [call.phase, ensureCallSocket]);
 
   // Ring only while an incoming call is pending.
   useEffect(() => {
@@ -314,6 +342,13 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
+      if (!(await ensureCallSocket())) {
+        endCall('You appear to be offline.');
+        return;
+      }
+
+      // The callee does not have to be online: the server rings their socket if
+      // it can and always sends a high-priority call push as well.
       const ack = await callSocket.invite({
         conversationId: input.conversationId,
         callId,
@@ -324,7 +359,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
         endCall(ack.error ?? 'Could not start the call.');
       }
     },
-    [callingSupported, endCall, session, toast],
+    [callingSupported, endCall, ensureCallSocket, session, toast],
   );
 
   const joinGroupCall = useCallback(
@@ -382,13 +417,9 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    if (!isSocketConnected()) {
-      ensureSocketConnected();
-      const ready = await waitUntilSocketConnected();
-      if (!ready) {
-        endCall('Could not reconnect to the call.');
-        return;
-      }
+    if (!(await ensureCallSocket())) {
+      endCall('Could not reconnect to the call.');
+      return;
     }
 
     const ack = await callSocket.accept({
@@ -407,7 +438,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
         .forEach((peer) => session.addExpectedPeer(peer.userId, peer.name));
       session.markConnectedIfAlone();
     }
-  }, [callingSupported, endCall, session, stopRinging, toast, user?.id]);
+  }, [callingSupported, endCall, ensureCallSocket, session, stopRinging, toast, user?.id]);
 
   acceptRef.current = acceptCall;
 

@@ -6,7 +6,7 @@ import { CreateProjectModal } from '@/components/dashboard/CreateProjectModal';
 import { InviteMembersModal } from '@/components/dashboard/InviteMembersModal';
 import { OnboardingChecklist } from '@/components/onboarding/OnboardingChecklist';
 import { Button } from '@/components/ui/Button';
-import { UserAvatar, avatarFromMembers } from '@/components/ui/UserAvatar';
+import { UserAvatar, avatarFromMembers, presenceUserIdFromMembers } from '@/components/ui/UserAvatar';
 import { useAttendance } from '@/lib/attendance/AttendanceContext';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { cn } from '@/lib/cn';
@@ -236,6 +236,10 @@ export function MyWorkPage() {
                       seed={task.assigneeName || task.id}
                       size="sm"
                       className="mt-0.5 !h-8 !w-8 !text-[10px]"
+                      userId={presenceUserIdFromMembers(
+                        project?.members ?? [],
+                        task.assigneeId,
+                      )}
                     />
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-1.5">

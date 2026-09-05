@@ -66,7 +66,7 @@ export function NewGroupScreen({ navigation }: Props) {
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
             {selectedUsers.map((entry) => (
               <Pressable key={entry.id} onPress={() => toggle(entry.id)} style={styles.chip}>
-                <Avatar name={entry.name} uri={entry.avatarUrl} size={44} />
+                <Avatar name={entry.name} uri={entry.avatarUrl} size={44} userId={entry.id} />
                 <View style={[styles.chipRemove, { backgroundColor: colors.danger, borderColor: colors.bg }]}>
                   <Ionicons name="close" size={11} color="#ffffff" />
                 </View>
@@ -101,7 +101,7 @@ export function NewGroupScreen({ navigation }: Props) {
               onPress={() => toggle(item.id)}
               style={({ pressed }) => [styles.row, pressed && { backgroundColor: colors.surfaceAlt }]}
             >
-              <Avatar name={item.name} uri={item.avatarUrl} size={42} />
+              <Avatar name={item.name} uri={item.avatarUrl} size={42} userId={item.id} />
               <View style={styles.rowText}>
                 <Text style={[styles.name, { color: colors.text }]} numberOfLines={1}>
                   {item.name}

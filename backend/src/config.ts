@@ -20,6 +20,17 @@ export const config = {
     .map((s) => s.trim())
     .filter(Boolean),
   /**
+   * Browser app origins (Vercel). Always allowed for CORS + Google returnTo
+   * even when CORS_ORIGIN is only set to localhost.
+   */
+  webAppOrigins: (
+    process.env.WEB_APP_ORIGINS ??
+    'https://matrix-view.vercel.app,http://localhost:5175,http://localhost:5173'
+  )
+    .split(',')
+    .map((s) => s.trim().replace(/\/$/, ''))
+    .filter(Boolean),
+  /**
    * Origins used by packaged Tauri / WebView shells. Always allowed so desktop
    * builds can call the API even when CORS_ORIGIN only lists web URLs.
    */

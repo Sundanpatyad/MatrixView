@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { peekInviteToken, postAuthPath, rememberInviteToken } from '@/lib/auth/inviteToken';
 import { openGoogleSignIn } from '@/lib/auth/googleSignIn';
+import { isTauriApp } from '@/lib/webrtc/screenShare';
 import { useToast } from '@/lib/toast/ToastContext';
 
 function GoogleIcon({ className }: { className?: string }) {
@@ -77,17 +78,16 @@ export function LoginPage() {
   }
 
   async function onGoogleSignIn() {
-    // Browser opens for account pick; desktop waits on a local loopback redirect.
     try {
-      setBrowserHint(true);
-      toast.info('Finish signing in with Google in your browser, then return to DockX.');
+      if (isTauriApp()) {
+        setBrowserHint(true);
+        toast.info('Finish signing in with Google in your browser, then return to DockX.');
+      }
       const result = await openGoogleSignIn();
       if (result.mode === 'desktop') {
         applySession(result.auth);
         navigate(afterAuth);
-        return;
       }
-      // web redirect — callback page finishes the session
     } catch (err) {
       setBrowserHint(false);
       toast.fromError(err, 'Unable to sign in with Google');

@@ -33,7 +33,20 @@ export function loginRequest(input: {
   });
 }
 
-/** Exchange one-time code from Google OAuth redirect for DockX tokens. */
+/** Browser Google Sign-In: verify an ID token (no client secret). */
+export function googleIdTokenLoginRequest(idToken: string): Promise<AuthResponse> {
+  const web = typeof window !== 'undefined' && !('__TAURI_INTERNALS__' in window);
+  return apiFetch<AuthResponse>('/api/auth/google', {
+    method: 'POST',
+    body: JSON.stringify({
+      idToken,
+      deviceType: web ? 'web' : 'desktop',
+      deviceId: web ? 'dockx-web' : 'dockx-desktop',
+    }),
+    skipRefresh: true,
+  });
+}
+
 export function googleExchangeRequest(code: string): Promise<AuthResponse> {
   return apiFetch<AuthResponse>('/api/auth/google/exchange', {
     method: 'POST',
@@ -71,13 +84,14 @@ export function googleDesktopLoginRequest(input: {
   });
 }
 
-/** Start Google OAuth in the system / current browser window. */
+/** Start Google OAuth via the API (legacy web redirect through the backend). */
 export function googleStartUrl(returnTo: string): string {
   const base = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') || '';
   const url = new URL(`${base}/api/auth/google/start`);
   url.searchParams.set('returnTo', returnTo);
-  url.searchParams.set('deviceType', 'desktop');
-  url.searchParams.set('deviceId', 'dockx-desktop');
+  const web = typeof window !== 'undefined' && !('__TAURI_INTERNALS__' in window);
+  url.searchParams.set('deviceType', web ? 'web' : 'desktop');
+  url.searchParams.set('deviceId', web ? 'dockx-web' : 'dockx-desktop');
   return url.toString();
 }
 

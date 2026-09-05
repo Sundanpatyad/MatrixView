@@ -156,7 +156,7 @@ export function ManageTeamsScreen({ route }: Props) {
                 <View style={styles.avatars}>
                   {members.slice(0, 8).map((member) => (
                     <View key={member.id} style={styles.avatarWrap}>
-                      <Avatar name={member.name || member.email} uri={member.avatarUrl} size={28} />
+                      <Avatar name={member.name || member.email} uri={member.avatarUrl} size={28} userId={member.userId || member.id} />
                     </View>
                   ))}
                   {members.length > 8 ? (
@@ -209,7 +209,7 @@ export function ManageTeamsScreen({ route }: Props) {
                   },
                 ]}
               >
-                <Avatar name={member.name || member.email} uri={member.avatarUrl} size={30} />
+                <Avatar name={member.name || member.email} uri={member.avatarUrl} size={30} userId={member.userId || member.id} />
                 <View style={styles.flex}>
                   <Text style={[styles.memberName, { color: colors.text }]} numberOfLines={1}>
                     {member.name || member.email}

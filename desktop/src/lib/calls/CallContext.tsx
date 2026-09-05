@@ -14,6 +14,7 @@ import {
   clearChatSocketHandlerKeys,
   patchChatSocketHandlers,
 } from '@/lib/socket/chatSocket';
+import { showIncomingCallPush } from '@/lib/notifications/desktopPush';
 import { useSocket } from '@/lib/socket/SocketContext';
 import {
   useAudioCall,
@@ -149,6 +150,41 @@ export function CallProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const clearFocusConversationId = useCallback(() => setFocusConversationId(null), []);
+
+  // Ringing while the window sits in the background would otherwise be silent
+  // and invisible, so mirror the call into an OS notification.
+  useEffect(() => {
+    if (call.phase !== 'incoming' || !call.callId) return undefined;
+
+    let close: (() => void) | null = null;
+    let cancelled = false;
+    const caller = call.fromName || call.peerName || 'Someone';
+    const kind = call.mediaKind === 'video' ? 'video' : 'voice';
+
+    void showIncomingCallPush({
+      title: `Incoming ${kind} call`,
+      body: call.isGroup ? `${caller} is calling ${call.conversationName}` : `${caller} is calling`,
+      href: call.conversationId ? `/chat?c=${encodeURIComponent(call.conversationId)}` : '/chat',
+      tag: `call:${call.callId}`,
+    }).then((dispose) => {
+      if (cancelled) dispose();
+      else close = dispose;
+    });
+
+    return () => {
+      cancelled = true;
+      close?.();
+    };
+  }, [
+    call.callId,
+    call.conversationId,
+    call.conversationName,
+    call.fromName,
+    call.isGroup,
+    call.mediaKind,
+    call.peerName,
+    call.phase,
+  ]);
 
   const handleAccept = useCallback(async () => {
     const convId = call.conversationId;

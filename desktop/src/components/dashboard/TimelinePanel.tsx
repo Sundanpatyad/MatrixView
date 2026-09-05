@@ -5,7 +5,7 @@ import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
-import { UserAvatar, avatarFromMembers } from '@/components/ui/UserAvatar';
+import { UserAvatar, avatarFromMembers, presenceUserIdFromMembers } from '@/components/ui/UserAvatar';
 import { cn } from '@/lib/cn';
 import {
   TASK_PRIORITIES,
@@ -379,6 +379,7 @@ function TimelineTable({
                         )}
                         seed={row.assigneeName}
                         size="sm"
+                        userId={presenceUserIdFromMembers(itemMembers, row.assigneeId)}
                       />
                       <span className="text-xs font-semibold text-ink-100">
                         {row.assigneeName}
@@ -437,6 +438,7 @@ type FilterPerson = {
   name: string;
   email: string;
   avatarUrl?: string | null;
+  userId?: string | null;
   /** All project-member ids for this person (tasks may use any of them) */
   memberIds: string[];
   projectLabels: string[];
@@ -610,6 +612,7 @@ function UserMultiFilter({
                         size="xs"
                         bare
                         className="mt-0.5"
+                        userId={p.userId}
                       />
                       <span className="min-w-0 flex-1">
                         <span className="block truncate font-medium text-ink-100">
@@ -697,6 +700,7 @@ export function TimelinePanel() {
       name: string;
       email: string;
       avatarUrl?: string | null;
+      userId?: string | null;
       memberIds: Set<string>;
       projects: Set<string>;
       teams: Set<string>;
@@ -719,6 +723,7 @@ export function TimelinePanel() {
             name: m.name,
             email: m.email,
             avatarUrl: m.avatarUrl,
+            userId: m.userId || m.id,
             memberIds: new Set(),
             projects: new Set(),
             teams: new Set(),
@@ -726,6 +731,7 @@ export function TimelinePanel() {
           byPerson.set(key, acc);
         }
         acc.memberIds.add(m.id);
+        if (!acc.userId) acc.userId = m.userId || m.id;
         acc.projects.add(projectLabel);
         if (m.avatarUrl && !acc.avatarUrl) acc.avatarUrl = m.avatarUrl;
         // Prefer longer/capitalized display name if we have a stub like "sundan"
@@ -745,6 +751,7 @@ export function TimelinePanel() {
         name: a.name,
         email: a.email,
         avatarUrl: a.avatarUrl,
+        userId: a.userId,
         memberIds: [...a.memberIds],
         projectLabels: [...a.projects].sort((x, y) => x.localeCompare(y)),
         teamLabels: [...a.teams].sort((x, y) => x.localeCompare(y)),

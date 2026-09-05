@@ -128,3 +128,45 @@ export async function showDesktopPush(opts: ShowOpts): Promise<void> {
     console.warn('[desktop-push] sendNotification failed', err);
   }
 }
+
+/**
+ * Ringing calls get a sticky notification whenever the window is not focused,
+ * so a call is never missed just because DockX is behind another window.
+ * Returns a disposer that clears it once the call stops ringing.
+ */
+export async function showIncomingCallPush(opts: {
+  title: string;
+  body?: string;
+  href?: string;
+  tag: string;
+}): Promise<() => void> {
+  if (document.hasFocus()) return () => undefined;
+  const granted = await ensureDesktopNotificationPermission();
+  if (!granted) return () => undefined;
+
+  const href = opts.href ?? '';
+  try {
+    if (typeof Notification !== 'undefined') {
+      const note = new Notification(opts.title, {
+        body: (opts.body ?? '').trim(),
+        tag: opts.tag,
+        requireInteraction: true,
+      });
+      note.onclick = () => {
+        note.close();
+        void focusDockXWindow();
+        if (href) openDesktopHref(href);
+      };
+      return () => note.close();
+    }
+  } catch (err) {
+    console.warn('[desktop-push] call Notification failed', err);
+  }
+
+  try {
+    sendNotification({ title: opts.title, body: opts.body ?? '', extra: { href } });
+  } catch (err) {
+    console.warn('[desktop-push] call sendNotification failed', err);
+  }
+  return () => undefined;
+}

@@ -28,9 +28,7 @@
     }
   },
   "plugins": {
-    "sql": {
-      "preload": ["sqlite:dockx.db"]
-    },
+    "sql": {},
     "deep-link": {
       "desktop": {
         "schemes": ["dockx"]

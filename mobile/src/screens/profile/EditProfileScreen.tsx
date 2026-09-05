@@ -64,7 +64,7 @@ export function EditProfileScreen({ navigation }: Props) {
         >
           <View style={styles.avatarBlock}>
             <Pressable onPress={changeAvatar} disabled={uploading}>
-              <Avatar name={user?.name} uri={user?.avatarUrl} size={88} />
+              <Avatar name={user?.name} uri={user?.avatarUrl} size={88} userId={user?.id} />
               <View style={[styles.cameraBadge, { backgroundColor: colors.brand, borderColor: colors.bg }]}>
                 <Ionicons name={uploading ? 'hourglass-outline' : 'camera'} size={14} color="#ffffff" />
               </View>

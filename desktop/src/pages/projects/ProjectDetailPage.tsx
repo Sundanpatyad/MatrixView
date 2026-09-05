@@ -122,6 +122,7 @@ export function ProjectDetailPage() {
                   seed={member.email || member.name}
                   size="lg"
                   className="!h-9 !w-9"
+                  userId={member.userId || member.id}
                 />
                 <div>
                   <p className="text-sm font-bold text-ink-50">{member.name}</p>

@@ -148,6 +148,7 @@ function ConversationAvatar({
       seed={peer?.id || conversation.id}
       size={size}
       className={className}
+      userId={peer?.id}
     />
   );
 }
@@ -672,27 +673,6 @@ function AttachmentBlock({
   return null;
 }
 
-function PresenceDot({
-  online,
-  className,
-}: {
-  online?: boolean;
-  className?: string;
-}) {
-  const socketOnline = Boolean(online);
-  return (
-    <span
-      className={cn(
-        'absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-white',
-        socketOnline ? 'bg-[#4BDE80]' : 'bg-ink-300',
-        socketOnline && 'ring-1 ring-[#4BDE80]/40',
-        className,
-      )}
-      title={socketOnline ? 'Online' : 'Offline'}
-    />
-  );
-}
-
 function ChatListSkeleton() {
   return (
     <div className="space-y-1 p-1">
@@ -955,8 +935,14 @@ function NewDmModal({
               className="flex w-full items-center gap-3 border-b border-ink-700 px-1 py-2.5 text-left hover:bg-ink-900 disabled:opacity-50"
             >
               <span className="relative shrink-0">
-                <UserAvatar name={u.name} src={u.avatarUrl} seed={u.id} size="lg" className="!h-9 !w-9" />
-                <PresenceDot online={presence[u.id]?.online ?? u.online} />
+                <UserAvatar
+                  name={u.name}
+                  src={u.avatarUrl}
+                  seed={u.id}
+                  size="lg"
+                  className="!h-9 !w-9"
+                  userId={u.id}
+                />
               </span>
               <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-2">
@@ -984,13 +970,11 @@ function NewDmModal({
 function NewGroupModal({
   users,
   meId,
-  presence,
   onClose,
   onCreated,
 }: {
   users: ChatMember[];
   meId: string;
-  presence: Record<string, PresenceUser>;
   onClose: () => void;
   onCreated: (c: ChatConversation) => void;
 }) {
@@ -1105,8 +1089,7 @@ function NewGroupModal({
                   className="h-4 w-4 accent-brand-700"
                 />
                 <span className="relative shrink-0">
-                  <UserAvatar name={u.name} src={u.avatarUrl} seed={u.id} size="sm" />
-                  <PresenceDot online={presence[u.id]?.online ?? u.online} />
+                  <UserAvatar name={u.name} src={u.avatarUrl} seed={u.id} size="sm" userId={u.id} />
                 </span>
                 <span className="min-w-0">
                   <span className="block truncate text-sm font-medium text-ink-50">{u.name}</span>
@@ -1273,8 +1256,7 @@ function GroupManagePanel({
             >
               <div className="flex min-w-0 items-center gap-2">
                 <span className="relative shrink-0">
-                  <UserAvatar name={m.name} src={m.avatarUrl} seed={m.id} size="sm" />
-                  <PresenceDot online={presence[m.id]?.online} />
+                  <UserAvatar name={m.name} src={m.avatarUrl} seed={m.id} size="sm" userId={m.id} />
                 </span>
                 <div className="min-w-0">
                 <p className="truncate text-sm font-medium text-ink-50">
@@ -2401,9 +2383,6 @@ export function ChatPage() {
           ) : (
             filtered.map((c) => {
               const selected = c.id === activeId;
-              const peerId =
-                c.type === 'dm' ? c.memberIds.find((id) => id !== meId) : undefined;
-              const peer = peerId ? presence[peerId] : undefined;
               const liveCall = c.type === 'group' ? activeRooms[c.id] : undefined;
               const preview = liveCall
                 ? `${liveCall.participantCount} in call · tap to join`
@@ -2423,9 +2402,6 @@ export function ChatPage() {
                 >
                   <span className="relative shrink-0">
                     <ConversationAvatar conversation={c} meId={meId} size="lg" />
-                    {c.type === 'dm' ? (
-                      <PresenceDot online={peer?.online} />
-                    ) : null}
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="flex items-baseline justify-between gap-2">
@@ -2490,9 +2466,6 @@ export function ChatPage() {
                 </button>
                 <span className="relative shrink-0">
                   <ConversationAvatar conversation={active} meId={meId} size="md" />
-                  {active.type === 'dm' && peerPresence && 'online' in peerPresence ? (
-                    <PresenceDot online={peerPresence.online} />
-                  ) : null}
                 </span>
                 <div className="min-w-0">
                   <p className="truncate text-[14px] font-semibold tracking-tight text-ink-50">
@@ -2530,19 +2503,11 @@ export function ChatPage() {
                           ? 'Connecting…'
                           : call.phase !== 'idle'
                             ? 'Already in a call'
-                            : active.type === 'dm' &&
-                                !(peerPresence && 'online' in peerPresence && peerPresence.online)
-                              ? 'Peer is offline for calls'
-                              : active.type === 'group'
-                                ? 'Group audio call'
-                                : 'Audio call'
+                            : active.type === 'group'
+                              ? 'Group audio call'
+                              : 'Audio call'
                       }
-                      disabled={
-                        !socketReady ||
-                        call.phase !== 'idle' ||
-                        (active.type === 'dm' &&
-                          !(peerPresence && 'online' in peerPresence && peerPresence.online))
-                      }
+                      disabled={!socketReady || call.phase !== 'idle'}
                       className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-ink-600/70 bg-ink-900/40 text-ink-300 transition hover:border-brand-500/40 hover:bg-ink-900 hover:text-ink-50 disabled:cursor-not-allowed disabled:opacity-35"
                       onClick={() => {
                         if (active.type === 'group') {
@@ -2581,19 +2546,11 @@ export function ChatPage() {
                           ? 'Connecting…'
                           : call.phase !== 'idle'
                             ? 'Already in a call'
-                            : active.type === 'dm' &&
-                                !(peerPresence && 'online' in peerPresence && peerPresence.online)
-                              ? 'Peer is offline for calls'
-                              : active.type === 'group'
-                                ? 'Group video call'
-                                : 'Video call'
+                            : active.type === 'group'
+                              ? 'Group video call'
+                              : 'Video call'
                       }
-                      disabled={
-                        !socketReady ||
-                        call.phase !== 'idle' ||
-                        (active.type === 'dm' &&
-                          !(peerPresence && 'online' in peerPresence && peerPresence.online))
-                      }
+                      disabled={!socketReady || call.phase !== 'idle'}
                       className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-ink-600/70 bg-ink-900/40 text-ink-300 transition hover:border-brand-500/40 hover:bg-ink-900 hover:text-ink-50 disabled:cursor-not-allowed disabled:opacity-35"
                       onClick={() => {
                         if (active.type === 'group') {
@@ -2849,6 +2806,7 @@ export function ChatPage() {
                               seed={msg.senderId}
                               size="sm"
                               className="mb-0.5 !h-7 !w-7 !text-[10px] sm:!h-8 sm:!w-8"
+                              userId={msg.senderId}
                             />
                           ) : (
                             <span
@@ -3327,7 +3285,6 @@ export function ChatPage() {
         <NewGroupModal
           users={orgUsers}
           meId={meId}
-          presence={presence}
           onClose={() => setModal(null)}
           onCreated={upsertConversation}
         />

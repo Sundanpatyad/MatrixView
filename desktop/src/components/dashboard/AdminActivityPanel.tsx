@@ -592,10 +592,8 @@ export function AdminActivityPanel({ projectId }: { projectId?: string } = {}) {
                       src={m.avatarUrl}
                       seed={m.email || m.name}
                       size="sm"
+                      userId={m.userId}
                     />
-                    {m.tracking ? (
-                      <span className="absolute -right-0.5 -bottom-0.5 h-2 w-2 rounded-full border-2 border-ink-800 bg-[#4BDE80]" />
-                    ) : null}
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-xs font-semibold text-ink-50">
@@ -791,6 +789,7 @@ export function AdminActivityPanel({ projectId }: { projectId?: string } = {}) {
                               src={member.avatarUrl}
                               seed={member.email || member.name}
                               size="sm"
+                              userId={member.userId}
                             />
                           ) : null}
                           <div className="min-w-0 flex-1">
@@ -861,6 +860,7 @@ export function AdminActivityPanel({ projectId }: { projectId?: string } = {}) {
                               src={m.avatarUrl}
                               seed={m.email || m.name}
                               size="sm"
+                              userId={m.userId}
                             />
                             <span className="min-w-0 flex-1 truncate text-xs text-ink-200">
                               {m.name}

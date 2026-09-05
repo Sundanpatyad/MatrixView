@@ -2,9 +2,9 @@ import * as Notifications from 'expo-notifications';
 
 import { handleNotificationAction, payloadFromNotification } from './actions';
 import { registerNotificationCategories } from './categories';
-import { incomingFromPushData } from './incomingCall';
+import { incomingFromPushData, presentIncomingCallNotification } from './incomingCall';
 import { presentActionableFromData, recordFromTaskData } from './presentActionable';
-import { startCallRingtone, stopCallRingtone } from './callRingtone';
+import { stopCallRingtone } from './callRingtone';
 
 export const BACKGROUND_NOTIFICATION_TASK = 'DOCKX_NOTIFICATION_TASK';
 
@@ -25,8 +25,11 @@ function defineBackgroundTask() {
       const notification = record.notification as Notifications.Notification | undefined;
       const payload = notification ? payloadFromNotification(notification) : recordFromTaskData(record);
       const type = typeof payload.type === 'string' ? payload.type : '';
-      if (type === 'call.incoming' && incomingFromPushData(payload)) {
-        startCallRingtone();
+      const incoming = type === 'call.incoming' ? incomingFromPushData(payload) : null;
+      if (incoming) {
+        // The app may be killed, so re-present the call ourselves (this also
+        // starts the ringtone): the FCM tray item carries no Accept / Decline.
+        await presentIncomingCallNotification(incoming);
         return;
       }
       if (type === 'call.ended' || type === 'call.missed') {

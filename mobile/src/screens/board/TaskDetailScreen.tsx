@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   AppHeader,
   Avatar,
+  presenceUserIdFromMembers,
   Badge,
   Card,
   EmptyState,
@@ -182,7 +183,15 @@ export function TaskDetailScreen({ route, navigation }: Props) {
               label="Assignee"
               value={task.assigneeName || 'Unassigned'}
               onPress={() => setAssigneeSheet(true)}
-              leading={task.assigneeName ? <Avatar name={task.assigneeName} size={24} /> : undefined}
+              leading={
+                task.assigneeName ? (
+                  <Avatar
+                    name={task.assigneeName}
+                    size={24}
+                    userId={presenceUserIdFromMembers(project?.members ?? [], task.assigneeId)}
+                  />
+                ) : undefined
+              }
             />
             <Divider />
             <DetailRow icon="person-circle-outline" label="Reporter" value={task.reporterName || task.createdByName} />
@@ -283,7 +292,7 @@ export function TaskDetailScreen({ route, navigation }: Props) {
             ) : (
               task.comments.map((entry) => (
                 <View key={entry.id} style={styles.comment}>
-                  <Avatar name={entry.authorName} uri={entry.authorAvatarUrl} size={30} />
+                  <Avatar name={entry.authorName} uri={entry.authorAvatarUrl} size={30} userId={entry.authorId} />
                   <View style={styles.flex}>
                     <View style={styles.commentHead}>
                       <Text style={[styles.commentAuthor, { color: colors.text }]}>{entry.authorName}</Text>

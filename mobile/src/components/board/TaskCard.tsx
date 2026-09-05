@@ -2,9 +2,10 @@ import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { Avatar } from '@/components/ui';
+import { Avatar, presenceUserIdFromMembers } from '@/components/ui';
 import { formatShortDate, isOverdue, titleCase } from '@/lib/format';
 import type { BoardTask } from '@/lib/api';
+import { useWorkspace } from '@/context/WorkspaceContext';
 import { priorityColor, radius, taskTypeColor, useColors, useTheme } from '@/theme';
 
 const TYPE_ICON: Record<string, keyof typeof Ionicons.glyphMap> = {
@@ -34,8 +35,13 @@ interface TaskCardProps {
 export function TaskCard({ task, onPress, onMove, projectName, compact = false }: TaskCardProps) {
   const colors = useColors();
   const { isDark } = useTheme();
+  const { getProject } = useWorkspace();
   const typeColor = taskTypeColor[task.type] ?? colors.brand;
   const overdue = isOverdue(task.dueDate) && task.status !== 'done';
+  const presenceUserId = presenceUserIdFromMembers(
+    getProject(task.projectId)?.members ?? [],
+    task.assigneeId,
+  );
 
   return (
     <Pressable
@@ -83,7 +89,7 @@ export function TaskCard({ task, onPress, onMove, projectName, compact = false }
 
       <View style={styles.footer}>
         {task.assigneeName ? (
-          <Avatar name={task.assigneeName} size={20} />
+          <Avatar name={task.assigneeName} size={20} userId={presenceUserId} />
         ) : (
           <View style={[styles.unassigned, { borderColor: colors.borderStrong }]}>
             <Ionicons name="person-outline" size={10} color={colors.textSubtle} />

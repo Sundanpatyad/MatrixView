@@ -224,7 +224,7 @@ export function NotificationsScreen() {
               ]}
             >
               <View style={styles.avatarWrap}>
-                <Avatar name={name} uri={item.actorAvatarUrl} size={42} />
+                <Avatar name={name} uri={item.actorAvatarUrl} size={42} userId={item.actorId} />
                 <View style={[styles.typeBadge, { backgroundColor: colors.bg, borderColor: colors.bg }]}>
                   <View style={[styles.typeBadgeInner, { backgroundColor: `${accent}22` }]}>
                     <Ionicons name={TYPE_ICON[item.type] ?? 'notifications-outline'} size={10} color={accent} />

@@ -353,6 +353,7 @@ export function ManageTeamsModal({ projectId, onClose, onViewTeamTasks }: Props)
                             size="sm"
                             bare
                             className="!h-7 !w-7 !text-[10px]"
+                            userId={m.userId || m.id}
                           />
                           <span className="min-w-0 flex-1">
                             <span className="block truncate text-xs font-medium text-ink-100">
@@ -417,6 +418,7 @@ export function ManageTeamsModal({ projectId, onClose, onViewTeamTasks }: Props)
                               size="sm"
                               bare
                               className="!h-7 !w-7 !text-[10px]"
+                              userId={m.userId || m.id}
                             />
                             <span className="min-w-0 flex-1 truncate text-xs font-medium text-ink-100">
                               {m.name}

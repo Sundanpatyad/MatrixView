@@ -191,6 +191,7 @@ export function MemberBoardPicker({ members, selectedIds, onToggle, className }:
                             size="sm"
                             bare
                             className="!h-7 !w-7 !text-[9px]"
+                            userId={m.userId || m.id}
                           />
                           <span className="min-w-0 flex-1 truncate text-xs font-semibold text-ink-50">
                             {m.name}

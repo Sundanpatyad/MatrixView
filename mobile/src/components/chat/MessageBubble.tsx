@@ -365,7 +365,7 @@ export function MessageBubble({
       >
         {!mine ? (
           <View style={[styles.avatarSlot, showName ? styles.avatarSlotNamed : null]}>
-            {showSender ? <Avatar name={message.senderName} uri={message.senderAvatarUrl} size={28} /> : null}
+            {showSender ? <Avatar name={message.senderName} uri={message.senderAvatarUrl} size={28} userId={message.senderId} /> : null}
           </View>
         ) : null}
 

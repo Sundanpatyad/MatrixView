@@ -1,113 +1,86 @@
-import { useEffect, useState } from 'react';
-import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { AuthLayout } from '@/components/auth/AuthLayout';
 import { Button } from '@/components/ui/Button';
 import { postAuthPath } from '@/lib/auth/inviteToken';
 import { useAuth } from '@/lib/auth/AuthContext';
-import { dockxGoogleDeepLink } from '@/lib/auth/googleSignIn';
-import { isTauriApp } from '@/lib/webrtc/screenShare';
+import { loginWithGoogleIdToken } from '@/lib/auth/googleSignIn';
+
+function readCallback() {
+  const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+  const query = new URLSearchParams(window.location.search);
+  return {
+    idToken: hash.get('id_token') || query.get('id_token'),
+    code: query.get('code') || hash.get('code'),
+    error: query.get('error') || hash.get('error'),
+    errorDescription: query.get('error_description') || hash.get('error_description'),
+  };
+}
 
 export function GoogleCallbackPage() {
-  const { completeOAuth, isAuthenticated, isBootstrapping } = useAuth();
-  const [searchParams] = useSearchParams();
+  const { completeOAuth, applySession, isAuthenticated, isBootstrapping } = useAuth();
   const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
   const [exchanging, setExchanging] = useState(false);
-  const [browserHandoff, setBrowserHandoff] = useState(false);
-  const code = searchParams.get('code');
-  const oauthError = searchParams.get('error');
+  const started = useRef(false);
 
   useEffect(() => {
-    if (isBootstrapping) return;
+    if (isBootstrapping || started.current) return;
+    started.current = true;
+
+    const { idToken, code, error: oauthError, errorDescription } = readCallback();
 
     if (oauthError) {
       setError(
         oauthError === 'access_denied'
           ? 'Google sign-in was cancelled.'
-          : oauthError.includes('redirect_uri')
-            ? 'Google redirect URI mismatch. Add http://localhost:4000/api/auth/google/callback on a Web OAuth client.'
+          : oauthError.includes('redirect_uri') || (errorDescription || '').includes('redirect_uri')
+            ? 'Google redirect URI mismatch. In Google Cloud Console, open the Web application client and add this site’s /auth/google/callback URL under Authorized redirect URIs.'
             : `Google sign-in failed (${oauthError}).`,
       );
       return;
     }
+
+    if (idToken) {
+      setExchanging(true);
+      void (async () => {
+        try {
+          const auth = await loginWithGoogleIdToken(idToken);
+          applySession(auth);
+          window.history.replaceState(null, '', '/auth/google/callback');
+          navigate(postAuthPath(), { replace: true });
+        } catch (err) {
+          setError(err instanceof Error ? err.message : 'Google sign-in failed.');
+        } finally {
+          setExchanging(false);
+        }
+      })();
+      return;
+    }
+
     if (!code) {
       setError('Missing Google sign-in code. Try again from the login page.');
       return;
     }
 
-    // Google finished in the system browser — hand the one-time code to DockX.
-    // Do not exchange here first (code is single-use).
-    if (!isTauriApp()) {
-      setBrowserHandoff(true);
-      window.location.href = dockxGoogleDeepLink(code);
-      return;
-    }
-
-    let cancelled = false;
     setExchanging(true);
     void (async () => {
       try {
         await completeOAuth(code);
-        if (!cancelled) navigate(postAuthPath(), { replace: true });
+        navigate(postAuthPath(), { replace: true });
       } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Google sign-in failed.');
-        }
+        setError(err instanceof Error ? err.message : 'Google sign-in failed.');
       } finally {
-        if (!cancelled) setExchanging(false);
+        setExchanging(false);
       }
     })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [code, completeOAuth, isBootstrapping, navigate, oauthError]);
-
-  async function finishInBrowser() {
-    if (!code) return;
-    setExchanging(true);
-    setError(null);
-    try {
-      await completeOAuth(code);
-      navigate(postAuthPath(), { replace: true });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Google sign-in failed.');
-    } finally {
-      setExchanging(false);
-    }
-  }
+  }, [applySession, completeOAuth, isBootstrapping, navigate]);
 
   if (isBootstrapping || exchanging) {
     return (
       <div className="flex min-h-[100dvh] flex-col items-center justify-center gap-2 bg-ink-950 px-6 text-center text-sm text-ink-300">
         <p>Completing Google sign-in…</p>
       </div>
-    );
-  }
-
-  if (browserHandoff && !error) {
-    return (
-      <AuthLayout
-        title="Open DockX"
-        subtitle="Google sign-in finished. Continue in the DockX app."
-      >
-        <p className="text-sm text-ink-300">
-          If macOS asks to open DockX, choose Open. Then return to the DockX window.
-        </p>
-        <div className="mt-4 flex flex-wrap gap-2">
-          {code ? (
-            <a href={dockxGoogleDeepLink(code)}>
-              <Button size="sm">Open DockX</Button>
-            </a>
-          ) : null}
-          <Button size="sm" variant="secondary" onClick={() => void finishInBrowser()}>
-            Continue in this browser
-          </Button>
-        </div>
-        <Link to="/login" className="mt-4 inline-block text-xs text-ink-400 underline">
-          Back to sign in
-        </Link>
-      </AuthLayout>
     );
   }
 

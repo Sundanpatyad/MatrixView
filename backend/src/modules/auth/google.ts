@@ -79,6 +79,21 @@ export function decodeOAuthState(raw: string): OAuthState {
   }
 }
 
+function isVercelAppOrigin(origin: string): boolean {
+  try {
+    const url = new URL(origin);
+    if (url.protocol !== 'https:') return false;
+    const host = url.hostname.toLowerCase();
+    return (
+      host === 'matrix-view.vercel.app' ||
+      (host.endsWith('.vercel.app') &&
+        (host.includes('matrix-view') || host.includes('matrixview')))
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function assertAllowedReturnTo(returnTo: string) {
   let url: URL;
   try {
@@ -102,10 +117,11 @@ export function assertAllowedReturnTo(returnTo: string) {
   const allowed = new Set([
     ...config.corsOrigin,
     ...config.desktopCorsOrigins,
+    ...config.webAppOrigins,
     config.appUrl,
   ]);
   const origin = url.origin;
-  if (!allowed.has(origin)) {
+  if (!allowed.has(origin) && !isVercelAppOrigin(origin)) {
     throw new AuthError('Return URL origin is not allowed', 400, 'INVALID_RETURN_TO');
   }
   if (!url.pathname.startsWith('/auth/google')) {

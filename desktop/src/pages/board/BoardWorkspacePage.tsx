@@ -1220,6 +1220,7 @@ export function BoardWorkspacePage() {
                               size="lg"
                               bare
                               className="!h-8 !w-8 !text-[11px]"
+                              userId={m.userId || m.id}
                             />
                             <div className="min-w-0 flex-1">
                               <p className="truncate text-xs font-semibold text-ink-50">

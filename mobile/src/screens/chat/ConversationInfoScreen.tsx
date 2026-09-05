@@ -130,6 +130,7 @@ export function ConversationInfoScreen({ route, navigation }: Props) {
               uri={isGroup ? conversation.avatarUrl : peer?.avatarUrl}
               size={96}
               square={isGroup}
+              userId={isGroup ? undefined : peer?.id}
             />
             {isGroup ? (
               <View style={[styles.cameraBadge, { backgroundColor: colors.brand, borderColor: colors.bg }]}>
@@ -175,13 +176,13 @@ export function ConversationInfoScreen({ route, navigation }: Props) {
           </View>
 
           {conversation.members.map((member) => {
+            const isSelf = member.id === user?.id;
             const online = isSelf
               ? connected
               : presence[member.id]?.online ?? false;
-            const isSelf = member.id === user?.id;
             return (
               <View key={member.id} style={styles.memberRow}>
-                <Avatar name={member.name} uri={member.avatarUrl} size={40} online={online} />
+                <Avatar name={member.name} uri={member.avatarUrl} size={40} userId={member.id} />
                 <View style={styles.memberText}>
                   <Text style={[styles.memberName, { color: colors.text }]} numberOfLines={1}>
                     {member.name}
@@ -261,7 +262,7 @@ export function ConversationInfoScreen({ route, navigation }: Props) {
                       },
                     ]}
                   >
-                    <Avatar name={entry.name} uri={entry.avatarUrl} size={32} />
+                    <Avatar name={entry.name} uri={entry.avatarUrl} size={32} userId={entry.id} />
                     <View style={styles.memberText}>
                       <Text style={[styles.memberName, { color: colors.text }]} numberOfLines={1}>
                         {entry.name}

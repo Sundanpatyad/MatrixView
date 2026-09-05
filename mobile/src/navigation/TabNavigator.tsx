@@ -169,7 +169,7 @@ function JsTabNavigator() {
         },
         tabBarIcon: ({ focused, color, size }) => {
           if (route.name === 'Profile') {
-            return <Avatar name={user?.name} uri={user?.avatarUrl} size={size} />;
+            return <Avatar name={user?.name} uri={user?.avatarUrl} size={size} userId={user?.id} />;
           }
           const icon = JS_ICONS[route.name as keyof TabParamList];
           return <Ionicons name={focused ? icon.active : icon.inactive} size={size - 2} color={color} />;

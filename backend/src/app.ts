@@ -13,11 +13,24 @@ import { uploadsDir } from './storage/paths.js';
 const allowedOrigins = new Set([
   ...config.corsOrigin,
   ...config.desktopCorsOrigins,
+  ...config.webAppOrigins,
 ]);
 
 function isAllowedOrigin(origin: string | undefined): boolean {
   if (!origin) return true;
-  return allowedOrigins.has(origin);
+  if (allowedOrigins.has(origin)) return true;
+  try {
+    const url = new URL(origin);
+    if (url.protocol !== 'https:') return false;
+    const host = url.hostname.toLowerCase();
+    return (
+      host === 'matrix-view.vercel.app' ||
+      (host.endsWith('.vercel.app') &&
+        (host.includes('matrix-view') || host.includes('matrixview')))
+    );
+  } catch {
+    return false;
+  }
 }
 
 export function createApp() {

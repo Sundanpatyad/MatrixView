@@ -581,6 +581,38 @@ export function emitMessagesRead(conversationId: string) {
   socket?.emit('messages:read', { conversationId });
 }
 
+const CALL_ACK_TIMEOUT_MS = 12_000;
+
+/**
+ * Call handshakes must survive a socket that is briefly down (sleep/wake, network
+ * flap), so they reconnect first and fail only after the server stays silent.
+ */
+async function emitCallWithAck<T extends { ok: boolean; error?: string }>(
+  event: string,
+  input: unknown,
+): Promise<T> {
+  let s = socket;
+  if (!s?.connected) s = await ensureChatSocketConnected({ attempts: 2 });
+  if (!s?.connected) return { ok: false, error: 'Not connected' } as T;
+
+  return new Promise<T>((resolve) => {
+    let settled = false;
+    const finish = (res: T) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timer);
+      resolve(res);
+    };
+    const timer = window.setTimeout(
+      () => finish({ ok: false, error: 'The call server did not respond.' } as T),
+      CALL_ACK_TIMEOUT_MS,
+    );
+    s!.emit(event, input, (res: T | undefined) =>
+      finish(res ?? ({ ok: false, error: 'No response' } as T)),
+    );
+  });
+}
+
 export function emitCallInvite(input: {
   conversationId: string;
   callId: string;
@@ -592,25 +624,7 @@ export function emitCallInvite(input: {
   isGroup?: boolean;
   peers?: Array<{ userId: string; name: string }>;
 }> {
-  return new Promise((resolve) => {
-    if (!socket) {
-      resolve({ ok: false, error: 'Not connected' });
-      return;
-    }
-    socket.emit(
-      'call:invite',
-      input,
-      (res: {
-        ok: boolean;
-        error?: string;
-        peerId?: string;
-        isGroup?: boolean;
-        peers?: Array<{ userId: string; name: string }>;
-      }) => {
-        resolve(res ?? { ok: false, error: 'No response' });
-      },
-    );
-  });
+  return emitCallWithAck('call:invite', input);
 }
 
 export function emitCallJoin(input: {
@@ -622,24 +636,7 @@ export function emitCallJoin(input: {
   peers?: Array<{ userId: string; name: string }>;
   mediaKind?: 'audio' | 'video';
 }> {
-  return new Promise((resolve) => {
-    if (!socket) {
-      resolve({ ok: false, error: 'Not connected' });
-      return;
-    }
-    socket.emit(
-      'call:join',
-      input,
-      (res: {
-        ok: boolean;
-        error?: string;
-        peers?: Array<{ userId: string; name: string }>;
-        mediaKind?: 'audio' | 'video';
-      }) => {
-        resolve(res ?? { ok: false, error: 'No response' });
-      },
-    );
-  });
+  return emitCallWithAck('call:join', input);
 }
 
 export function emitCallAccept(input: {
@@ -652,25 +649,7 @@ export function emitCallAccept(input: {
   peers?: Array<{ userId: string; name: string }>;
   mediaKind?: 'audio' | 'video';
 }> {
-  return new Promise((resolve) => {
-    if (!socket) {
-      resolve({ ok: false, error: 'Not connected' });
-      return;
-    }
-    socket.emit(
-      'call:accept',
-      input,
-      (res: {
-        ok: boolean;
-        error?: string;
-        isGroup?: boolean;
-        peers?: Array<{ userId: string; name: string }>;
-        mediaKind?: 'audio' | 'video';
-      }) => {
-        resolve(res ?? { ok: false });
-      },
-    );
-  });
+  return emitCallWithAck('call:accept', input);
 }
 
 export function emitCallReject(input: { callId: string; conversationId: string }) {

@@ -132,7 +132,7 @@ function MemberRow({ member, onPress }: { member: MemberActivity; onPress: () =>
       ]}
     >
       <View>
-        <Avatar name={member.name} uri={member.avatarUrl} size={42} />
+        <Avatar name={member.name} uri={member.avatarUrl} size={42} userId={member.userId} />
         {member.tracking ? <View style={[styles.liveDot, { borderColor: colors.surface }]} /> : null}
       </View>
       <View style={styles.flex}>
@@ -438,7 +438,7 @@ function MemberDetail({ member, onClose }: { member: MemberActivity; onClose: ()
       </Pressable>
 
       <View style={styles.detailHero}>
-        <Avatar name={member.name} uri={member.avatarUrl} size={52} />
+        <Avatar name={member.name} uri={member.avatarUrl} size={52} userId={member.userId} />
         <View style={styles.flex}>
           <Text style={[styles.memberName, { color: colors.text }]}>{member.name}</Text>
           <Text style={[styles.memberMeta, { color: colors.textSubtle }]}>{member.email}</Text>

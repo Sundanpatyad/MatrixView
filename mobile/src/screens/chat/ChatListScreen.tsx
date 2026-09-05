@@ -36,7 +36,6 @@ export function ChatListScreen() {
   const {
     conversations,
     unread,
-    presence,
     isLoading,
     connected,
     refresh,
@@ -215,7 +214,6 @@ export function ChatListScreen() {
         renderItem={({ item }) => {
           const peer = peerFor(item);
           const count = unread[item.id] ?? 0;
-          const online = peer ? presence[peer.id]?.online ?? false : undefined;
           const title = item.type === 'dm' ? peer?.name ?? item.name : item.name;
           const typing = typingIn(item.id);
           const typingLabel = typing.length
@@ -236,7 +234,7 @@ export function ChatListScreen() {
                 uri={item.type === 'group' ? item.avatarUrl : peer?.avatarUrl}
                 size={50}
                 square={item.type === 'group'}
-                online={item.type === 'dm' ? online : undefined}
+                userId={item.type === 'dm' ? peer?.id : undefined}
               />
 
               <View style={styles.rowBody}>

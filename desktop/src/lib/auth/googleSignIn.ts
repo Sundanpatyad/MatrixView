@@ -3,21 +3,47 @@ import { isTauriApp } from '@/lib/webrtc/screenShare';
 import {
   googleDesktopLoginRequest,
   googleDesktopUrlRequest,
-  googleStartUrl,
+  googleIdTokenLoginRequest,
 } from '@/lib/api/auth';
 import type { AuthResponse } from '@/lib/api/auth';
 
-/** Prefer http callback for browser/web testing. */
-const HTTP_RETURN =
-  (import.meta.env.VITE_APP_URL as string | undefined)?.replace(/\/$/, '') ||
-  'http://localhost:5175';
+const NONCE_KEY = 'dockx.google.nonce';
+
+/**
+ * Web application OAuth client (Google Cloud "Web application" type).
+ * Must not be the Desktop/installed client — that one only redirects to localhost.
+ */
+export const GOOGLE_WEB_CLIENT_ID =
+  (import.meta.env.VITE_GOOGLE_WEB_CLIENT_ID as string | undefined)?.trim() ||
+  '569448299007-djn2v1re676r3rjcqm84fbrjraddbdnp.apps.googleusercontent.com';
 
 type LoopbackStart = { redirectUri: string; port: number };
 type LoopbackResult = { code: string | null; error: string | null };
 
-/** Build the OAuth start URL that eventually returns into the web app. */
+function webCallbackUri(): string {
+  return `${window.location.origin}/auth/google/callback`;
+}
+
+/** Implicit ID-token login that returns to this origin (Vercel or local Vite). */
 export function googleOAuthStartUrl(): string {
-  return googleStartUrl(`${HTTP_RETURN}/auth/google/callback`);
+  const nonce =
+    typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  try {
+    sessionStorage.setItem(NONCE_KEY, nonce);
+  } catch {
+    /* private mode */
+  }
+  const params = new URLSearchParams({
+    client_id: GOOGLE_WEB_CLIENT_ID,
+    redirect_uri: webCallbackUri(),
+    response_type: 'id_token',
+    scope: 'openid email profile',
+    nonce,
+    prompt: 'select_account',
+  });
+  return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
 }
 
 /** Deep-link into the Tauri app after the browser receives a one-time DockX code. */
@@ -32,8 +58,6 @@ export function dockxGoogleDeepLink(code: string): string {
 export async function signInWithGoogleDesktop(): Promise<AuthResponse> {
   const started = await invoke<LoopbackStart>('google_oauth_loopback_start');
   try {
-    // Accept as soon as the port is bound so a fast Google redirect cannot
-    // hit 127.0.0.1 before the app is waiting.
     const wait = invoke<LoopbackResult>('google_oauth_loopback_wait', {
       timeoutMs: 180_000,
     });
@@ -69,10 +93,14 @@ export async function signInWithGoogleDesktop(): Promise<AuthResponse> {
   }
 }
 
+export async function loginWithGoogleIdToken(idToken: string): Promise<AuthResponse> {
+  return googleIdTokenLoginRequest(idToken);
+}
+
 /**
  * Open Google sign-in.
- * - Tauri: full desktop loopback flow (returns tokens).
- * - Web: redirect / system browser (caller waits on callback page).
+ * - Tauri: loopback in the system browser.
+ * - Web: Google returns to this site with an ID token (never localhost).
  */
 export async function openGoogleSignIn(): Promise<
   { mode: 'desktop'; auth: AuthResponse } | { mode: 'browser' } | { mode: 'redirect' }
@@ -85,18 +113,20 @@ export async function openGoogleSignIn(): Promise<
   return { mode: 'redirect' };
 }
 
-/** Parse `dockx:///auth/google/callback?code=…` (or http callback) into query params. */
 export function parseGoogleCallbackUrl(raw: string): {
   code: string | null;
   error: string | null;
+  idToken: string | null;
 } {
   try {
     const url = new URL(raw);
+    const hash = new URLSearchParams(url.hash.replace(/^#/, ''));
     return {
-      code: url.searchParams.get('code'),
-      error: url.searchParams.get('error'),
+      code: url.searchParams.get('code') || hash.get('code'),
+      error: url.searchParams.get('error') || hash.get('error'),
+      idToken: hash.get('id_token') || url.searchParams.get('id_token'),
     };
   } catch {
-    return { code: null, error: null };
+    return { code: null, error: null, idToken: null };
   }
 }

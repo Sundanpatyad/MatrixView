@@ -12,7 +12,6 @@ import {
   useGlassScreenPadding,
 } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
-import { useChat } from '@/context/ChatContext';
 import { useConfirm } from '@/context/ConfirmContext';
 import { useToast } from '@/context/ToastContext';
 import { useWorkspace } from '@/context/WorkspaceContext';
@@ -29,7 +28,6 @@ export function ProfileScreen() {
   const toast = useToast();
   const confirm = useConfirm();
   const { user, logout, logoutEverywhere, uploadAvatar } = useAuth();
-  const { connected } = useChat();
   const { projects, isProjectAdmin } = useWorkspace();
   const pad = useGlassScreenPadding();
   const adminAnywhere = projects.some((project) => isProjectAdmin(project.id));
@@ -92,7 +90,7 @@ export function ProfileScreen() {
       >
         <Pressable style={styles.hero} onPress={changeAvatar} disabled={uploading}>
           <View>
-            <Avatar name={user?.name} uri={user?.avatarUrl} size={96} online={connected} />
+            <Avatar name={user?.name} uri={user?.avatarUrl} size={96} userId={user?.id} />
             <View style={[styles.cameraBadge, { backgroundColor: colors.brand, borderColor: colors.bg }]}>
               <Ionicons name={uploading ? 'hourglass-outline' : 'camera'} size={14} color="#ffffff" />
             </View>

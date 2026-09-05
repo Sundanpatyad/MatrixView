@@ -3,6 +3,8 @@
 interface ImportMetaEnv {
   readonly VITE_API_URL: string;
   readonly VITE_GOOGLE_CLIENT_ID: string;
+  readonly VITE_GOOGLE_WEB_CLIENT_ID?: string;
+  readonly VITE_APP_URL?: string;
   readonly VITE_TURN_URLS?: string;
   readonly VITE_TURN_USERNAME?: string;
   readonly VITE_TURN_CREDENTIAL?: string;

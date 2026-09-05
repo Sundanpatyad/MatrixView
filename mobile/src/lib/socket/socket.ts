@@ -394,7 +394,12 @@ export async function connectSocket(token?: string): Promise<Socket | null> {
   return connectInFlight;
 }
 
-export function disconnectSocket() {
+/**
+ * `preserveRooms` keeps the conversation / project membership so a lifecycle
+ * disconnect (app backgrounded) rejoins everything on the next connect. Sign-out
+ * drops it.
+ */
+export function disconnectSocket(opts?: { preserveRooms?: boolean }) {
   stopHeartbeat();
   if (socket) {
     socket.removeAllListeners();
@@ -402,8 +407,10 @@ export function disconnectSocket() {
     socket = null;
   }
   currentToken = null;
-  joinedConversations.clear();
-  joinedProjects.clear();
+  if (!opts?.preserveRooms) {
+    joinedConversations.clear();
+    joinedProjects.clear();
+  }
   call('onConnectionChange', false);
 }
 
@@ -419,6 +426,25 @@ export function isSocketConnected(): boolean {
 export function ensureSocketConnected() {
   if (!socket) return;
   if (!socket.connected) socket.connect();
+}
+
+/**
+ * Backgrounding the app normally tears the socket down so the user reads as
+ * Offline. A live call has to outlive that, so callers take a named hold and
+ * release it when the call ends.
+ */
+const connectionHolds = new Set<string>();
+
+export function holdSocketConnection(reason: string) {
+  connectionHolds.add(reason);
+}
+
+export function releaseSocketConnection(reason: string) {
+  connectionHolds.delete(reason);
+}
+
+export function hasSocketHold() {
+  return connectionHolds.size > 0;
 }
 
 export function waitUntilSocketConnected(timeoutMs = 8000): Promise<boolean> {

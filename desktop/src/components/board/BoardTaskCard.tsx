@@ -1,7 +1,8 @@
 import { useRef } from 'react';
-import { UserAvatar } from '@/components/ui/UserAvatar';
+import { UserAvatar, presenceUserIdFromMembers } from '@/components/ui/UserAvatar';
 import { TASK_TYPES, type BoardTask } from '@/lib/workspace/types';
 import { cn } from '@/lib/cn';
+import { useWorkspace } from '@/lib/workspace/WorkspaceContext';
 
 const priorityStyles: Record<string, string> = {
   lowest: 'text-ink-400',
@@ -30,6 +31,11 @@ export function BoardTaskCard({
 }: Props) {
   const typeMeta = TASK_TYPES.find((t) => t.id === task.type);
   const draggedRef = useRef(false);
+  const { getProject } = useWorkspace();
+  const presenceUserId = presenceUserIdFromMembers(
+    getProject(task.projectId)?.members ?? [],
+    task.assigneeId,
+  );
 
   return (
     <article
@@ -84,6 +90,7 @@ export function BoardTaskCard({
             src={avatarUrl}
             seed={task.assigneeName || task.id}
             size="xs"
+            userId={presenceUserId}
           />
           <span className="truncate text-[11px] font-medium text-ink-300">
             {task.assigneeName || 'Unassigned'}

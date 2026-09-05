@@ -1,7 +1,8 @@
 import { useRef, type DragEvent } from 'react';
-import { UserAvatar } from '@/components/ui/UserAvatar';
+import { UserAvatar, presenceUserIdFromMembers } from '@/components/ui/UserAvatar';
 import { TASK_TYPES, type BoardTask } from '@/lib/workspace/types';
 import { cn } from '@/lib/cn';
+import { useWorkspace } from '@/lib/workspace/WorkspaceContext';
 
 const typeChip: Record<string, string> = {
   task: 'bg-[#00a8fc]/12 text-[#00a8fc]',
@@ -48,6 +49,11 @@ export function DashboardTaskCard({
 }: Props) {
   const typeMeta = TASK_TYPES.find((t) => t.id === task.type);
   const draggedRef = useRef(false);
+  const { getProject } = useWorkspace();
+  const presenceUserId = presenceUserIdFromMembers(
+    getProject(task.projectId)?.members ?? [],
+    task.assigneeId,
+  );
   const description = visibleDescription(task.description);
 
   return (
@@ -122,6 +128,7 @@ export function DashboardTaskCard({
             src={avatarUrl}
             seed={task.assigneeName || task.id}
             size="xs"
+            userId={presenceUserId}
           />
           <span className="truncate text-[11px] font-medium text-ink-300">
             {task.assigneeName || 'Unassigned'}

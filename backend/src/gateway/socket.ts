@@ -14,6 +14,8 @@ import {
   emitPresenceUpdate,
   presenceSnapshotForUser,
   onlineCounts,
+  cancelPendingOffline,
+  schedulePresenceOffline,
   setIO,
   emitToUser,
   emitToConversation,
@@ -414,7 +416,7 @@ async function isConversationMember(conversationId: string, userId: string, orgI
 export function initSocket(httpServer: HttpServer) {
   const io = new Server(httpServer, {
     cors: {
-      origin: [...config.corsOrigin, ...config.desktopCorsOrigins],
+      origin: [...config.corsOrigin, ...config.desktopCorsOrigins, ...config.webAppOrigins],
       credentials: true,
     },
     path: '/socket.io',
@@ -448,6 +450,7 @@ export function initSocket(httpServer: HttpServer) {
       socket.emit('client:pong', { t: payload?.t ?? Date.now(), serverTime: Date.now() });
     });
 
+    cancelPendingOffline(userId);
     onlineCounts.set(userId, (onlineCounts.get(userId) ?? 0) + 1);
 
     const attendance = await ActivitySession.exists({
@@ -634,7 +637,7 @@ export function initSocket(httpServer: HttpServer) {
         try {
           const conversationId = payload?.conversationId;
           const callId = payload?.callId;
-          const mediaKind = payload?.mediaKind === 'video' ? 'video' : 'audio';
+          const mediaKind: 'audio' | 'video' = payload?.mediaKind === 'video' ? 'video' : 'audio';
           if (!conversationId || !callId) {
             ack?.({ ok: false, error: 'Invalid call' });
             return;
@@ -1235,15 +1238,19 @@ export function initSocket(httpServer: HttpServer) {
       }
 
       if (next <= 0) {
-        const stillCheckedIn = await ActivitySession.exists({
-          userId,
-          orgId,
-          status: 'active',
-        });
-        await emitPresenceUpdate(orgId, {
-          userId,
-          checkedIn: Boolean(stillCheckedIn),
-          online: false,
+        schedulePresenceOffline(userId, () => {
+          void (async () => {
+            const stillCheckedIn = await ActivitySession.exists({
+              userId,
+              orgId,
+              status: 'active',
+            });
+            await emitPresenceUpdate(orgId, {
+              userId,
+              checkedIn: Boolean(stillCheckedIn),
+              online: false,
+            });
+          })();
         });
       }
     });

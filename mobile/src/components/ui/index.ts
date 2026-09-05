@@ -1,5 +1,5 @@
 export { AppHeader, useFloatingHeaderHeight, useHeaderClearance, type HeaderAction } from './AppHeader';
-export { Avatar } from './Avatar';
+export { Avatar, presenceUserIdFromMembers } from './Avatar';
 export { Badge } from './Badge';
 export { Button, type ButtonSize, type ButtonVariant } from './Button';
 export { Card } from './Card';

@@ -549,7 +549,7 @@ export function ChatThreadScreen({ route, navigation }: Props) {
               uri={conversation.type === 'group' ? conversation.avatarUrl : peer?.avatarUrl}
               size={36}
               square={conversation.type === 'group'}
-              online={conversation.type === 'dm' ? online : undefined}
+              userId={conversation.type === 'dm' ? peer?.id : undefined}
             />
           </Pressable>
         }

@@ -10,6 +10,29 @@ let io: Server | null = null;
 /** userId → number of active sockets (logged in + connected = online) */
 export const onlineCounts = new Map<string, number>();
 
+/** Avoid flashing Offline when a client refreshes or briefly drops the socket. */
+const PRESENCE_OFFLINE_GRACE_MS = 2500;
+const pendingOffline = new Map<string, ReturnType<typeof setTimeout>>();
+
+export function cancelPendingOffline(userId: string) {
+  const timer = pendingOffline.get(userId);
+  if (!timer) return;
+  clearTimeout(timer);
+  pendingOffline.delete(userId);
+}
+
+export function schedulePresenceOffline(userId: string, onOffline: () => void) {
+  cancelPendingOffline(userId);
+  pendingOffline.set(
+    userId,
+    setTimeout(() => {
+      pendingOffline.delete(userId);
+      if ((onlineCounts.get(userId) ?? 0) > 0) return;
+      onOffline();
+    }, PRESENCE_OFFLINE_GRACE_MS),
+  );
+}
+
 export function setIO(server: Server | null) {
   io = server;
 }

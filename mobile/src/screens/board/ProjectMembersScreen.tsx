@@ -110,7 +110,7 @@ export function ProjectMembersScreen({ route }: Props) {
         }
         renderItem={({ item }) => (
           <View style={[styles.row, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Avatar name={item.name || item.email} uri={item.avatarUrl} size={42} />
+            <Avatar name={item.name || item.email} uri={item.avatarUrl} size={42} userId={item.userId || item.id} />
 
             <View style={styles.info}>
               <Text style={[styles.name, { color: colors.text }]} numberOfLines={1}>

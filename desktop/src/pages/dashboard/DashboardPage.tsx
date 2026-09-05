@@ -8,7 +8,7 @@ import { OnboardingChecklist } from '@/components/onboarding/OnboardingChecklist
 import { Button } from '@/components/ui/Button';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { Select } from '@/components/ui/Select';
-import { UserAvatar, avatarFromMembers } from '@/components/ui/UserAvatar';
+import { UserAvatar, avatarFromMembers, presenceUserIdFromMembers } from '@/components/ui/UserAvatar';
 import { useAttendance } from '@/lib/attendance/AttendanceContext';
 import { listOrgUsers, type OrgUser } from '@/lib/api/org';
 import { useAuth } from '@/lib/auth/AuthContext';
@@ -728,6 +728,10 @@ export function DashboardPage() {
                             )}
                             seed={t.assigneeName || t.id}
                             size="xs"
+                            userId={presenceUserIdFromMembers(
+                              getProject(t.projectId)?.members ?? [],
+                              t.assigneeId,
+                            )}
                           />
                           {t.assigneeName || 'Unassigned'}
                         </span>
@@ -786,6 +790,10 @@ export function DashboardPage() {
                               )}
                               seed={t.assigneeName || t.id}
                               size="xs"
+                              userId={presenceUserIdFromMembers(
+                              getProject(t.projectId)?.members ?? [],
+                              t.assigneeId,
+                            )}
                             />
                             {t.assigneeName}
                           </div>
@@ -872,6 +880,7 @@ export function DashboardPage() {
                           seed={u.email || u.name}
                           size="sm"
                           className="!h-8 !w-8 !text-[9px]"
+                          userId={u.userId || u.id}
                         />
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-sm font-semibold text-ink-50">
@@ -963,6 +972,7 @@ export function DashboardPage() {
                               seed={u.email || u.name}
                               size="sm"
                               className="!h-7 !w-7 !text-[9px]"
+                              userId={u.userId || u.id}
                             />
                             <span className="font-semibold text-ink-50">
                               {u.name}
@@ -1165,6 +1175,10 @@ export function DashboardPage() {
                                 )}
                                 seed={t.assigneeName || t.id}
                                 size="xs"
+                                userId={presenceUserIdFromMembers(
+                                  getProject(t.projectId)?.members ?? [],
+                                  t.assigneeId,
+                                )}
                               />
                               <span className="truncate text-ink-300">{t.assigneeName}</span>
                             </div>
@@ -1267,6 +1281,7 @@ export function DashboardPage() {
                         }
                         seed={u.email || u.name}
                         size="sm"
+                        userId={u.userId || u.id}
                       />
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-[13px] font-medium text-ink-50">
