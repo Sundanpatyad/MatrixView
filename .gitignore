@@ -1,3 +1,6 @@
+# Android Gradle outputs (long generated .dex names break Windows checkout)
+**/android/build/
+
 # Secrets — never commit OAuth client JSON, Firebase Admin keys, or env files
 client_secret*.json
 **/client_secret*.json

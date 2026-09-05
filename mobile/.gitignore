@@ -40,3 +40,7 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Local Expo module Gradle/Xcode outputs — long Windows paths break CI checkout
+modules/**/android/build/
+modules/**/ios/build/

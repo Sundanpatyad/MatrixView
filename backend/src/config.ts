@@ -1,4 +1,10 @@
-import 'dotenv/config';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import dotenv from 'dotenv';
+
+// Load backend/.env from this file's folder so cwd (tsx watch, Cloud Run, etc.)
+// cannot silently skip MONGODB_URI / USE_MEMORY_DB.
+dotenv.config({ path: path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../.env') });
 
 function required(name: string, fallback?: string): string {
   const value = process.env[name] ?? fallback;
@@ -6,11 +12,32 @@ function required(name: string, fallback?: string): string {
   return value;
 }
 
+function envFlag(name: string, fallback = 'false'): boolean {
+  return (process.env[name] ?? fallback).trim().toLowerCase() === 'true';
+}
+
+const environment = (process.env.ENVIRONMENT ?? process.env.NODE_ENV ?? 'development').toLowerCase();
+const isProduction = environment === 'production' || environment === 'prod';
+const useMemoryDb = envFlag('USE_MEMORY_DB');
+
+if (isProduction && useMemoryDb) {
+  throw new Error(
+    'USE_MEMORY_DB=true is not allowed in production. Point MONGODB_URI at Atlas (or another persistent MongoDB).',
+  );
+}
+
+if (isProduction && !process.env.MONGODB_URI?.trim()) {
+  throw new Error(
+    'MONGODB_URI is required in production. In-memory MongoDB is disabled there so data cannot vanish on restart.',
+  );
+}
+
 export const config = {
-  environment: process.env.ENVIRONMENT ?? 'development',
+  environment,
+  isProduction,
   port: Number(process.env.PORT ?? 4000),
   mongoUri: process.env.MONGODB_URI ?? 'mongodb://127.0.0.1:27017/dockx',
-  useMemoryDb: (process.env.USE_MEMORY_DB ?? 'false').toLowerCase() === 'true',
+  useMemoryDb,
   jwtAccessSecret: required('JWT_ACCESS_SECRET', 'dev-access-secret-change-me-32chars'),
   jwtRefreshSecret: required('JWT_REFRESH_SECRET', 'dev-refresh-secret-change-me-32chars'),
   accessTokenTtl: process.env.ACCESS_TOKEN_TTL ?? '15m',

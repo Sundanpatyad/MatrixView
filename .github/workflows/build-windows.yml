@@ -16,7 +16,13 @@ jobs:
         working-directory: desktop
 
     steps:
+      - name: Enable Git long paths
+        run: git config --system core.longpaths true
+
       - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            desktop
 
       - name: Setup Node
         uses: actions/setup-node@v4

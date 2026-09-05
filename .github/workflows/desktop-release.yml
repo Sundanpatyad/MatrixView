@@ -61,8 +61,17 @@ jobs:
     runs-on: ${{ matrix.platform }}
 
     steps:
+      # Windows MAX_PATH (260) cannot write some generated Android .dex names
+      # if they were ever committed. Enable long paths and only fetch desktop.
+      - name: Enable Git long paths
+        if: runner.os == 'Windows'
+        run: git config --system core.longpaths true
+
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            desktop
 
       - name: Install Linux dependencies
         if: matrix.platform == 'ubuntu-22.04'
