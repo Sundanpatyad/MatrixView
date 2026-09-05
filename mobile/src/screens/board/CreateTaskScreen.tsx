@@ -89,6 +89,7 @@ export function CreateTaskScreen({ route, navigation }: Props) {
   const [draftDate, setDraftDate] = useState(() => startOfToday());
   const [draftHours, setDraftHours] = useState(() => dateFromEstimateHours(1));
   const [submitting, setSubmitting] = useState(false);
+  const [attempted, setAttempted] = useState(false);
 
   const assignee = project?.members.find((member) => member.id === assigneeId);
   const team = teams.find((entry) => entry.id === teamId);
@@ -159,6 +160,7 @@ export function CreateTaskScreen({ route, navigation }: Props) {
   };
 
   const handleSubmit = async () => {
+    setAttempted(true);
     if (!title.trim() || submitting) return;
 
     const dueError = validateDueDate(dueDate);
@@ -215,10 +217,12 @@ export function CreateTaskScreen({ route, navigation }: Props) {
         >
           <Input
             label="Title"
+            required
             placeholder="What needs to be done?"
             value={title}
             onChangeText={setTitle}
             autoFocus
+            error={attempted && !title.trim() ? 'Title is required.' : null}
           />
 
           <Input

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { UserAvatar } from '@/components/ui/UserAvatar';
+import { Tooltip } from '@/components/ui/Tooltip';
 import { cn } from '@/lib/cn';
 import type { ProjectMember } from '@/lib/workspace/types';
 
@@ -76,10 +77,19 @@ export function MemberBoardPicker({ members, selectedIds, onToggle, className }:
         {visible.map((m, i) => {
           const active = selectedIds.includes(m.id);
           return (
-            <button
+            <Tooltip
               key={m.id}
+              label={
+                active
+                  ? `Hide ${m.name}'s tasks (click again)`
+                  : `Add ${m.name}'s tasks`
+              }
+              side="bottom"
+              className={cn(i > 0 && '-ml-1.5')}
+            >
+            <button
               type="button"
-              title={
+              aria-label={
                 active
                   ? `Hide ${m.name}'s tasks (click again)`
                   : `Add ${m.name}'s tasks`
@@ -91,7 +101,6 @@ export function MemberBoardPicker({ members, selectedIds, onToggle, className }:
                 'relative h-7 w-7 shrink-0 rounded-full p-0 transition',
                 'ring-2 ring-ink-800',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500',
-                i > 0 && '-ml-1.5',
                 active
                   ? 'opacity-100'
                   : 'scale-90 opacity-40 grayscale hover:scale-100 hover:opacity-100 hover:grayscale-0',
@@ -103,33 +112,41 @@ export function MemberBoardPicker({ members, selectedIds, onToggle, className }:
                 seed={m.email || m.name}
                 size="md"
                 bare
+                title=""
                 className="!h-7 !w-7 !text-[9px]"
               />
               {active ? (
                 <span className="absolute -right-0.5 -bottom-0.5 h-2 w-2 rounded-full border-2 border-ink-800 bg-brand-500" />
               ) : null}
             </button>
+            </Tooltip>
           );
         })}
 
         {overflow > 0 ? (
+          <Tooltip
+            label={`Show ${overflow} more members`}
+            side="bottom"
+            className="-ml-1.5"
+          >
           <button
             ref={triggerRef}
             type="button"
             aria-expanded={open}
             aria-haspopup="dialog"
+            aria-label={`Show ${overflow} more members`}
             onClick={() => setOpen((v) => !v)}
             style={{ zIndex: visible.length + 1 }}
             className={cn(
-              'relative -ml-1.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full',
+              'relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full',
               'border border-ink-500 bg-ink-700 text-[10px] font-bold text-ink-100 ring-2 ring-ink-800',
               'transition hover:border-brand-500 hover:bg-brand-500/15 hover:text-brand-600 dark:hover:text-brand-300',
               open && 'border-brand-500 bg-brand-500/20 text-brand-600 dark:text-brand-300',
             )}
-            title={`Show ${overflow} more members`}
           >
             +{overflow}
           </button>
+          </Tooltip>
         ) : null}
       </div>
 

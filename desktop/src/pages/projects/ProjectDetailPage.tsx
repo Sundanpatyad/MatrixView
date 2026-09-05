@@ -31,6 +31,16 @@ export function ProjectDetailPage() {
 
   async function onAdd(e: FormEvent) {
     e.preventDefault();
+    const emailNorm = email.trim().toLowerCase();
+    const existing = project!.members.find((m) => m.email.toLowerCase() === emailNorm);
+    if (existing?.status === 'pending') {
+      toast.error('This person already has a pending invite. They must Accept it first.');
+      return;
+    }
+    if (existing) {
+      toast.error('This person is already on the project.');
+      return;
+    }
     try {
       const res = await addMember(project!.id, { email, role });
       if (!res.member) {

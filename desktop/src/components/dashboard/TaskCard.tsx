@@ -1,4 +1,5 @@
 import type { DesktopTask } from '@/data/mockTasks';
+import { Tooltip } from '@/components/ui/Tooltip';
 import { cn } from '@/lib/cn';
 
 const priorityStyles = {
@@ -63,9 +64,11 @@ export function TaskCard({
           {task.priority}
         </span>
         {draggable ? (
-          <span className="text-ink-300" title="Drag to move" aria-hidden>
-            ⋮⋮
-          </span>
+          <Tooltip label="Drag to move" side="left">
+            <span className="text-ink-300" aria-hidden>
+              ⋮⋮
+            </span>
+          </Tooltip>
         ) : null}
       </div>
 

@@ -4,6 +4,7 @@ import { InviteActions } from '@/components/notifications/InviteActions';
 import { NotificationRow } from '@/components/notifications/NotificationBell';
 import { Button } from '@/components/ui/Button';
 import { IconBell, IconCheck, IconTrash } from '@/components/ui/Icons';
+import { Tooltip } from '@/components/ui/Tooltip';
 import { cn } from '@/lib/cn';
 import type { NotificationType } from '@/lib/api/notifications';
 import { useNotifications } from '@/lib/notifications/NotificationContext';
@@ -200,14 +201,16 @@ export function NotificationsPage() {
                     {new Date(selected.createdAt).toLocaleString()}
                   </p>
                 </div>
+                <Tooltip label="Delete" side="left">
                 <button
                   type="button"
-                  title="Delete"
+                  aria-label="Delete"
                   onClick={() => void remove(selected.id)}
                   className="rounded-lg p-2 text-ink-400 transition hover:bg-ink-700 hover:text-ink-50"
                 >
                   <IconTrash className="h-4 w-4" />
                 </button>
+                </Tooltip>
               </div>
 
               <p className="mt-5 text-sm leading-relaxed text-ink-200">

@@ -6,6 +6,7 @@ import { CreateProjectModal } from '@/components/dashboard/CreateProjectModal';
 import { InviteMembersModal } from '@/components/dashboard/InviteMembersModal';
 import { OnboardingChecklist } from '@/components/onboarding/OnboardingChecklist';
 import { Button } from '@/components/ui/Button';
+import { Tooltip } from '@/components/ui/Tooltip';
 import { UserAvatar, avatarFromMembers, presenceUserIdFromMembers } from '@/components/ui/UserAvatar';
 import { useAttendance } from '@/lib/attendance/AttendanceContext';
 import { useAuth } from '@/lib/auth/AuthContext';
@@ -269,11 +270,14 @@ export function MyWorkPage() {
                       </p>
                     </div>
                     {open ? (
+                      <Tooltip
+                        label={checkedIn ? '' : 'Check in to start tracking'}
+                        side="top"
+                      >
                       <Button
                         size="xs"
                         variant={active ? 'secondary' : 'primary'}
                         disabled={!checkedIn}
-                        title={checkedIn ? undefined : 'Check in to start tracking'}
                         onClick={(e) => {
                           e.stopPropagation();
                           setActiveTask(active ? null : task.id);
@@ -281,6 +285,7 @@ export function MyWorkPage() {
                       >
                         {active ? 'Pause' : 'Start'}
                       </Button>
+                      </Tooltip>
                     ) : (
                       <span className="mt-1 text-[11px] font-semibold text-ink-400">Done</span>
                     )}

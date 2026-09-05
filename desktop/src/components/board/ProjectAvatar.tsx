@@ -1,4 +1,5 @@
 import { useRef, useState, type ChangeEvent } from 'react';
+import { Tooltip } from '@/components/ui/Tooltip';
 import { cn } from '@/lib/cn';
 import { resolveMediaUrl } from '@/lib/mediaUrl';
 
@@ -69,9 +70,10 @@ export function ProjectAvatar({
 
   return (
     <div className="relative shrink-0">
+      <Tooltip label={avatarUrl ? 'Change project image' : 'Add project image'} side="bottom">
       <button
         type="button"
-        title={avatarUrl ? 'Change project image' : 'Add project image'}
+        aria-label={avatarUrl ? 'Change project image' : 'Add project image'}
         disabled={busy}
         onClick={() => setMenuOpen((v) => !v)}
         className={cn(
@@ -81,6 +83,7 @@ export function ProjectAvatar({
       >
         {badge}
       </button>
+      </Tooltip>
 
       {menuOpen ? (
         <>

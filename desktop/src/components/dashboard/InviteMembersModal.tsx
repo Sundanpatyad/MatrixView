@@ -33,12 +33,22 @@ export function InviteMembersModal({ project, onClose }: Props) {
 
   async function onAdd(e: FormEvent) {
     e.preventDefault();
+    const emailNorm = email.trim().toLowerCase();
+    const existing = live.members.find((m) => m.email.toLowerCase() === emailNorm);
+    if (existing?.status === 'pending') {
+      toast.error('This person already has a pending invite. They must Accept it first.');
+      return;
+    }
+    if (existing) {
+      toast.error('This person is already on the project.');
+      return;
+    }
     setInviteLink(null);
     setBusy(true);
     try {
       const res = await addMember(live.id, { email, role });
       if (!res.member) {
-        toast.error('Could not invite — they may already be on this project.');
+        toast.error('Could not invite. They may already be on this project.');
         return;
       }
       setEmail('');

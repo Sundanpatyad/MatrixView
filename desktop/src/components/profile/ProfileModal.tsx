@@ -9,6 +9,7 @@ import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { UserAvatar } from '@/components/ui/UserAvatar';
+import { Tooltip } from '@/components/ui/Tooltip';
 import { useAttendance } from '@/lib/attendance/AttendanceContext';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { cn } from '@/lib/cn';
@@ -160,9 +161,10 @@ export function ProfileModal({ open, onClose }: Props) {
                 Avatar
               </p>
               <div className="flex items-center gap-3">
+                <Tooltip label="Choose photo" side="right">
                 <button
                   type="button"
-                  title="Choose photo"
+                  aria-label="Choose photo"
                   onClick={() => fileRef.current?.click()}
                   className="rounded-full ring-2 ring-ink-600 transition hover:ring-brand-500"
                 >
@@ -174,6 +176,7 @@ export function ProfileModal({ open, onClose }: Props) {
                     className="!h-16 !w-16 !text-base"
                   />
                 </button>
+                </Tooltip>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-xs font-semibold text-ink-100">{displayName}</p>
                   <p className="truncate text-[11px] text-ink-400">{user.email}</p>
@@ -293,13 +296,14 @@ export function ProfileModal({ open, onClose }: Props) {
                       bare
                       className="!h-20 !w-20 !text-xl"
                     />
+                    <Tooltip label={statusLabel} side="right" className="absolute right-1 bottom-1">
                     <span
                       className={cn(
-                        'absolute right-1 bottom-1 h-4 w-4 rounded-full border-[3px] border-ink-900',
+                        'block h-4 w-4 rounded-full border-[3px] border-ink-900',
                         statusColor,
                       )}
-                      title={statusLabel}
                     />
+                    </Tooltip>
                   </span>
                 </div>
 

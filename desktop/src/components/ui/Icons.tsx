@@ -8,7 +8,7 @@ function base({ className, ...props }: IconProps) {
     className: cn('h-[18px] w-[18px]', className),
     fill: 'none' as const,
     stroke: 'currentColor',
-    strokeWidth: 1.75,
+    strokeWidth: 1.5,
     strokeLinecap: 'round' as const,
     strokeLinejoin: 'round' as const,
     viewBox: '0 0 24 24',
@@ -20,10 +20,10 @@ function base({ className, ...props }: IconProps) {
 export function IconDashboard(props: IconProps) {
   return (
     <svg {...base(props)}>
-      <rect x="3" y="3" width="7" height="9" rx="1.5" />
-      <rect x="14" y="3" width="7" height="5" rx="1.5" />
-      <rect x="14" y="12" width="7" height="9" rx="1.5" />
-      <rect x="3" y="16" width="7" height="5" rx="1.5" />
+      <rect x="3" y="3" width="7" height="9" rx="1" />
+      <rect x="14" y="3" width="7" height="5" rx="1" />
+      <rect x="14" y="12" width="7" height="9" rx="1" />
+      <rect x="3" y="16" width="7" height="5" rx="1" />
     </svg>
   );
 }
@@ -31,9 +31,10 @@ export function IconDashboard(props: IconProps) {
 export function IconBoard(props: IconProps) {
   return (
     <svg {...base(props)}>
-      <rect x="3" y="4" width="5" height="16" rx="1.5" />
-      <rect x="10" y="4" width="5" height="16" rx="1.5" />
-      <rect x="17" y="4" width="4" height="10" rx="1.5" />
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <path d="M8 7v10" />
+      <path d="M12 7v6" />
+      <path d="M16 7v8" />
     </svg>
   );
 }
@@ -41,7 +42,7 @@ export function IconBoard(props: IconProps) {
 export function IconChat(props: IconProps) {
   return (
     <svg {...base(props)}>
-      <path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8v.5z" />
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
     </svg>
   );
 }
@@ -68,8 +69,8 @@ export function IconProfile(props: IconProps) {
 export function IconSend(props: IconProps) {
   return (
     <svg {...base(props)}>
-      <line x1="22" y1="2" x2="11" y2="13" />
-      <polygon points="22 2 15 22 11 13 2 9 22 2" />
+      <path d="m22 2-7 20-4-9-9-4Z" />
+      <path d="M22 2 11 13" />
     </svg>
   );
 }
@@ -290,10 +291,10 @@ export function IconHand(props: IconProps) {
 export function IconLayoutGrid(props: IconProps) {
   return (
     <svg {...base(props)}>
-      <rect x="3" y="3" width="7" height="7" />
-      <rect x="14" y="3" width="7" height="7" />
-      <rect x="14" y="14" width="7" height="7" />
-      <rect x="3" y="14" width="7" height="7" />
+      <rect x="3" y="3" width="7" height="7" rx="1" />
+      <rect x="14" y="3" width="7" height="7" rx="1" />
+      <rect x="14" y="14" width="7" height="7" rx="1" />
+      <rect x="3" y="14" width="7" height="7" rx="1" />
     </svg>
   );
 }
@@ -368,6 +369,23 @@ export function IconInbox(props: IconProps) {
     <svg {...base(props)}>
       <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
       <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
+    </svg>
+  );
+}
+
+export function IconSun(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+    </svg>
+  );
+}
+
+export function IconMoon(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M21 14.3A8.5 8.5 0 0 1 9.7 3 8.5 8.5 0 1 0 21 14.3Z" />
     </svg>
   );
 }

@@ -20,9 +20,10 @@ import { InviteMembersModal } from '@/components/dashboard/InviteMembersModal';
 import { Button } from '@/components/ui/Button';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { DatePicker } from '@/components/ui/DatePicker';
-import { IconUsers, IconX } from '@/components/ui/Icons';
+import { IconChevronLeft, IconChevronRight, IconSearch, IconUsers, IconX } from '@/components/ui/Icons';
 import { MultiSelect } from '@/components/ui/MultiSelect';
 import { Select } from '@/components/ui/Select';
+import { Tooltip } from '@/components/ui/Tooltip';
 import { UserAvatar, avatarFromMembers } from '@/components/ui/UserAvatar';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { cn } from '@/lib/cn';
@@ -702,16 +703,17 @@ export function BoardWorkspacePage() {
           </div>
 
           <div className="ml-auto flex items-center gap-2">
+            <Tooltip label="People on this project" side="bottom">
             <Button
               size="sm"
               variant="secondary"
               disabled={!project}
               onClick={() => setMembersPanelOpen(true)}
-              title="People on this project"
             >
               <IconUsers className="h-3.5 w-3.5" />
               People
             </Button>
+            </Tooltip>
           </div>
         </div>
 
@@ -813,17 +815,7 @@ export function BoardWorkspacePage() {
                   </div>
                 ) : null}
                 <label className="relative min-w-[160px] flex-1 sm:max-w-[220px]">
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    className="pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-ink-400"
-                    aria-hidden
-                  >
-                    <circle cx="11" cy="11" r="7" />
-                    <path d="m20 20-3.5-3.5" />
-                  </svg>
+                  <IconSearch className="pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-ink-400" />
                   <input
                     ref={searchInputRef}
                     value={query}
@@ -1020,7 +1012,6 @@ export function BoardWorkspacePage() {
                         ) : (
                           <button
                             type="button"
-                            title={canEditColumns ? 'Click to rename column' : col.label}
                             disabled={!canEditColumns}
                             onClick={() => beginRenameColumn(col.id, col.label)}
                             className={cn(
@@ -1039,34 +1030,40 @@ export function BoardWorkspacePage() {
                         </span>
                         {canEditColumns ? (
                           <>
+                            <Tooltip label="Move column left" side="top">
                             <button
                               type="button"
-                              title="Move column left"
+                              aria-label="Move column left"
                               disabled={columnBusy || idx === 0}
                               onClick={() => void onMoveColumn(col.id, -1)}
                               className="flex h-6 w-6 items-center justify-center rounded-md text-ink-400 hover:bg-ink-800 hover:text-ink-200 disabled:opacity-30"
                             >
-                              ‹
+                              <IconChevronLeft className="h-3.5 w-3.5" />
                             </button>
+                            </Tooltip>
+                            <Tooltip label="Move column right" side="top">
                             <button
                               type="button"
-                              title="Move column right"
+                              aria-label="Move column right"
                               disabled={columnBusy || idx === columns.length - 1}
                               onClick={() => void onMoveColumn(col.id, 1)}
                               className="flex h-6 w-6 items-center justify-center rounded-md text-ink-400 hover:bg-ink-800 hover:text-ink-200 disabled:opacity-30"
                             >
-                              ›
+                              <IconChevronRight className="h-3.5 w-3.5" />
                             </button>
+                            </Tooltip>
                             {columns.length > 1 ? (
+                              <Tooltip label="Remove column" side="top">
                               <button
                                 type="button"
-                                title="Remove column"
+                                aria-label="Remove column"
                                 disabled={columnBusy}
                                 onClick={() => requestRemoveColumn(col.id, col.label)}
                                 className="flex h-6 w-6 items-center justify-center rounded-md text-ink-400 hover:bg-ink-800 hover:text-[#ed4245]"
                               >
-                                ×
+                                <IconX className="h-3.5 w-3.5" />
                               </button>
+                              </Tooltip>
                             ) : null}
                           </>
                         ) : null}
@@ -1142,6 +1139,7 @@ export function BoardWorkspacePage() {
                       Invite
                     </button>
                   ) : null}
+                  <Tooltip label="Close" side="left">
                   <button
                     type="button"
                     aria-label="Close"
@@ -1150,6 +1148,7 @@ export function BoardWorkspacePage() {
                   >
                     <IconX className="h-4 w-4" />
                   </button>
+                  </Tooltip>
                 </div>
               </div>
             </div>

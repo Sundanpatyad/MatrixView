@@ -17,6 +17,7 @@ import {
   IconX,
 } from '@/components/ui/Icons';
 import { Button } from '@/components/ui/Button';
+import { Tooltip } from '@/components/ui/Tooltip';
 import { MediaPermissionModal } from '@/components/calls/MediaPermissionModal';
 import { cn } from '@/lib/cn';
 import {
@@ -86,22 +87,24 @@ function ControlBtn({
   children: ReactNode;
 }) {
   return (
-    <button
-      type="button"
-      title={title}
-      disabled={disabled}
-      onClick={onClick}
-      className={cn(
-        'flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-40 sm:h-11 sm:w-11',
-        danger
-          ? 'bg-[#ea4335] text-white hover:bg-[#d93025]'
-          : active
-            ? 'bg-brand-500 text-[#062816] hover:bg-brand-600'
-            : 'bg-ink-700 text-ink-50 hover:bg-ink-600',
-      )}
-    >
-      {children}
-    </button>
+    <Tooltip label={title} side="top">
+      <button
+        type="button"
+        aria-label={title}
+        disabled={disabled}
+        onClick={onClick}
+        className={cn(
+          'flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-40 sm:h-11 sm:w-11',
+          danger
+            ? 'bg-[#ea4335] text-white hover:bg-[#d93025]'
+            : active
+              ? 'bg-brand-500 text-[#062816] hover:bg-brand-600'
+              : 'bg-ink-700 text-ink-50 hover:bg-ink-600',
+        )}
+      >
+        {children}
+      </button>
+    </Tooltip>
   );
 }
 
@@ -170,18 +173,24 @@ function PeerVideoTile({
         </span>
       ) : null}
       {onPin ? (
+        <Tooltip
+          label={person.pinned ? 'Unpin' : 'Pin'}
+          side="left"
+          className="absolute right-2 top-2 z-[1]"
+        >
         <button
           type="button"
           className={cn(
-            'absolute right-2 top-2 z-[1] flex h-7 w-7 items-center justify-center rounded-full bg-black/55 text-white transition-opacity',
+            'flex h-7 w-7 items-center justify-center rounded-full bg-black/55 text-white transition-opacity',
             'opacity-100 sm:opacity-0 sm:group-hover:opacity-100',
             person.pinned && 'opacity-100 bg-brand-500',
           )}
-          title={person.pinned ? 'Unpin' : 'Pin'}
+          aria-label={person.pinned ? 'Unpin' : 'Pin'}
           onClick={() => onPin(person.userId)}
         >
           <IconPin className="h-3.5 w-3.5" />
         </button>
+        </Tooltip>
       ) : null}
     </div>
   );
@@ -1167,9 +1176,9 @@ export function CallOverlay({
               <IconPhoneOff className="h-3.5 w-3.5" />
             </span>
             <p className="min-w-0 flex-1 text-xs font-medium leading-snug text-ink-100">{error}</p>
+            <Tooltip label="Dismiss" side="bottom">
             <button
               type="button"
-              title="Dismiss"
               aria-label="Dismiss"
               onClick={(e) => {
                 e.stopPropagation();
@@ -1179,6 +1188,7 @@ export function CallOverlay({
             >
               <IconX className="h-3 w-3" />
             </button>
+            </Tooltip>
           </div>
         </div>
       ) : null}

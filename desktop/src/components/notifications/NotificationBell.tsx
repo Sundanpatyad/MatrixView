@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { InviteActions } from '@/components/notifications/InviteActions';
 import { IconBell, IconCheck } from '@/components/ui/Icons';
+import { Tooltip } from '@/components/ui/Tooltip';
 import { cn } from '@/lib/cn';
 import type { AppNotification, NotificationType } from '@/lib/api/notifications';
 import { MessagePreviewLabel } from '@/lib/messagePreview';
@@ -142,9 +143,9 @@ export function NotificationBell() {
 
   return (
     <div className="relative" ref={rootRef}>
+      <Tooltip label="Notifications" side="bottom">
       <button
         type="button"
-        title="Notifications"
         aria-label={
           unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'
         }
@@ -162,6 +163,7 @@ export function NotificationBell() {
           </span>
         ) : null}
       </button>
+      </Tooltip>
 
       {open ? (
         <div className="absolute top-full right-0 z-50 mt-2 w-[min(22rem,calc(100vw-1.5rem))] overflow-hidden rounded-xl border border-ink-600 bg-ink-800 shadow-2xl">
@@ -172,16 +174,18 @@ export function NotificationBell() {
                 {unreadCount > 0 ? `${unreadCount} unread` : 'You are all caught up'}
               </p>
             </div>
+            <Tooltip label="Mark all as read" side="bottom">
             <button
               type="button"
               disabled={unreadCount === 0}
               onClick={() => void markAllRead()}
               className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold text-ink-300 transition hover:bg-ink-700 hover:text-ink-50 disabled:opacity-40"
-              title="Mark all as read"
+              aria-label="Mark all as read"
             >
               <IconCheck className="h-3.5 w-3.5" />
               Mark all
             </button>
+            </Tooltip>
           </div>
 
           <div className="max-h-[min(24rem,60vh)] overflow-y-auto">

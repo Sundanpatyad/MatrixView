@@ -14,6 +14,7 @@ import { radius, useColors } from '@/theme';
 
 interface InputProps extends Omit<TextInputProps, 'style'> {
   label?: string;
+  required?: boolean;
   error?: string | null;
   hint?: string;
   icon?: keyof typeof Ionicons.glyphMap;
@@ -23,7 +24,7 @@ interface InputProps extends Omit<TextInputProps, 'style'> {
 }
 
 export const Input = forwardRef<TextInput, InputProps>(function Input(
-  { label, error, hint, icon, containerStyle, password = false, multiline, ...rest },
+  { label, required, error, hint, icon, containerStyle, password = false, multiline, ...rest },
   ref,
 ) {
   const colors = useColors();
@@ -34,7 +35,12 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
 
   return (
     <View style={containerStyle}>
-      {label ? <Text style={[styles.label, { color: colors.textMuted }]}>{label}</Text> : null}
+      {label ? (
+        <Text style={[styles.label, { color: colors.textMuted }]}>
+          {label}
+          {required ? <Text style={{ color: colors.danger }}> *</Text> : null}
+        </Text>
+      ) : null}
       <View
         style={[
           styles.field,

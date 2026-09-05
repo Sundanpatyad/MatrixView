@@ -41,6 +41,16 @@ export function ProjectMembersScreen({ route }: Props) {
 
   const handleInvite = async () => {
     if (!email.trim() || submitting) return;
+    const emailNorm = email.trim().toLowerCase();
+    const existing = project.members.find((member) => member.email.toLowerCase() === emailNorm);
+    if (existing?.status === 'pending') {
+      toast.error('This person already has a pending invite. They must Accept it first.');
+      return;
+    }
+    if (existing) {
+      toast.error('This person is already on the project.');
+      return;
+    }
     setSubmitting(true);
     try {
       await addMember(projectId, { email: email.trim(), name: name.trim() || undefined, role });

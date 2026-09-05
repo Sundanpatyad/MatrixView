@@ -511,6 +511,10 @@ router.post('/projects/:projectId/tasks', async (req, res, next) => {
         assigneeName: z.string().max(120).optional(),
         assigneeId: z.string().max(64).optional(),
         dueDate: z.string().max(40).optional(),
+        startDate: z.string().max(40).optional(),
+        endDate: z.string().max(40).optional(),
+        labels: z.array(z.string().max(40)).optional(),
+        status: z.string().min(1).max(64).optional(),
         teamId: z.string().max(64).nullable().optional(),
         sprintId: z.string().max(64).nullable().optional(),
       })

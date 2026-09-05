@@ -2,9 +2,11 @@ import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'r
 import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/Button';
 import { DatePicker } from '@/components/ui/DatePicker';
+import { FieldError, FieldLabel } from '@/components/ui/FieldLabel';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { UserAvatar } from '@/components/ui/UserAvatar';
+import { Tooltip } from '@/components/ui/Tooltip';
 import { useAuth } from '@/lib/auth/AuthContext';
 import {
   TASK_PRIORITIES,
@@ -32,7 +34,7 @@ type Props = {
 
 const MAX_FILE_BYTES = 2 * 1024 * 1024;
 
-const labelClass = 'text-[10px] font-bold tracking-wide text-ink-300 uppercase';
+const labelClass = 'mb-0 text-[10px] font-bold tracking-wide text-ink-300 uppercase';
 
 function filterFiles(files: FileList | File[]): { ok: File[]; skipped: string[] } {
   const ok: File[] = [];
@@ -117,20 +119,28 @@ function AttachmentList({
 
 export function TaskDetailModal({ task, projectName, columns, onClose }: Props) {
   const { user } = useAuth();
-  const { getProject, getProjectTeams, updateTask, addComment, addTaskAttachments, removeTaskAttachment, getTask } =
+  const { getProject, getProjectTeams, getProjectSprints, updateTask, addComment, addTaskAttachments, removeTaskAttachment, getTask } =
     useWorkspace();
   const liveTask = getTask(task.id) ?? task;
   const [comment, setComment] = useState('');
   const [labelDraft, setLabelDraft] = useState('');
   const [commentFiles, setCommentFiles] = useState<File[]>([]);
+  const [titleDraft, setTitleDraft] = useState(liveTask.title);
+  const [titleError, setTitleError] = useState('');
   const toast = useToast();
   const taskFileRef = useRef<HTMLInputElement>(null);
   const commentFileRef = useRef<HTMLInputElement>(null);
 
   const project = getProject(liveTask.projectId);
   const teams = getProjectTeams(liveTask.projectId);
-  const members = project?.members ?? [];
+  const sprints = getProjectSprints(liveTask.projectId);
+  const members = (project?.members ?? []).filter((m) => m.status !== 'pending');
   const typeMeta = TASK_TYPES.find((t) => t.id === liveTask.type);
+
+  useEffect(() => {
+    setTitleDraft(liveTask.title);
+    setTitleError('');
+  }, [liveTask.id, liveTask.title]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -142,6 +152,17 @@ export function TaskDetailModal({ task, projectName, columns, onClose }: Props) 
 
   function patch(partial: Partial<BoardTask>) {
     void updateTask(liveTask.id, partial);
+  }
+
+  function commitTitle() {
+    const next = titleDraft.trim();
+    if (!next) {
+      setTitleError('Title is required.');
+      setTitleDraft(liveTask.title);
+      return;
+    }
+    setTitleError('');
+    if (next !== liveTask.title) patch({ title: next });
   }
 
   function assignMember(member: ProjectMember | null) {
@@ -213,7 +234,7 @@ export function TaskDetailModal({ task, projectName, columns, onClose }: Props) 
       <div
         role="dialog"
         aria-modal="true"
-        className="relative z-10 flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden border border-ink-600 bg-ink-800 shadow-xl"
+        className="relative z-10 flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-ink-600 bg-ink-800 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <header className="flex shrink-0 items-start justify-between gap-4 border-b border-ink-600 px-5 py-3.5">
@@ -221,13 +242,13 @@ export function TaskDetailModal({ task, projectName, columns, onClose }: Props) 
             <div className="flex flex-wrap items-center gap-2">
               <span
                 className={cn(
-                  'rounded px-2 py-0.5 text-[10px] font-bold uppercase text-white',
+                  'rounded-md px-2 py-0.5 text-[10px] font-bold uppercase text-white',
                   typeMeta?.color ?? 'bg-ink-700',
                 )}
               >
                 {typeMeta?.label ?? liveTask.type}
               </span>
-              <div className="w-[96px]">
+              <div className="w-[110px]">
                 <Select
                   size="xs"
                   value={liveTask.type}
@@ -240,11 +261,30 @@ export function TaskDetailModal({ task, projectName, columns, onClose }: Props) 
               <span className="text-xs text-ink-400">·</span>
               <span className="text-xs font-semibold text-ink-200">{projectName}</span>
             </div>
+            <FieldLabel htmlFor="task-title" required className="mt-3 mb-1">
+              Title
+            </FieldLabel>
             <input
-              className="mt-1.5 w-full border-0 bg-transparent text-lg font-semibold text-ink-50 outline-none"
-              value={liveTask.title}
-              onChange={(e) => patch({ title: e.target.value })}
+              id="task-title"
+              className={cn(
+                'w-full rounded-lg border bg-ink-900/40 px-3 py-2 text-lg font-semibold text-ink-50 outline-none',
+                titleError ? 'border-[#ed4245]/70' : 'border-ink-600 focus:border-brand-500',
+              )}
+              value={titleDraft}
+              onChange={(e) => {
+                setTitleDraft(e.target.value);
+                if (e.target.value.trim()) setTitleError('');
+              }}
+              onBlur={commitTitle}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  (e.target as HTMLInputElement).blur();
+                }
+              }}
+              required
             />
+            <FieldError>{titleError}</FieldError>
           </div>
           <Button variant="secondary" size="xs" onClick={onClose}>
             Close
@@ -254,18 +294,23 @@ export function TaskDetailModal({ task, projectName, columns, onClose }: Props) 
         <div className="grid min-h-0 flex-1 gap-0 overflow-hidden md:grid-cols-[1fr_300px]">
           <div className="min-h-0 space-y-5 overflow-y-auto p-5">
             <section>
-              <p className={labelClass}>Description</p>
+              <FieldLabel htmlFor="task-desc" optional>
+                Description
+              </FieldLabel>
               <textarea
-                className="mt-1.5 min-h-[100px] w-full border border-ink-600 px-3 py-2 text-sm text-ink-50 outline-none focus:border-ink-400"
+                id="task-desc"
+                className="mt-0 min-h-[100px] w-full rounded-lg border border-ink-600 bg-ink-900/30 px-3 py-2 text-sm text-ink-50 outline-none focus:border-brand-500"
                 value={liveTask.description}
                 onChange={(e) => patch({ description: e.target.value })}
-                placeholder="Add a description…"
+                placeholder="Add a description"
               />
             </section>
 
             <section>
               <div className="flex items-center justify-between gap-2">
-                <p className={labelClass}>Attachments</p>
+                <FieldLabel optional className="mb-0">
+                  Attachments
+                </FieldLabel>
                 <button
                   type="button"
                   onClick={() => taskFileRef.current?.click()}
@@ -292,7 +337,7 @@ export function TaskDetailModal({ task, projectName, columns, onClose }: Props) 
             </section>
 
             <section>
-              <p className={labelClass}>Time tracking</p>
+              <FieldLabel optional>Time tracking</FieldLabel>
               <div className="mt-2 grid grid-cols-3 gap-2">
                 <label className="border border-ink-600 bg-ink-800/60 px-2.5 py-2">
                   <span className="text-[10px] font-bold text-ink-300 uppercase">Estimate</span>
@@ -326,18 +371,19 @@ export function TaskDetailModal({ task, projectName, columns, onClose }: Props) 
             </section>
 
             <section>
-              <p className={labelClass}>Labels</p>
+              <FieldLabel optional>Labels</FieldLabel>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {liveTask.labels.map((label) => (
+                  <Tooltip key={label} label="Remove label" side="top">
                   <button
-                    key={label}
                     type="button"
-                    title="Remove label"
+                    aria-label={`Remove ${label}`}
                     onClick={() => patch({ labels: liveTask.labels.filter((l) => l !== label) })}
                     className="bg-ink-700 px-2 py-0.5 text-[11px] font-semibold text-ink-200"
                   >
                     {label} ×
                   </button>
+                  </Tooltip>
                 ))}
               </div>
               <form onSubmit={onAddLabel} className="mt-2 flex gap-1.5">
@@ -354,7 +400,7 @@ export function TaskDetailModal({ task, projectName, columns, onClose }: Props) 
             </section>
 
             <section>
-              <p className={labelClass}>Comments</p>
+              <FieldLabel optional>Comments</FieldLabel>
               <form onSubmit={onAddComment} className="mt-2 space-y-2">
                 <textarea
                   className="min-h-[72px] w-full border border-ink-600 px-3 py-2 text-sm text-ink-50 outline-none focus:border-ink-400"
@@ -444,127 +490,93 @@ export function TaskDetailModal({ task, projectName, columns, onClose }: Props) 
 
           <aside className="min-h-0 space-y-4 overflow-y-auto border-t border-ink-600 bg-ink-950 p-4 md:border-t-0 md:border-l">
             <div>
-              <p className={labelClass}>Status</p>
-              <div className="mt-1">
+              <FieldLabel required>Status</FieldLabel>
+              <Select
+                value={liveTask.status}
+                onChange={(v) => patch({ status: v as TaskStatus })}
+                options={columns.map((c) => ({ value: c.id, label: c.label }))}
+                aria-label="Status"
+              />
+            </div>
+
+            <div>
+              <FieldLabel required>Priority</FieldLabel>
+              <Select
+                value={liveTask.priority}
+                onChange={(v) => patch({ priority: v as TaskPriority })}
+                options={TASK_PRIORITIES.map((p) => ({
+                  value: p,
+                  label: p.charAt(0).toUpperCase() + p.slice(1),
+                }))}
+                aria-label="Priority"
+              />
+            </div>
+
+            {sprints.length > 0 ? (
+              <div>
+                <FieldLabel optional>Sprint</FieldLabel>
                 <Select
-                  value={liveTask.status}
-                  onChange={(v) => patch({ status: v as TaskStatus })}
-                  options={columns.map((c) => ({ value: c.id, label: c.label }))}
-                  aria-label="Status"
+                  value={liveTask.sprintId ?? ''}
+                  onChange={(v) => patch({ sprintId: v || null })}
+                  options={[
+                    { value: '', label: 'Backlog' },
+                    ...sprints.map((s) => ({ value: s.id, label: s.name })),
+                  ]}
+                  aria-label="Sprint"
                 />
               </div>
-            </div>
+            ) : null}
 
             {teams.length > 0 ? (
               <div>
-                <p className={labelClass}>Group</p>
-                <div className="mt-1">
-                  <Select
-                    value={liveTask.teamId ?? ''}
-                    onChange={(v) => patch({ teamId: v || null })}
-                    options={[
-                      { value: '', label: 'No group' },
-                      ...teams.map((t) => ({ value: t.id, label: t.name })),
-                    ]}
-                    aria-label="Group"
-                  />
-                </div>
+                <FieldLabel optional>Group</FieldLabel>
+                <Select
+                  value={liveTask.teamId ?? ''}
+                  onChange={(v) => patch({ teamId: v || null })}
+                  options={[
+                    { value: '', label: 'No group' },
+                    ...teams.map((t) => ({ value: t.id, label: t.name })),
+                  ]}
+                  aria-label="Group"
+                />
               </div>
             ) : null}
 
             <div>
-              <p className={labelClass}>Assignee</p>
-              <p className="mt-1 text-[11px] text-ink-300">Pick a project member</p>
-
-              {selectedMember || liveTask.assigneeName === 'Unassigned' || !liveTask.assigneeName ? (
-                <div className="mt-2 flex items-center gap-2 border border-ink-600 bg-ink-800 px-2.5 py-2">
-                  {selectedMember ? (
-                    <>
-                      <UserAvatar
-                        name={selectedMember.name}
-                        src={selectedMember.avatarUrl}
-                        seed={selectedMember.email || selectedMember.name}
-                        size="sm"
-                        className="!h-7 !w-7 !text-[10px]"
-                        userId={selectedMember.userId || selectedMember.id}
-                      />
-                      <div className="min-w-0">
-                        <p className="truncate text-xs font-semibold text-ink-50">
-                          {selectedMember.name}
-                        </p>
-                        <p className="truncate text-[10px] text-ink-300">{selectedMember.role}</p>
-                      </div>
-                    </>
-                  ) : (
-                    <p className="text-xs font-medium text-ink-300">Unassigned</p>
-                  )}
+              <FieldLabel optional>Assignee</FieldLabel>
+              {selectedMember ? (
+                <div className="mb-2 flex items-center gap-2 rounded-lg border border-ink-600 bg-ink-800 px-2.5 py-2">
+                  <UserAvatar
+                    name={selectedMember.name}
+                    src={selectedMember.avatarUrl}
+                    seed={selectedMember.email || selectedMember.name}
+                    size="sm"
+                    className="!h-7 !w-7 !text-[10px]"
+                    userId={selectedMember.userId || selectedMember.id}
+                  />
+                  <div className="min-w-0">
+                    <p className="truncate text-xs font-semibold text-ink-50">{selectedMember.name}</p>
+                    <p className="truncate text-[10px] text-ink-300">{selectedMember.email}</p>
+                  </div>
                 </div>
-              ) : (
-                <div className="mt-2 border border-ink-600 bg-ink-800 px-2.5 py-2">
+              ) : liveTask.assigneeName && liveTask.assigneeName !== 'Unassigned' ? (
+                <div className="mb-2 rounded-lg border border-ink-600 bg-ink-800 px-2.5 py-2">
                   <p className="text-xs font-semibold text-ink-100">{liveTask.assigneeName}</p>
                   <p className="text-[10px] text-ink-400">Not a project member</p>
                 </div>
-              )}
-
-              <div className="mt-2 max-h-48 space-y-1 overflow-y-auto border border-ink-600 bg-ink-800 p-1">
-                <button
-                  type="button"
-                  onClick={() => assignMember(null)}
-                  className={cn(
-                    'flex w-full items-center gap-2 px-2 py-1.5 text-left text-xs',
-                    !selectedMember &&
-                      (liveTask.assigneeName === 'Unassigned' || !liveTask.assigneeName)
-                      ? 'bg-brand-500/10 font-semibold text-ink-50'
-                      : 'text-ink-200 hover:bg-ink-700',
-                  )}
-                >
-                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-ink-700 text-[9px] font-bold text-ink-200">
-                    —
-                  </span>
-                  Unassigned
-                </button>
-                {members.length === 0 ? (
-                  <p className="px-2 py-3 text-[11px] text-ink-400">
-                    Invite members to assign this liveTask.
-                  </p>
-                ) : (
-                  members.map((m) => {
-                    const active =
-                      selectedMember?.id === m.id ||
-                      (!selectedMember &&
-                        m.name.toLowerCase() === liveTask.assigneeName.toLowerCase());
-                    return (
-                      <button
-                        key={m.id}
-                        type="button"
-                        onClick={() => assignMember(m)}
-                        className={cn(
-                          'flex w-full items-center gap-2 px-2 py-1.5 text-left',
-                          active
-                            ? 'bg-brand-500/10 ring-1 ring-brand-500/30'
-                            : 'hover:bg-ink-700',
-                        )}
-                      >
-                        <UserAvatar
-                          name={m.name}
-                          src={m.avatarUrl}
-                          seed={m.email || m.name}
-                          size="sm"
-                          userId={m.userId || m.id}
-                        />
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-xs font-semibold text-ink-50">{m.name}</p>
-                          <p className="truncate text-[10px] text-ink-300">{m.email}</p>
-                        </div>
-                        <span className="shrink-0 text-[10px] font-semibold capitalize text-ink-400">
-                          {m.role}
-                        </span>
-                      </button>
-                    );
-                  })
-                )}
-              </div>
-
+              ) : null}
+              <Select
+                value={selectedMember?.id ?? ''}
+                onChange={(id) => assignMember(members.find((m) => m.id === id) ?? null)}
+                options={[
+                  { value: '', label: 'Unassigned' },
+                  ...members.map((m) => ({
+                    value: m.id,
+                    label: user && m.email.toLowerCase() === user.email.toLowerCase() ? `${m.name} (you)` : m.name,
+                  })),
+                ]}
+                aria-label="Assignee"
+              />
               {user ? (
                 <button
                   type="button"
@@ -586,51 +598,45 @@ export function TaskDetailModal({ task, projectName, columns, onClose }: Props) 
             </div>
 
             <div>
-              <p className={labelClass}>Reporter</p>
+              <FieldLabel optional>Reporter</FieldLabel>
               <Input
-                className="mt-1 h-9 text-xs"
+                className="h-9 rounded-lg text-xs"
                 value={liveTask.reporterName}
                 onChange={(e) => patch({ reporterName: e.target.value })}
               />
             </div>
 
             <div>
-              <p className={labelClass}>Priority</p>
-              <div className="mt-1">
-                <Select
-                  value={liveTask.priority}
-                  onChange={(v) => patch({ priority: v as TaskPriority })}
-                  options={TASK_PRIORITIES.map((p) => ({
-                    value: p,
-                    label: p.charAt(0).toUpperCase() + p.slice(1),
-                  }))}
-                  aria-label="Priority"
-                />
-              </div>
+              <FieldLabel optional>Start date</FieldLabel>
+              <DatePicker
+                value={liveTask.startDate}
+                onChange={(v) => {
+                  if (liveTask.endDate && v && liveTask.endDate < v) {
+                    patch({ startDate: v, endDate: v });
+                    return;
+                  }
+                  patch({ startDate: v });
+                }}
+              />
             </div>
 
             <div>
-              <p className={labelClass}>Start date</p>
-              <div className="mt-1">
-                <DatePicker
-                  value={liveTask.startDate}
-                  onChange={(v) => patch({ startDate: v })}
-                />
-              </div>
+              <FieldLabel optional>End date</FieldLabel>
+              <DatePicker
+                value={liveTask.endDate}
+                onChange={(v) => {
+                  if (liveTask.startDate && v && v < liveTask.startDate) return;
+                  patch({ endDate: v });
+                }}
+              />
+              {liveTask.startDate && liveTask.endDate && liveTask.endDate < liveTask.startDate ? (
+                <FieldError>End date cannot be before the start date.</FieldError>
+              ) : null}
             </div>
 
             <div>
-              <p className={labelClass}>End date</p>
-              <div className="mt-1">
-                <DatePicker value={liveTask.endDate} onChange={(v) => patch({ endDate: v })} />
-              </div>
-            </div>
-
-            <div>
-              <p className={labelClass}>Due date</p>
-              <div className="mt-1">
-                <DatePicker value={liveTask.dueDate} onChange={(v) => patch({ dueDate: v })} />
-              </div>
+              <FieldLabel optional>Due date</FieldLabel>
+              <DatePicker value={liveTask.dueDate} onChange={(v) => patch({ dueDate: v })} />
             </div>
 
             <div className="border-t border-ink-600 pt-3">

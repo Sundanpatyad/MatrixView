@@ -79,7 +79,10 @@ export function UserAvatar({
   const live = userId && socket ? socket.isOnline(userId) : undefined;
   const flag = live ?? online;
   const showDot = showPresence && (userId != null || online !== undefined);
-  const label = title ?? (showDot ? `${name} · ${flag ? 'Online' : 'Offline'}` : name);
+  const label =
+    title === ''
+      ? undefined
+      : title ?? (showDot ? `${name} · ${flag ? 'Online' : 'Offline'}` : name);
   const color = avatarColor(seed || name || 'user');
 
   return (

@@ -6,6 +6,8 @@ import { TaskDetailModal } from '@/components/board/TaskDetailModal';
 import { Button } from '@/components/ui/Button';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { Input } from '@/components/ui/Input';
+import { IconX } from '@/components/ui/Icons';
+import { Tooltip } from '@/components/ui/Tooltip';
 import { avatarFromMembers } from '@/components/ui/UserAvatar';
 import type { BoardTask, TaskStatus } from '@/lib/workspace/types';
 import { useWorkspace } from '@/lib/workspace/WorkspaceContext';
@@ -147,14 +149,16 @@ export function ProjectBoardPage() {
                   {(byStatus[col.id] ?? []).length}
                 </span>
                 {columns.length > 1 ? (
+                  <Tooltip label="Remove column" side="top">
                   <button
                     type="button"
-                    title="Remove column"
-                    className="rounded px-1 text-xs font-bold text-ink-300 hover:bg-ink-800 hover:text-[#ed4245]"
+                    aria-label="Remove column"
+                    className="flex h-6 w-6 items-center justify-center rounded-md text-ink-400 hover:bg-ink-800 hover:text-[#ed4245]"
                     onClick={() => setColumnToRemove({ id: col.id, label: col.label })}
                   >
-                    ×
+                    <IconX className="h-3.5 w-3.5" />
                   </button>
+                  </Tooltip>
                 ) : null}
               </header>
 

@@ -35,6 +35,7 @@ import { Button } from '@/components/ui/Button';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { UserAvatar } from '@/components/ui/UserAvatar';
 import { Input } from '@/components/ui/Input';
+import { Tooltip } from '@/components/ui/Tooltip';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { setDesktopPushContext } from '@/lib/notifications/desktopPush';
 import { cn } from '@/lib/cn';
@@ -222,24 +223,28 @@ function MessageTicks({
   if (!mine) return null;
   if (localState === 'sending') {
     return (
-      <span className="inline-flex text-white/50" title="Sending" aria-label="Sending">
-        <span className="inline-block h-2.5 w-2.5 animate-pulse rounded-full border border-current border-t-transparent" />
-      </span>
+      <Tooltip label="Sending" side="top">
+        <span className="inline-flex text-white/50" aria-label="Sending">
+          <span className="inline-block h-2.5 w-2.5 animate-pulse rounded-full border border-current border-t-transparent" />
+        </span>
+      </Tooltip>
     );
   }
   if (localState === 'failed') {
     return (
-      <span className="font-semibold text-rose-200" title="Failed to send" aria-label="Failed">
-        !
-      </span>
+      <Tooltip label="Failed to send" side="top">
+        <span className="font-semibold text-rose-200" aria-label="Failed">
+          !
+        </span>
+      </Tooltip>
     );
   }
   const read = status === 'read';
   const double = status === 'delivered' || status === 'read';
   return (
+    <Tooltip label={status ?? 'sent'} side="top">
     <span
       className={cn('inline-flex', read ? 'text-[#6fe99a]' : 'text-white/65')}
-      title={status ?? 'sent'}
       aria-label={status ?? 'sent'}
     >
       <svg viewBox="0 0 16 11" className="h-3 w-4" fill="none" aria-hidden>
@@ -271,6 +276,7 @@ function MessageTicks({
         )}
       </svg>
     </span>
+    </Tooltip>
   );
 }
 
@@ -344,37 +350,43 @@ function MediaPreviewModal({
             >
               Open
             </a>
-            <button
-              type="button"
-              title="Close"
-              onClick={onClose}
-              className="rounded-lg p-1.5 text-ink-300 hover:bg-ink-800 hover:text-ink-50"
-            >
-              <IconX className="h-4 w-4" />
-            </button>
+            <Tooltip label="Close" side="bottom">
+              <button
+                type="button"
+                aria-label="Close"
+                onClick={onClose}
+                className="rounded-lg p-1.5 text-ink-300 hover:bg-ink-800 hover:text-ink-50"
+              >
+                <IconX className="h-4 w-4" />
+              </button>
+            </Tooltip>
           </div>
         </div>
         <div className="relative flex min-h-0 flex-1 items-center justify-center bg-ink-950/80 p-3 sm:p-4">
           {gallery && onIndexChange ? (
             <>
+              <Tooltip label="Previous" side="right" className="absolute top-1/2 left-2 z-10 -translate-y-1/2">
               <button
                 type="button"
                 disabled={!canPrev}
                 aria-label="Previous"
                 onClick={() => onIndexChange(index - 1)}
-                className="absolute top-1/2 left-2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white transition hover:bg-black/70 disabled:opacity-30"
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white transition hover:bg-black/70 disabled:opacity-30"
               >
                 <IconChevronLeft className="h-5 w-5" />
               </button>
+              </Tooltip>
+              <Tooltip label="Next" side="left" className="absolute top-1/2 right-2 z-10 -translate-y-1/2">
               <button
                 type="button"
                 disabled={!canNext}
                 aria-label="Next"
                 onClick={() => onIndexChange(index + 1)}
-                className="absolute top-1/2 right-2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white transition hover:bg-black/70 disabled:opacity-30"
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white transition hover:bg-black/70 disabled:opacity-30"
               >
                 <IconChevronLeft className="h-5 w-5 rotate-180" />
               </button>
+              </Tooltip>
             </>
           ) : null}
           {current.kind === 'image' ? (
@@ -767,15 +779,16 @@ function ComposerAttachmentPreview({
           </span>
         </div>
       )}
-      <button
-        type="button"
-        title={`Remove ${file.name}`}
-        aria-label={`Remove ${file.name}`}
-        onClick={onRemove}
-        className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-ink-950/80 text-ink-50 opacity-90 shadow transition hover:bg-[#ed4245] hover:opacity-100"
-      >
-        <IconX className="h-3 w-3" />
-      </button>
+        <Tooltip label={`Remove ${file.name}`} side="top" className="absolute right-1 top-1">
+        <button
+          type="button"
+          aria-label={`Remove ${file.name}`}
+          onClick={onRemove}
+          className="flex h-5 w-5 items-center justify-center rounded-full bg-ink-950/80 text-ink-50 opacity-90 shadow transition hover:bg-[#ed4245] hover:opacity-100"
+        >
+          <IconX className="h-3 w-3" />
+        </button>
+      </Tooltip>
       <span className="pointer-events-none absolute inset-x-0 bottom-0 truncate bg-gradient-to-t from-black/70 to-transparent px-1.5 pb-1 pt-3 text-[9px] font-medium text-white">
         {file.name}
       </span>
@@ -1035,9 +1048,10 @@ function NewGroupModal({
     >
       <form onSubmit={onSubmit} className="mt-3 space-y-3">
         <div className="flex items-center gap-3">
+          <Tooltip label="Add group photo" side="right">
           <button
             type="button"
-            title="Add group photo"
+            aria-label="Add group photo"
             onClick={() => avatarRef.current?.click()}
             className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-ink-700 text-white"
           >
@@ -1047,6 +1061,7 @@ function NewGroupModal({
               <IconUsers className="h-5 w-5" />
             )}
           </button>
+          </Tooltip>
           <div className="min-w-0 flex-1">
             <Input
               placeholder="Group name"
@@ -1209,15 +1224,17 @@ function GroupManagePanel({
       subtitle={`${conversation.members.length} members`}
     >
       <div className="mt-3 flex items-center gap-3">
+        <Tooltip label="Change group photo" side="bottom">
         <button
           type="button"
-          title="Change group photo"
+          aria-label="Change group photo"
           disabled={busy}
           onClick={() => avatarRef.current?.click()}
           className="relative shrink-0 overflow-hidden rounded-full disabled:opacity-50"
         >
           <ConversationAvatar conversation={conversation} meId={meId} size="xl" />
         </button>
+        </Tooltip>
         <div className="min-w-0 flex-1">
           <form onSubmit={saveName} className="flex gap-2">
             <Input value={name} onChange={(e) => setName(e.target.value)} required />
@@ -2272,54 +2289,59 @@ export function ChatPage() {
           <div className="flex items-center justify-between gap-2">
             <div className="flex min-w-0 items-center gap-2">
               <h1 className="text-[15px] font-semibold tracking-tight text-ink-50">Messages</h1>
-              <span
-                className={cn(
-                  'h-1.5 w-1.5 shrink-0 rounded-full',
-                  socketReady
-                    ? 'bg-[#4BDE80]'
-                    : online
-                      ? 'bg-[#f0b232]'
-                      : 'bg-ink-400',
-                )}
-                title={
-                  socketReady
-                    ? 'Live'
-                    : online
-                      ? 'Connecting…'
-                      : 'Offline'
+              <Tooltip
+                label={
+                  socketReady ? 'Live' : online ? 'Connecting…' : 'Offline'
                 }
-              />
+                side="bottom"
+              >
+                <span
+                  className={cn(
+                    'h-1.5 w-1.5 shrink-0 rounded-full',
+                    socketReady
+                      ? 'bg-[#4BDE80]'
+                      : online
+                        ? 'bg-[#f0b232]'
+                        : 'bg-ink-400',
+                  )}
+                />
+              </Tooltip>
               {!socketReady && online ? (
+                <Tooltip label="Reconnect" side="bottom">
                 <button
                   type="button"
                   className="truncate text-[11px] font-medium text-ink-400 hover:text-ink-100 disabled:opacity-60"
                   disabled={socketRetrying}
-                  title="Reconnect"
                   onClick={() => {
                     void reconnectSocket();
                   }}
                 >
                   {socketRetrying ? 'Connecting…' : 'Reconnect'}
                 </button>
+                </Tooltip>
               ) : null}
             </div>
             <div className="flex shrink-0 items-center gap-1">
-              <button
-                type="button"
-                title="New direct message"
-                onClick={() => setModal('dm')}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-transparent text-ink-300 transition hover:border-ink-600 hover:bg-ink-900/60 hover:text-ink-50"
-              >
-                <IconPlus className="h-4 w-4" />
-              </button>
-              <button
-                type="button"
-                title="New team chat"
-                onClick={() => setModal('group')}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-transparent text-ink-300 transition hover:border-ink-600 hover:bg-ink-900/60 hover:text-ink-50"
-              >
-                <IconUsers className="h-4 w-4" />
-              </button>
+              <Tooltip label="New direct message" side="bottom">
+                <button
+                  type="button"
+                  aria-label="New direct message"
+                  onClick={() => setModal('dm')}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-transparent text-ink-300 transition hover:border-ink-600 hover:bg-ink-900/60 hover:text-ink-50"
+                >
+                  <IconPlus className="h-4 w-4" />
+                </button>
+              </Tooltip>
+              <Tooltip label="New team chat" side="bottom">
+                <button
+                  type="button"
+                  aria-label="New team chat"
+                  onClick={() => setModal('group')}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-transparent text-ink-300 transition hover:border-ink-600 hover:bg-ink-900/60 hover:text-ink-50"
+                >
+                  <IconUsers className="h-4 w-4" />
+                </button>
+              </Tooltip>
             </div>
           </div>
 
@@ -2455,15 +2477,16 @@ export function ChatPage() {
           <>
             <header className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-ink-600/70 bg-ink-800 px-2 sm:px-4">
               <div className="flex min-w-0 items-center gap-2.5">
-                <button
-                  type="button"
-                  aria-label="Back to chats"
-                  title="Back to chats"
-                  onClick={() => setActiveId(null)}
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-transparent text-ink-300 transition hover:border-ink-600 hover:bg-ink-900/60 hover:text-ink-50 md:hidden"
-                >
-                  <IconChevronLeft className="h-5 w-5" />
-                </button>
+                <Tooltip label="Back to chats" side="bottom" className="md:hidden">
+                  <button
+                    type="button"
+                    aria-label="Back to chats"
+                    onClick={() => setActiveId(null)}
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-transparent text-ink-300 transition hover:border-ink-600 hover:bg-ink-900/60 hover:text-ink-50"
+                  >
+                    <IconChevronLeft className="h-5 w-5" />
+                  </button>
+                </Tooltip>
                 <span className="relative shrink-0">
                   <ConversationAvatar conversation={active} meId={meId} size="md" />
                 </span>
@@ -2496,9 +2519,21 @@ export function ChatPage() {
               <div className="flex shrink-0 items-center gap-1">
                 {active.type === 'dm' || active.type === 'group' ? (
                   <>
+                    <Tooltip
+                      label={
+                        !socketReady
+                          ? 'Connecting…'
+                          : call.phase !== 'idle'
+                            ? 'Already in a call'
+                            : active.type === 'group'
+                              ? 'Group audio call'
+                              : 'Audio call'
+                      }
+                      side="bottom"
+                    >
                     <button
                       type="button"
-                      title={
+                      aria-label={
                         !socketReady
                           ? 'Connecting…'
                           : call.phase !== 'idle'
@@ -2539,9 +2574,22 @@ export function ChatPage() {
                     >
                       <IconPhone className="h-4 w-4" />
                     </button>
+                    </Tooltip>
+                    <Tooltip
+                      label={
+                        !socketReady
+                          ? 'Connecting…'
+                          : call.phase !== 'idle'
+                            ? 'Already in a call'
+                            : active.type === 'group'
+                              ? 'Group video call'
+                              : 'Video call'
+                      }
+                      side="bottom"
+                    >
                     <button
                       type="button"
-                      title={
+                      aria-label={
                         !socketReady
                           ? 'Connecting…'
                           : call.phase !== 'idle'
@@ -2582,17 +2630,20 @@ export function ChatPage() {
                     >
                       <IconVideo className="h-4 w-4" />
                     </button>
+                    </Tooltip>
                   </>
                 ) : null}
                 {active.type === 'group' ? (
+                  <Tooltip label="Manage group" side="bottom">
                   <button
                     type="button"
-                    title="Manage group"
+                    aria-label="Manage group"
                     onClick={() => setModal('manage')}
                     className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-ink-600/70 bg-ink-900/40 text-ink-300 transition hover:border-brand-500/40 hover:bg-ink-900 hover:text-ink-50"
                   >
                     <IconUsers className="h-4 w-4" />
                   </button>
+                  </Tooltip>
                 ) : null}
               </div>
             </header>
@@ -2984,9 +3035,10 @@ export function ChatPage() {
                               )}
                             >
                               <div className="flex items-center gap-0.5 rounded-lg border border-ink-600/70 bg-ink-800/95 p-0.5 text-ink-300 backdrop-blur-sm">
+                                <Tooltip label="Reply" side="top">
                                 <button
                                   type="button"
-                                  title="Reply"
+                                  aria-label="Reply"
                                   className="rounded-md p-1.5 transition hover:bg-ink-700 hover:text-ink-50"
                                   onClick={(e) => {
                                     e.stopPropagation();
@@ -2995,9 +3047,11 @@ export function ChatPage() {
                                 >
                                   <IconReply className="h-3.5 w-3.5" />
                                 </button>
+                                </Tooltip>
+                                <Tooltip label="Forward" side="top">
                                 <button
                                   type="button"
-                                  title="Forward"
+                                  aria-label="Forward"
                                   className="rounded-md p-1.5 transition hover:bg-ink-700 hover:text-ink-50"
                                   onClick={(e) => {
                                     e.stopPropagation();
@@ -3006,9 +3060,11 @@ export function ChatPage() {
                                 >
                                   <IconForward className="h-3.5 w-3.5" />
                                 </button>
+                                </Tooltip>
+                                <Tooltip label="More" side="top">
                                 <button
                                   type="button"
-                                  title="More"
+                                  aria-label="More"
                                   className="rounded-md px-1.5 py-1 text-[11px] font-bold transition hover:bg-ink-700 hover:text-ink-50"
                                   onClick={(e) => {
                                     e.stopPropagation();
@@ -3017,6 +3073,7 @@ export function ChatPage() {
                                 >
                                   ···
                                 </button>
+                                </Tooltip>
                               </div>
                             </div>
                           ) : null}
@@ -3179,9 +3236,10 @@ export function ChatPage() {
               />
               {!editing ? (
                 <div className="relative mb-0.5" ref={attachMenuRef}>
+                  <Tooltip label="Attach" side="top">
                   <button
                     type="button"
-                    title="Attach"
+                    aria-label="Attach"
                     onClick={() => setAttachMenuOpen((o) => !o)}
                     className={cn(
                       'rounded-xl p-2 text-ink-400 transition hover:bg-ink-800 hover:text-ink-100',
@@ -3190,6 +3248,7 @@ export function ChatPage() {
                   >
                     <IconPaperclip className="h-5 w-5" />
                   </button>
+                  </Tooltip>
                   {attachMenuOpen ? (
                     <div className="absolute bottom-full left-0 z-30 mb-2 w-48 overflow-hidden rounded-xl border border-ink-600 bg-ink-800 py-1">
                       <button
@@ -3253,6 +3312,7 @@ export function ChatPage() {
                   }
                 }}
               />
+              <Tooltip label={editing ? 'Save' : 'Send'} side="top">
               <Button
                 type="submit"
                 size="md"
@@ -3262,10 +3322,11 @@ export function ChatPage() {
                   (!editing && !draft.trim() && files.length === 0)
                 }
                 className="mb-0.5 h-10 w-10 shrink-0 rounded-xl !px-0"
-                title={editing ? 'Save' : 'Send'}
+                aria-label={editing ? 'Save' : 'Send'}
               >
                 <IconSend className="h-4 w-4" />
               </Button>
+              </Tooltip>
               </div>
             </form>
           </>

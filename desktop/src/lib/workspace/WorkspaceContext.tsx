@@ -101,6 +101,10 @@ type CreateTaskInput = {
   assigneeName: string;
   assigneeId?: string;
   dueDate: string;
+  startDate?: string;
+  endDate?: string;
+  labels?: string[];
+  status?: string;
   teamId?: string | null;
   sprintId?: string | null;
 };

@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { IconMic, IconVideo, IconX } from '@/components/ui/Icons';
 import { Button } from '@/components/ui/Button';
+import { Tooltip } from '@/components/ui/Tooltip';
 import {
   isMediaPermissionError,
   mediaPermissionSteps,
@@ -150,15 +151,17 @@ export function MediaPermissionModal({ open, kind, onClose, onGranted }: Props) 
               <h2 id={titleId} className="text-base font-semibold tracking-tight text-ink-50">
                 {title}
               </h2>
+              <Tooltip label="Close" side="left">
               <button
                 type="button"
-                title="Close"
+                aria-label="Close"
                 disabled={busy || openingSettings}
                 onClick={onClose}
                 className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-ink-400 transition hover:bg-ink-700 hover:text-ink-50 disabled:opacity-40"
               >
                 <IconX className="h-4 w-4" />
               </button>
+              </Tooltip>
             </div>
             <p className="mt-1.5 text-sm leading-relaxed text-ink-300">
               {kind === 'video'

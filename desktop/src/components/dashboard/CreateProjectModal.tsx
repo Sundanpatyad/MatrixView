@@ -2,6 +2,7 @@ import { useRef, useState, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { Tooltip } from '@/components/ui/Tooltip';
 import { resolveMediaUrl } from '@/lib/mediaUrl';
 import { useWorkspace } from '@/lib/workspace/WorkspaceContext';
 
@@ -76,11 +77,12 @@ export function CreateProjectModal({ onClose, onCreated }: Props) {
 
         <form onSubmit={(e) => void onSubmit(e)} className="mt-4 space-y-2.5">
           <div className="flex items-center gap-3">
+            <Tooltip label="Add project image" side="right">
             <button
               type="button"
               onClick={() => fileRef.current?.click()}
               className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 text-lg font-bold text-white"
-              title="Add project image"
+              aria-label="Add project image"
             >
               {preview ? (
                 <img src={preview} alt="" className="h-full w-full object-cover" />
@@ -88,6 +90,7 @@ export function CreateProjectModal({ onClose, onCreated }: Props) {
                 (name.charAt(0).toUpperCase() || '+')
               )}
             </button>
+            </Tooltip>
             <div className="min-w-0 flex-1">
               <p className="text-xs font-semibold text-ink-100">Project image</p>
               <p className="text-[11px] text-ink-400">PNG or JPG, optional</p>

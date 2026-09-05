@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/Icons';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
+import { Tooltip } from '@/components/ui/Tooltip';
 import { UserAvatar } from '@/components/ui/UserAvatar';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
 import { ProfileModal } from '@/components/profile/ProfileModal';
@@ -95,57 +96,64 @@ export function AppShell() {
             className="pointer-events-auto fixed inset-y-0 left-0 hidden w-14 flex-col items-center gap-1.5 border-r border-ink-800 bg-ink-950 py-4 md:flex"
             style={{ zIndex: NAV_RAIL_Z }}
           >
-            <button
-              type="button"
-              title="DockX home"
-              onClick={() => go('/')}
-              className="mb-3 shrink-0 overflow-hidden rounded-lg"
-            >
-              <img src="/logo.png" alt="DockX" className="h-8 w-8 object-cover" />
-            </button>
+            <Tooltip label="Home" side="right" className="mb-3">
+              <button
+                type="button"
+                aria-label="DockX home"
+                onClick={() => go('/')}
+                className="shrink-0 overflow-hidden rounded-lg"
+              >
+                <img src="/logo.png" alt="DockX" className="h-8 w-8 object-cover" />
+              </button>
+            </Tooltip>
             {nav.map((item) => {
               const active = item.end
                 ? location.pathname === item.to
                 : location.pathname === item.to ||
                   location.pathname.startsWith(`${item.to}/`);
               return (
-                <button
-                  key={item.to}
-                  type="button"
-                  title={item.label}
-                  onClick={() => go(item.to)}
-                  className={cn(
-                    'flex h-9 w-9 items-center justify-center rounded-xl transition-colors',
-                    active
-                      ? 'bg-brand-500 text-[#062816]'
-                      : 'text-ink-300 hover:bg-brand-500/80 hover:text-[#062816]',
-                  )}
-                >
-                  <item.Icon className="shrink-0" />
-                </button>
+                <Tooltip key={item.to} label={item.label} side="right">
+                  <button
+                    type="button"
+                    aria-label={item.label}
+                    onClick={() => go(item.to)}
+                    className={cn(
+                      'flex h-9 w-9 items-center justify-center rounded-xl transition-colors',
+                      active
+                        ? 'bg-brand-500/15 text-brand-300'
+                        : 'text-ink-400 hover:bg-ink-800 hover:text-ink-100',
+                    )}
+                  >
+                    <item.Icon className="h-[18px] w-[18px] shrink-0" />
+                  </button>
+                </Tooltip>
               );
             })}
-            <button
-              type="button"
-              title="Profile"
-              onClick={() => setProfileOpen(true)}
-              className={cn(
-                'flex h-9 w-9 items-center justify-center rounded-xl transition-colors',
-                profileOpen
-                  ? 'bg-brand-500 text-[#062816]'
-                  : 'text-ink-300 hover:bg-brand-500/80 hover:text-[#062816]',
-              )}
-            >
-              <IconProfile className="shrink-0" />
-            </button>
-            <button
-              type="button"
-              title="Sign out"
-              onClick={() => setConfirmLogout(true)}
-              className="mt-auto mb-1 flex h-9 w-9 items-center justify-center rounded-md text-ink-400 hover:bg-ink-900 hover:text-ink-100"
-            >
-              <IconLogout className="shrink-0" />
-            </button>
+            <Tooltip label="Profile" side="right">
+              <button
+                type="button"
+                aria-label="Profile"
+                onClick={() => setProfileOpen(true)}
+                className={cn(
+                  'flex h-9 w-9 items-center justify-center rounded-xl transition-colors',
+                  profileOpen
+                    ? 'bg-brand-500/15 text-brand-300'
+                    : 'text-ink-400 hover:bg-ink-800 hover:text-ink-100',
+                )}
+              >
+                <IconProfile className="h-[18px] w-[18px] shrink-0" />
+              </button>
+            </Tooltip>
+            <Tooltip label="Sign out" side="right" className="mt-auto mb-1">
+              <button
+                type="button"
+                aria-label="Sign out"
+                onClick={() => setConfirmLogout(true)}
+                className="flex h-9 w-9 items-center justify-center rounded-xl text-ink-400 transition-colors hover:bg-ink-800 hover:text-ink-100"
+              >
+                <IconLogout className="h-[18px] w-[18px] shrink-0" />
+              </button>
+            </Tooltip>
           </nav>,
           document.body,
         )
@@ -194,8 +202,8 @@ export function AppShell() {
                       className={cn(
                         'flex h-9 items-center gap-2.5 rounded-xl px-2.5 text-sm font-medium transition-colors',
                         active
-                          ? 'bg-brand-500 text-[#062816]'
-                          : 'text-ink-300 hover:bg-brand-500/80 hover:text-[#062816]',
+                          ? 'bg-brand-500/15 text-brand-300'
+                          : 'text-ink-300 hover:bg-ink-800 hover:text-ink-100',
                       )}
                     >
                       <item.Icon className="shrink-0" />
@@ -212,8 +220,8 @@ export function AppShell() {
                   className={cn(
                     'flex h-9 items-center gap-2.5 rounded-xl px-2.5 text-sm font-medium transition-colors',
                     profileOpen
-                      ? 'bg-brand-500 text-[#062816]'
-                      : 'text-ink-300 hover:bg-brand-500/80 hover:text-[#062816]',
+                      ? 'bg-brand-500/15 text-brand-300'
+                      : 'text-ink-300 hover:bg-ink-800 hover:text-ink-100',
                   )}
                 >
                   <IconProfile className="shrink-0" />
@@ -269,14 +277,16 @@ export function AppShell() {
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="relative z-20 flex h-12 shrink-0 items-center justify-between gap-3 border-b border-ink-800 bg-ink-900 px-3 sm:px-4 md:px-5">
           <div className="flex min-w-0 items-center gap-2.5 text-sm">
-            <button
-              type="button"
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-ink-300 hover:bg-ink-700 hover:text-ink-50 md:hidden"
-              aria-label="Open menu"
-              onClick={() => setMobileNavOpen(true)}
-            >
-              <IconMenu className="h-5 w-5" />
-            </button>
+            <Tooltip label="Menu" side="bottom" className="md:hidden">
+              <button
+                type="button"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-ink-300 hover:bg-ink-700 hover:text-ink-50"
+                aria-label="Open menu"
+                onClick={() => setMobileNavOpen(true)}
+              >
+                <IconMenu className="h-5 w-5" />
+              </button>
+            </Tooltip>
             <span className="font-semibold tracking-tight text-ink-50">DockX</span>
             <div className="flex items-center gap-0.5">
               {nav.map((item) => {
@@ -323,12 +333,12 @@ export function AppShell() {
             {offlineLabel ? (
               <>
                 <span className="hidden h-4 w-px bg-ink-600 sm:block" aria-hidden />
+                <Tooltip label="SQLite offline cache" side="bottom" className="hidden sm:inline-flex">
                 <span
                   className={cn(
                     'hidden items-center gap-1.5 text-xs font-medium sm:flex',
                     !online ? 'text-[#fee75c]' : 'text-ink-400',
                   )}
-                  title="SQLite offline cache"
                 >
                   <span
                     className={cn(
@@ -338,15 +348,17 @@ export function AppShell() {
                   />
                   {offlineLabel}
                 </span>
+                </Tooltip>
               </>
             ) : null}
           </div>
           <div className="flex shrink-0 items-center gap-1">
             <NotificationBell />
             <ThemeToggle />
+            <Tooltip label="Profile" side="bottom">
             <button
               type="button"
-              title="My profile"
+              aria-label="Profile"
               onClick={() => setProfileOpen(true)}
               className="ml-1 flex items-center gap-2 rounded-md px-2 py-1 transition-colors hover:bg-ink-700"
             >
@@ -361,8 +373,10 @@ export function AppShell() {
                 size="sm"
                 className="!h-7 !w-7 !text-[10px]"
                 userId={user?.id}
+                title=""
               />
             </button>
+            </Tooltip>
           </div>
         </header>
 

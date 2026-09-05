@@ -382,6 +382,20 @@ export async function addMember(
     throw new AuthError('Member already on project', 409, 'MEMBER_EXISTS');
   }
 
+  const pendingInvite = await ProjectInvite.findOne({
+    projectId: project._id,
+    email,
+    status: 'pending',
+    expiresAt: { $gt: new Date() },
+  }).lean();
+  if (pendingInvite) {
+    throw new AuthError(
+      'This person already has a pending invite to this project. They must Accept it first.',
+      409,
+      'INVITE_PENDING',
+    );
+  }
+
   const existingUser = await User.findOne({ email });
   const displayName =
     existingUser?.name ??
@@ -1060,6 +1074,10 @@ export async function createTask(
     assigneeName?: string;
     assigneeId?: string;
     dueDate?: string;
+    startDate?: string;
+    endDate?: string;
+    labels?: string[];
+    status?: string;
     teamId?: string | null;
     sprintId?: string | null;
   },
@@ -1070,11 +1088,15 @@ export async function createTask(
   const displayName = await actorName(actor);
   let firstCol = project.columns[0]?.id ?? 'todo';
   let sprintOid: Types.ObjectId | null = null;
+  let columnIds = new Set((project.columns ?? []).map((c) => c.id));
   if (input.sprintId) {
     const sprint = await getSprintInProject(project, input.sprintId);
     sprintOid = sprint._id;
     firstCol = sprint.columns[0]?.id ?? firstCol;
+    columnIds = new Set((sprint.columns ?? []).map((c) => c.id));
   }
+  const status =
+    input.status && columnIds.has(input.status) ? input.status : firstCol;
   project.taskSeq = (project.taskSeq ?? 0) + 1;
   await project.save();
 
@@ -1104,7 +1126,7 @@ export async function createTask(
     description: input.description?.trim() ?? '',
     type: input.type ?? 'task',
     priority: input.priority ?? 'medium',
-    status: firstCol,
+    status,
     estimateHours: estimate,
     loggedHours: 0,
     remainingHours: estimate,
@@ -1113,9 +1135,9 @@ export async function createTask(
     reporterName: displayName,
     assigneeId: input.assigneeId || matched?.id || '',
     assigneeName: matched?.name || assigneeName,
-    labels: [],
-    startDate: '',
-    endDate: '',
+    labels: (input.labels ?? []).map((label) => label.trim()).filter(Boolean).slice(0, 20),
+    startDate: input.startDate ?? '',
+    endDate: input.endDate ?? '',
     dueDate: input.dueDate ?? '',
     teamId: teamOid,
     sprintId: sprintOid,
