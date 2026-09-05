@@ -9,6 +9,7 @@ import { CallProvider } from '@/context/CallContext';
 import { ChatProvider } from '@/context/ChatContext';
 import { NotificationProvider } from '@/context/NotificationContext';
 import { ConfirmProvider } from '@/context/ConfirmContext';
+import { SocketProvider } from '@/context/SocketContext';
 import { ToastProvider } from '@/context/ToastContext';
 import { WorkspaceProvider } from '@/context/WorkspaceContext';
 import { PushTokenRegistrar } from '@/lib/push/PushTokenRegistrar';
@@ -28,19 +29,21 @@ export default function App() {
           <ToastProvider>
             <ConfirmProvider>
               <AuthProvider>
-                <WorkspaceProvider>
-                  <ChatProvider>
-                    <NotificationProvider>
-                      {/* Calls live above the navigator so they survive screen changes. */}
-                      <CallProvider>
-                        <ThemedStatusBar />
-                        <PushTokenRegistrar />
-                        <RootNavigator />
-                        <CallOverlay />
-                      </CallProvider>
-                    </NotificationProvider>
-                  </ChatProvider>
-                </WorkspaceProvider>
+                <SocketProvider>
+                  <WorkspaceProvider>
+                    <ChatProvider>
+                      <NotificationProvider>
+                        {/* Calls live above the navigator so they survive screen changes. */}
+                        <CallProvider>
+                          <ThemedStatusBar />
+                          <PushTokenRegistrar />
+                          <RootNavigator />
+                          <CallOverlay />
+                        </CallProvider>
+                      </NotificationProvider>
+                    </ChatProvider>
+                  </WorkspaceProvider>
+                </SocketProvider>
               </AuthProvider>
             </ConfirmProvider>
           </ToastProvider>

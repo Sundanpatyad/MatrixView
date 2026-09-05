@@ -8,7 +8,9 @@ export function isMediaPermissionError(err: unknown): boolean {
     return (
       err.name === 'NotAllowedError' ||
       err.name === 'PermissionDeniedError' ||
-      err.name === 'SecurityError'
+      err.name === 'SecurityError' ||
+      err.name === 'NotFoundError' ||
+      err.name === 'NotReadableError'
     );
   }
   const msg = err instanceof Error ? err.message : String(err ?? '');
@@ -41,10 +43,20 @@ export function mediaConstraints(kind: MediaAccessKind): MediaStreamConstraints 
   };
 }
 
-/** Probe current permission state when the Permissions API is available. */
+/** Probe OS + WebView permission. Prefer native TCC on Tauri/macOS. */
 export async function queryMediaPermission(
   kind: MediaAccessKind,
 ): Promise<PermissionState | 'unsupported'> {
+  if (isTauriApp()) {
+    try {
+      const osStatus = await invoke<string>('os_media_permission_status', { kind });
+      if (osStatus === 'authorized') return 'granted';
+      if (osStatus === 'denied' || osStatus === 'restricted') return 'denied';
+      if (osStatus === 'notDetermined') return 'prompt';
+    } catch {
+      /* fall through to the Web Permissions API */
+    }
+  }
   try {
     if (!navigator.permissions?.query) return 'unsupported';
     if (kind === 'video') {
@@ -61,14 +73,57 @@ export async function queryMediaPermission(
   }
 }
 
+async function waitForCaptureDevices(
+  kind: MediaAccessKind,
+  timeoutMs = 4000,
+): Promise<boolean> {
+  if (!navigator.mediaDevices?.enumerateDevices) return true;
+  const needVideo = kind === 'video';
+  const deadline = Date.now() + timeoutMs;
+  do {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const audio = devices.some((d) => d.kind === 'audioinput');
+    const video = devices.some((d) => d.kind === 'videoinput');
+    if (devices.length > 0 && audio && (!needVideo || video)) return true;
+    await new Promise((r) => window.setTimeout(r, 150));
+  } while (Date.now() < deadline);
+  return false;
+}
+
 /**
- * Request camera/mic access. Retries with simpler constraints if the first
- * attempt fails with OverconstrainedError ("Invalid constraint").
+ * Request camera/mic access. On macOS Tauri this first asks the OS (so DockX
+ * appears in System Settings). Then it calls getUserMedia for the WebView.
  */
 export async function requestMediaAccess(kind: MediaAccessKind): Promise<MediaStream> {
   if (!navigator.mediaDevices?.getUserMedia) {
     throw new Error('Media devices are not available in this environment');
   }
+
+  if (isTauriApp()) {
+    try {
+      const osStatus = await invoke<string>('request_os_media_access', { kind });
+      if (osStatus === 'denied' || osStatus === 'restricted') {
+        const label = kind === 'video' ? 'Camera and microphone' : 'Microphone';
+        throw new DOMException(
+          `${label} permission denied. Enable DockX in System Settings → Privacy & Security.`,
+          'NotAllowedError',
+        );
+      }
+    } catch (err) {
+      if (isMediaPermissionError(err)) throw err;
+      // Native command missing (old build) — still try getUserMedia.
+    }
+  }
+
+  const devicesReady = await waitForCaptureDevices(kind);
+  if (!devicesReady) {
+    const label = kind === 'video' ? 'Camera and microphone' : 'Microphone';
+    throw new DOMException(
+      `${label} is not available. Enable DockX in System Settings → Privacy & Security.`,
+      'NotAllowedError',
+    );
+  }
+
   try {
     return await navigator.mediaDevices.getUserMedia(mediaConstraints(kind));
   } catch (err) {
@@ -121,9 +176,8 @@ export function mediaPermissionSteps(kind: MediaAccessKind): string[] {
     const isMac = /Mac|iPhone|iPad/i.test(navigator.platform || navigator.userAgent);
     if (isMac) {
       return [
-        'Tap “Allow access” — DockX will prompt for permission or open System Settings.',
-        `In Privacy & Security → ${devices}, turn on DockX.`,
-        'Return here and tap “Allow access” again.',
+        `Open Privacy & Security → ${devices} and turn on DockX.`,
+        'Return here and tap “Allow access” to start the call.',
       ];
     }
     return [

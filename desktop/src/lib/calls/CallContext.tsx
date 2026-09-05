@@ -10,16 +10,11 @@ import {
 } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/auth/AuthContext';
-import { useOffline } from '@/lib/offline/OfflineContext';
 import {
   clearChatSocketHandlerKeys,
-  connectChatSocket,
-  disconnectChatSocket,
-  ensureChatSocketConnected,
-  getChatSocket,
   patchChatSocketHandlers,
-  requestPresenceSnapshot,
 } from '@/lib/socket/chatSocket';
+import { useSocket } from '@/lib/socket/SocketContext';
 import {
   useAudioCall,
   type ActiveGroupRoom,
@@ -51,15 +46,15 @@ type CallContextValue = {
 const CallContext = createContext<CallContextValue | null>(null);
 
 /**
- * Keeps the chat socket + call signaling alive while logged in,
- * so incoming audio/video calls show Accept/Decline anywhere in the app.
+ * Call signaling rides the session socket from SocketProvider.
+ * Incoming audio/video calls show Accept/Decline anywhere in the app.
  */
 export function CallProvider({ children }: { children: ReactNode }) {
   const { user, isAuthenticated } = useAuth();
-  const { online } = useOffline();
+  const { connected, reconnect } = useSocket();
   const navigate = useNavigate();
   const meId = user?.id ?? '';
-  const [socketReady, setSocketReady] = useState(false);
+  const socketReady = connected;
   const [socketRetrying, setSocketRetrying] = useState(false);
   const [focusConversationId, setFocusConversationId] = useState<string | null>(null);
   const [overlayError, setOverlayError] = useState<string | null>(null);
@@ -86,6 +81,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
     acceptCall,
     rejectCall,
     hangup,
+    retryAfterMediaPermission,
     clearCallError,
     toggleMute,
     toggleCamera,
@@ -97,21 +93,10 @@ export function CallProvider({ children }: { children: ReactNode }) {
   callHandlersRef.current = callHandlers;
 
   useEffect(() => {
-    if (!isAuthenticated || !meId) {
-      disconnectChatSocket();
-      setSocketReady(false);
-      setSocketRetrying(false);
-      return;
-    }
+    if (!isAuthenticated || !meId) return;
 
     const get = () => callHandlersRef.current();
     patchChatSocketHandlers({
-      onConnect: () => {
-        setSocketReady(true);
-        setSocketRetrying(false);
-        requestPresenceSnapshot();
-      },
-      onDisconnect: () => setSocketReady(false),
       onCallIncoming: (p) => get().onCallIncoming?.(p),
       onCallAccepted: (p) => get().onCallAccepted?.(p),
       onCallOffer: (p) => get().onCallOffer?.(p),
@@ -126,23 +111,6 @@ export function CallProvider({ children }: { children: ReactNode }) {
       onCallReaction: (p) => get().onCallReaction?.(p),
       onCallSpotlight: (p) => get().onCallSpotlight?.(p),
     });
-
-    // Already live from login/bootstrap — reflect immediately
-    if (getChatSocket()?.connected) {
-      setSocketReady(true);
-    }
-
-    if (online) {
-      void connectChatSocket().then((s) => {
-        if (s?.connected) {
-          setSocketReady(true);
-          setSocketRetrying(false);
-        }
-      });
-    } else {
-      disconnectChatSocket();
-      setSocketReady(false);
-    }
 
     return () => {
       clearChatSocketHandlerKeys([
@@ -159,75 +127,25 @@ export function CallProvider({ children }: { children: ReactNode }) {
         'onCallHand',
         'onCallReaction',
         'onCallSpotlight',
-        // Keep onConnect/onDisconnect so reconnects during effect churn still update ready state.
       ]);
     };
-  }, [isAuthenticated, meId, online]);
+  }, [isAuthenticated, meId]);
 
   const reconnectSocket = useCallback(async () => {
-    if (!isAuthenticated || !meId || !online) return false;
+    if (!isAuthenticated || !meId) return false;
     setSocketRetrying(true);
     try {
-      const s = await ensureChatSocketConnected({ attempts: 5, force: true });
-      const ok = !!s?.connected;
-      setSocketReady(ok);
-      return ok;
+      return await reconnect();
     } finally {
       setSocketRetrying(false);
     }
-  }, [isAuthenticated, meId, online]);
+  }, [isAuthenticated, meId, reconnect]);
 
-  // Quiet background keepalive while logged in — never flash "Retrying…" for background work
-  useEffect(() => {
-    if (!isAuthenticated || !meId || !online) return;
-
-    let cancelled = false;
-    let timer: number | undefined;
-
-    const sync = () => {
-      const connected = !!getChatSocket()?.connected;
-      setSocketReady(connected);
-      return connected;
-    };
-
-    const loop = async () => {
-      if (cancelled) return;
-      if (sync()) {
-        timer = window.setTimeout(loop, 20_000);
-        return;
-      }
-      // Silent reconnect — UI only shows Retry on manual click
-      try {
-        await ensureChatSocketConnected({ attempts: 3 });
-        sync();
-      } catch {
-        /* ignore */
-      }
-      if (!cancelled) {
-        timer = window.setTimeout(loop, getChatSocket()?.connected ? 20_000 : 5_000);
-      }
-    };
-
-    void loop();
-    return () => {
-      cancelled = true;
-      if (timer) window.clearTimeout(timer);
-    };
-  }, [isAuthenticated, meId, online]);
-
-  // Tear down socket when logging out (provider unmounts with auth routes)
   useEffect(() => {
     return () => {
       hangup();
-      disconnectChatSocket();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only on unmount
-  }, []);
-
-  // Keep socketReady in sync if already connected
-  useEffect(() => {
-    const s = getChatSocket();
-    if (s?.connected) setSocketReady(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- hangup on unmount only
   }, []);
 
   const clearFocusConversationId = useCallback(() => setFocusConversationId(null), []);
@@ -329,6 +247,11 @@ export function CallProvider({ children }: { children: ReactNode }) {
           onDismissError={() => {
             setOverlayError(null);
             clearCallError();
+          }}
+          onRetryAfterPermission={() => {
+            setOverlayError(null);
+            clearCallError();
+            void retryAfterMediaPermission();
           }}
         />
       ) : null}

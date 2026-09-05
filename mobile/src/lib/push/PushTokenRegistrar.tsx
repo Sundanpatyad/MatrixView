@@ -11,6 +11,7 @@ import {
   payloadFromNotification,
 } from '@/lib/push/actions';
 import { registerNotificationCategories } from '@/lib/push/categories';
+import { presentActionableFromNotification } from '@/lib/push/presentActionable';
 import {
   deliverCallDismiss,
   deliverIncomingCall,
@@ -72,9 +73,12 @@ function onNotificationReceived(notification: Notifications.Notification) {
     deliverCallDismiss(callId);
     return;
   }
-  if (type !== 'call.incoming') return;
-  const incoming = incomingFromPushData(data);
-  if (incoming) deliverIncomingCall({ payload: incoming });
+  if (type === 'call.incoming') {
+    const incoming = incomingFromPushData(data);
+    if (incoming) deliverIncomingCall({ payload: incoming });
+    return;
+  }
+  void presentActionableFromNotification(notification);
 }
 
 async function ensureCallChannel() {

@@ -393,13 +393,29 @@ function bindSocket(s: Socket) {
   });
 }
 
-/** Replace all handlers (prefer patchChatSocketHandlers for partial updates). */
+/** Replace non-lifecycle handlers. Presence/connect stay owned by SocketProvider. */
 export function setChatSocketHandlers(next: Handlers) {
-  handlers = next;
+  patchChatSocketHandlers(next);
 }
 
+const LIFECYCLE_HANDLER_KEYS: Array<keyof Handlers> = [
+  'onConnect',
+  'onDisconnect',
+  'onPresenceSnapshot',
+  'onPresenceUpdate',
+];
+
 /** Merge handlers so CallProvider + ChatPage can coexist. */
-export function patchChatSocketHandlers(partial: Partial<Handlers>) {
+export function patchChatSocketHandlers(
+  partial: Partial<Handlers>,
+  opts?: { lifecycle?: boolean },
+) {
+  if (!opts?.lifecycle) {
+    const next = { ...partial };
+    for (const key of LIFECYCLE_HANDLER_KEYS) delete next[key];
+    handlers = { ...handlers, ...next };
+    return;
+  }
   handlers = { ...handlers, ...partial };
 }
 
@@ -407,13 +423,18 @@ export function patchChatSocketHandlers(partial: Partial<Handlers>) {
 export function clearChatSocketHandlerKeys(keys: Array<keyof Handlers>) {
   const next = { ...handlers };
   for (const key of keys) {
+    if (LIFECYCLE_HANDLER_KEYS.includes(key)) continue;
     delete next[key];
   }
   handlers = next;
 }
 
 export async function connectChatSocket() {
-  if (socket?.connected) return socket;
+  if (socket?.connected) {
+    const token = peekAccessToken();
+    if (token) socket.auth = { token };
+    return socket;
+  }
   if (connectInFlight) return connectInFlight;
 
   connectInFlight = (async () => {

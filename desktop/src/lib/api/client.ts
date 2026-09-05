@@ -1,3 +1,5 @@
+export const DESKTOP_AUTH_STORAGE_KEY = 'dockx.desktop.auth';
+
 export const API_BASE =
   (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') || '';
 
@@ -21,7 +23,18 @@ export class ApiError extends Error {
 type TokenGetter = () => string | null;
 type TokenRefresher = () => Promise<string | null>;
 
-let accessTokenGetter: TokenGetter = () => null;
+function tokenFromStorage(): string | null {
+  try {
+    const raw = localStorage.getItem(DESKTOP_AUTH_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { accessToken?: string };
+    return parsed.accessToken || null;
+  } catch {
+    return null;
+  }
+}
+
+let accessTokenGetter: TokenGetter = tokenFromStorage;
 let accessTokenRefresher: TokenRefresher = async () => null;
 
 export function configureApiAuth(opts: {
@@ -61,9 +74,13 @@ export async function apiFetch<T>(
     finalHeaders.set('Content-Type', 'application/json');
   }
 
-  if (auth) {
-    const token = accessTokenGetter();
-    if (token) finalHeaders.set('Authorization', `Bearer ${token}`);
+  let token = accessTokenGetter() || tokenFromStorage();
+  if (auth && !token && !skipRefresh) {
+    token = await accessTokenRefresher();
+  }
+  if (token) finalHeaders.set('Authorization', `Bearer ${token}`);
+  else if (auth) {
+    throw new ApiError('Authentication required', 401, 'UNAUTHORIZED');
   }
 
   let res: Response;
@@ -77,7 +94,7 @@ export async function apiFetch<T>(
     );
   }
 
-  if (res.status === 401 && auth && !skipRefresh) {
+  if (res.status === 401 && !skipRefresh) {
     const next = await accessTokenRefresher();
     if (next) {
       finalHeaders.set('Authorization', `Bearer ${next}`);

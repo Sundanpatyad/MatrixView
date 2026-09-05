@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { AttendanceProvider } from '@/lib/attendance/AttendanceContext';
 import { AuthProvider } from '@/lib/auth/AuthContext';
 import { OfflineProvider } from '@/lib/offline/OfflineContext';
+import { SocketProvider } from '@/lib/socket/SocketContext';
 import { WorkspaceProvider } from '@/lib/workspace/WorkspaceContext';
 import { NotificationProvider } from '@/lib/notifications/NotificationContext';
 import { ToastProvider } from '@/lib/toast/ToastContext';
@@ -25,15 +26,17 @@ createRoot(document.getElementById('root')!).render(
     <BrowserRouter>
       <ToastProvider>
         <AuthProvider>
-          <OfflineProvider>
-            <WorkspaceProvider>
-              <AttendanceProvider>
-                <NotificationProvider>
-                  <App />
-                </NotificationProvider>
-              </AttendanceProvider>
-            </WorkspaceProvider>
-          </OfflineProvider>
+          <SocketProvider>
+            <OfflineProvider>
+              <WorkspaceProvider>
+                <AttendanceProvider>
+                  <NotificationProvider>
+                    <App />
+                  </NotificationProvider>
+                </AttendanceProvider>
+              </WorkspaceProvider>
+            </OfflineProvider>
+          </SocketProvider>
         </AuthProvider>
       </ToastProvider>
     </BrowserRouter>

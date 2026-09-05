@@ -3,15 +3,11 @@
  * Best for small groups (≤8). Signaling via socket callbacks.
  */
 import type { CallMediaKind, CallSignal } from '@/lib/webrtc/audioCall';
+import { callIceServers } from '@/lib/webrtc/iceServers';
 import {
   acquireScreenShare,
   type CaptureTarget,
 } from '@/lib/webrtc/screenShare';
-
-const DEFAULT_ICE: RTCIceServer[] = [
-  { urls: 'stun:stun.l.google.com:19302' },
-  { urls: 'stun:stun1.l.google.com:19302' },
-];
 
 function newCallId() {
   return `gcall_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
@@ -84,6 +80,7 @@ type PeerSlot = {
   connected: boolean;
   audioEl: HTMLAudioElement | null;
   makingOffer: boolean;
+  pendingIce: RTCIceCandidateInit[];
 };
 
 export class GroupCallSession {
@@ -94,6 +91,7 @@ export class GroupCallSession {
   private state: GroupCallState = idleState();
   private meId = '';
   private peers = new Map<string, PeerSlot>();
+  private earlyIce = new Map<string, RTCIceCandidateInit[]>();
   private remoteSharingUserIds = new Set<string>();
 
   constructor(private readonly cb: GroupCallCallbacks) {}
@@ -137,23 +135,9 @@ export class GroupCallSession {
 
   private async ensureMedia() {
     if (this.localStream) return this.localStream;
-    const { mediaConstraints } = await import('@/lib/media/permissions');
+    const { requestMediaAccess } = await import('@/lib/media/permissions');
     const wantVideo = this.state.mediaKind === 'video';
-    let stream: MediaStream;
-    try {
-      stream = await navigator.mediaDevices.getUserMedia(
-        mediaConstraints(wantVideo ? 'video' : 'audio'),
-      );
-    } catch (err) {
-      const overconstrained =
-        err instanceof DOMException &&
-        (err.name === 'OverconstrainedError' || err.name === 'ConstraintNotSatisfiedError');
-      if (overconstrained && wantVideo) {
-        stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
-      } else {
-        throw err;
-      }
-    }
+    const stream = await requestMediaAccess(wantVideo ? 'video' : 'audio');
     // Keep tracks enabled so remotes actually receive media after join races.
     stream.getAudioTracks().forEach((t) => {
       t.enabled = !this.state.muted;
@@ -206,7 +190,7 @@ export class GroupCallSession {
     const existing = this.peers.get(peerUserId);
     if (existing) return existing;
 
-    const pc = new RTCPeerConnection({ iceServers: DEFAULT_ICE });
+    const pc = new RTCPeerConnection({ iceServers: callIceServers() });
     const slot: PeerSlot = {
       userId: peerUserId,
       name: peerName,
@@ -215,7 +199,9 @@ export class GroupCallSession {
       connected: false,
       audioEl: null,
       makingOffer: false,
+      pendingIce: this.earlyIce.get(peerUserId) ?? [],
     };
+    this.earlyIce.delete(peerUserId);
     this.peers.set(peerUserId, slot);
 
     if (this.localStream) {
@@ -435,6 +421,8 @@ export class GroupCallSession {
     try {
       await this.ensureMedia();
     } catch {
+      const need = this.state.mediaKind === 'video' ? 'Camera and microphone' : 'Microphone';
+      this.endLocal(`${need} permission denied`);
       return;
     }
     const slot = this.createPeerConnection(fromUserId, fromName || 'Participant');
@@ -447,6 +435,7 @@ export class GroupCallSession {
       );
     }
     await slot.pc.setRemoteDescription(sdp);
+    await this.flushPendingIce(slot);
     const answer = await slot.pc.createAnswer();
     await slot.pc.setLocalDescription(answer);
     const { callId, conversationId } = this.state;
@@ -466,17 +455,40 @@ export class GroupCallSession {
     if (!slot) return;
     if (slot.pc.signalingState === 'have-local-offer') {
       await slot.pc.setRemoteDescription(sdp);
+      await this.flushPendingIce(slot);
     }
   }
 
   async onRemoteIce(fromUserId: string, candidate: RTCIceCandidateInit | null) {
     const slot = this.peers.get(fromUserId);
-    if (!slot) return;
+    if (!slot) {
+      if (!candidate) return;
+      const queued = this.earlyIce.get(fromUserId) ?? [];
+      queued.push(candidate);
+      this.earlyIce.set(fromUserId, queued);
+      return;
+    }
+    if (!slot.pc.remoteDescription) {
+      if (candidate) slot.pendingIce.push(candidate);
+      return;
+    }
+    await this.applyIce(slot, candidate);
+  }
+
+  private async applyIce(slot: PeerSlot, candidate: RTCIceCandidateInit | null) {
     try {
       if (candidate) await slot.pc.addIceCandidate(candidate);
       else await slot.pc.addIceCandidate();
     } catch {
       /* ignore */
+    }
+  }
+
+  private async flushPendingIce(slot: PeerSlot) {
+    const queued = slot.pendingIce;
+    slot.pendingIce = [];
+    for (const candidate of queued) {
+      await this.applyIce(slot, candidate);
     }
   }
 
@@ -654,6 +666,7 @@ export class GroupCallSession {
       }
     }
     this.peers.clear();
+    this.earlyIce.clear();
     this.remoteSharingUserIds.clear();
     this.localStream?.getTracks().forEach((t) => t.stop());
     this.localStream = null;

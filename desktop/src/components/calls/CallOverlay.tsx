@@ -22,6 +22,7 @@ import { cn } from '@/lib/cn';
 import {
   isMediaPermissionError,
   mediaKindFromPermissionError,
+  queryMediaPermission,
 } from '@/lib/media/permissions';
 import type {
   CallFloatingReaction,
@@ -273,6 +274,8 @@ type Props = {
   onToggleCamera: () => void;
   onToggleScreenShare: (opts?: { nativeTarget?: CaptureTarget }) => void;
   onDismissError: () => void;
+  /** After mic/camera is actually granted — retry the call that failed. */
+  onRetryAfterPermission: () => void;
 };
 
 function MeetingDock({
@@ -594,6 +597,7 @@ export function CallOverlay({
   onToggleCamera,
   onToggleScreenShare,
   onDismissError,
+  onRetryAfterPermission,
 }: Props) {
   const location = useLocation();
   const remoteIsScreen = useMemo(() => isScreenTrack(remoteStream), [remoteStream]);
@@ -808,13 +812,22 @@ export function CallOverlay({
 
   useEffect(() => {
     if (!error || call.phase !== 'idle') return;
-    if (isMediaPermissionError(error)) {
-      setPermissionOpen(true);
-      return;
+    if (!isMediaPermissionError(error)) {
+      const t = window.setTimeout(onDismissError, 4000);
+      return () => window.clearTimeout(t);
     }
-    const t = window.setTimeout(onDismissError, 4000);
-    return () => window.clearTimeout(t);
-  }, [error, call.phase, onDismissError]);
+    // Debug: only the native macOS Allow / Don't Allow alert — no in-app sheet.
+    if (import.meta.env.DEV) return;
+    let cancelled = false;
+    void queryMediaPermission(permissionKind).then((status) => {
+      if (cancelled) return;
+      // Native prompt already handled first-run. Help only after Don't Allow.
+      if (status === 'denied') setPermissionOpen(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [error, call.phase, onDismissError, permissionKind]);
 
   useEffect(() => {
     if (call.phase === 'idle' || call.phase === 'ended') setShareTargets(null);
@@ -1180,6 +1193,9 @@ export function CallOverlay({
         onGranted={() => {
           setPermissionOpen(false);
           onDismissError();
+          // Probe stream is stopped before this fires; wait a tick so
+          // getUserMedia can acquire the device again for the real call.
+          window.setTimeout(() => onRetryAfterPermission(), 150);
         }}
       />
     </>

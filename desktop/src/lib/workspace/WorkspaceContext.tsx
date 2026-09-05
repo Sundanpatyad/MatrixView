@@ -50,8 +50,6 @@ import {
 } from '@/lib/api/workspace';
 import {
   clearChatSocketHandlerKeys,
-  connectChatSocket,
-  getChatSocket,
   joinProject,
   leaveProject,
   patchChatSocketHandlers,
@@ -59,6 +57,7 @@ import {
   type BoardTaskEventPayload,
   type BoardTeamEventPayload,
 } from '@/lib/socket/chatSocket';
+import { useSocket } from '@/lib/socket/SocketContext';
 import {
   ensureProjectColumns,
   ensureTaskFields,
@@ -266,6 +265,7 @@ function readStoredActiveProject(): ActiveProjectId {
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const { user, isAuthenticated, isBootstrapping } = useAuth();
+  const { connected: socketConnected } = useSocket();
   const toast = useToast();
   const [state, setState] = useState<WorkspaceState>({
     projects: [],
@@ -468,21 +468,13 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       },
     });
 
-    let cancelled = false;
     const joinAll = () => {
       for (const id of projectIdsRef.current) joinProject(id);
     };
 
-    void connectChatSocket().then((s) => {
-      if (cancelled || !s) return;
-      joinAll();
-      s.on('connect', joinAll);
-    });
+    if (socketConnected) joinAll();
 
     return () => {
-      cancelled = true;
-      const s = getChatSocket();
-      s?.off('connect', joinAll);
       for (const id of projectIdsRef.current) leaveProject(id);
       clearChatSocketHandlerKeys([
         'onTaskCreated',
@@ -496,13 +488,13 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         'onInviteResolved',
       ]);
     };
-  }, [dropLocalProject, isAuthenticated, isBootstrapping, toast, user]);
+  }, [dropLocalProject, isAuthenticated, isBootstrapping, socketConnected, toast, user]);
 
   // Re-join when project list changes (new project created / invited)
   useEffect(() => {
-    if (!isAuthenticated || !projectIds) return;
+    if (!isAuthenticated || !socketConnected || !projectIds) return;
     for (const id of projectIdsRef.current) joinProject(id);
-  }, [isAuthenticated, projectIds]);
+  }, [isAuthenticated, projectIds, socketConnected]);
 
   // Drop stale selection if project was removed / no longer visible
   useEffect(() => {

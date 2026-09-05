@@ -1,6 +1,6 @@
 import { io, type Socket } from 'socket.io-client';
 
-import { refreshApiAccessToken } from '../api/client';
+import { peekAccessToken, refreshApiAccessToken } from '../api/client';
 import type {
   AppNotification,
   BoardTask,
@@ -230,15 +230,31 @@ function call<K extends HandlerKey>(key: K, ...args: Parameters<NonNullable<Sock
 }
 
 export function setSocketHandlers(next: Partial<SocketHandlers>) {
-  Object.assign(handlers, next);
+  patchSocketHandlers(next);
 }
 
-export function patchSocketHandlers(next: Partial<SocketHandlers>) {
+const LIFECYCLE_HANDLER_KEYS: HandlerKey[] = [
+  'onConnectionChange',
+  'onPresenceSnapshot',
+  'onPresenceUpdate',
+];
+
+export function patchSocketHandlers(
+  next: Partial<SocketHandlers>,
+  opts?: { lifecycle?: boolean },
+) {
+  if (!opts?.lifecycle) {
+    const filtered = { ...next };
+    for (const key of LIFECYCLE_HANDLER_KEYS) delete filtered[key];
+    Object.assign(handlers, filtered);
+    return;
+  }
   Object.assign(handlers, next);
 }
 
 export function clearSocketHandlerKeys(keys: HandlerKey[]) {
   keys.forEach((key) => {
+    if (LIFECYCLE_HANDLER_KEYS.includes(key)) return;
     delete handlers[key];
   });
 }
@@ -336,24 +352,26 @@ function bindListeners(active: Socket) {
   active.on('call:screen', (payload) => call('onCallScreen', payload));
 }
 
-export function connectSocket(token: string): Promise<Socket | null> {
-  if (socket && socket.connected && currentToken === token) {
-    return Promise.resolve(socket);
+export async function connectSocket(token?: string): Promise<Socket | null> {
+  const nextToken = token || peekAccessToken() || (await refreshApiAccessToken());
+  if (!nextToken) return null;
+
+  if (socket) {
+    currentToken = nextToken;
+    socket.auth = { token: nextToken };
+    if (socket.connected) return socket;
+    if (connectInFlight) return connectInFlight;
+    socket.connect();
+    return waitUntilSocketConnected().then((ok) => (ok && socket ? socket : socket));
   }
   if (connectInFlight) return connectInFlight;
 
   connectInFlight = new Promise<Socket | null>((resolve) => {
-    if (socket) {
-      socket.removeAllListeners();
-      socket.disconnect();
-      socket = null;
-    }
-
-    currentToken = token;
+    currentToken = nextToken;
     const active = io(API_BASE, {
       path: '/socket.io',
       transports: ['websocket'],
-      auth: { token },
+      auth: { token: nextToken },
       autoConnect: true,
       reconnection: true,
       reconnectionAttempts: Infinity,

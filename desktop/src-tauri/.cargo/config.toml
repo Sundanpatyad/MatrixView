@@ -1,0 +1,6 @@
+# Launch `tauri:dev` inside DockX.app so macOS exposes camera/mic to WKWebView.
+[target.aarch64-apple-darwin]
+runner = ["bash", "scripts/macos-dev-runner.sh"]
+
+[target.x86_64-apple-darwin]
+runner = ["bash", "scripts/macos-dev-runner.sh"]

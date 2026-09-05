@@ -1,4 +1,8 @@
 [[permission]]
 identifier = "allow-privacy-settings"
 description = "Allow opening system privacy settings for camera/microphone"
-commands.allow = ["open_privacy_settings"]
+commands.allow = [
+  "open_privacy_settings",
+  "request_os_media_access",
+  "os_media_permission_status",
+]

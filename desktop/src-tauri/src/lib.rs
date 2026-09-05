@@ -38,6 +38,8 @@ pub fn run() {
       screen_capture::list_capture_targets,
       screen_capture::capture_frame,
       privacy_settings::open_privacy_settings,
+      privacy_settings::os_media_permission_status,
+      privacy_settings::request_os_media_access,
       oauth_loopback::google_oauth_loopback_start,
       oauth_loopback::google_oauth_loopback_wait,
       oauth_loopback::google_oauth_loopback_cancel

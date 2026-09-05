@@ -2,6 +2,7 @@
  * 1:1 WebRTC audio / video call helper.
  * Signaling is handled by the caller via callbacks (socket relay).
  */
+import { callIceServers } from '@/lib/webrtc/iceServers';
 import {
   acquireScreenShare,
   type CaptureTarget,
@@ -17,11 +18,6 @@ export type CallSignal = {
 };
 
 export type IceServer = RTCIceServer;
-
-const DEFAULT_ICE: IceServer[] = [
-  { urls: 'stun:stun.l.google.com:19302' },
-  { urls: 'stun:stun1.l.google.com:19302' },
-];
 
 function newCallId() {
   return `call_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
@@ -85,6 +81,7 @@ export class AudioCallSession {
   private meId = '';
   private makingOffer = false;
   private polite = false;
+  private pendingIce: RTCIceCandidateInit[] = [];
 
   constructor(private readonly cb: AudioCallCallbacks) {}
 
@@ -107,23 +104,9 @@ export class AudioCallSession {
 
   private async ensureMedia() {
     if (this.localStream) return this.localStream;
-    const { mediaConstraints } = await import('@/lib/media/permissions');
+    const { requestMediaAccess } = await import('@/lib/media/permissions');
     const wantVideo = this.state.mediaKind === 'video';
-    let stream: MediaStream;
-    try {
-      stream = await navigator.mediaDevices.getUserMedia(
-        mediaConstraints(wantVideo ? 'video' : 'audio'),
-      );
-    } catch (err) {
-      const overconstrained =
-        err instanceof DOMException &&
-        (err.name === 'OverconstrainedError' || err.name === 'ConstraintNotSatisfiedError');
-      if (overconstrained && wantVideo) {
-        stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
-      } else {
-        throw err;
-      }
-    }
+    const stream = await requestMediaAccess(wantVideo ? 'video' : 'audio');
     this.localStream = stream;
     this.cb.onLocalStream?.(stream);
     return stream;
@@ -131,7 +114,7 @@ export class AudioCallSession {
 
   private ensurePeerConnection() {
     if (this.pc) return this.pc;
-    const pc = new RTCPeerConnection({ iceServers: DEFAULT_ICE });
+    const pc = new RTCPeerConnection({ iceServers: callIceServers() });
     this.pc = pc;
 
     pc.onicecandidate = (ev) => {
@@ -317,9 +300,12 @@ export class AudioCallSession {
     try {
       await this.attachLocalTracks();
     } catch {
+      const need = this.state.mediaKind === 'video' ? 'Camera and microphone' : 'Microphone';
+      this.endLocal(`${need} permission denied`);
       return;
     }
     await pc.setRemoteDescription(sdp);
+    await this.flushPendingIce();
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
     this.cb.sendAnswer({
@@ -337,10 +323,20 @@ export class AudioCallSession {
     if (!pc) return;
     if (pc.signalingState === 'have-local-offer') {
       await pc.setRemoteDescription(sdp);
+      await this.flushPendingIce();
     }
   }
 
   async onRemoteIce(candidate: RTCIceCandidateInit | null) {
+    const pc = this.pc;
+    if (!pc || !pc.remoteDescription) {
+      if (candidate) this.pendingIce.push(candidate);
+      return;
+    }
+    await this.applyIce(candidate);
+  }
+
+  private async applyIce(candidate: RTCIceCandidateInit | null) {
     const pc = this.pc;
     if (!pc) return;
     try {
@@ -348,6 +344,14 @@ export class AudioCallSession {
       else await pc.addIceCandidate();
     } catch {
       /* ignore late/failed ICE */
+    }
+  }
+
+  private async flushPendingIce() {
+    const queued = this.pendingIce;
+    this.pendingIce = [];
+    for (const candidate of queued) {
+      await this.applyIce(candidate);
     }
   }
 
@@ -564,6 +568,7 @@ export class AudioCallSession {
       this.remoteAudio = null;
     }
     this.makingOffer = false;
+    this.pendingIce = [];
     this.setState({ ...idleState(), error });
   }
 

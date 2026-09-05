@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { IconMic, IconVideo, IconX } from '@/components/ui/Icons';
 import { Button } from '@/components/ui/Button';
@@ -17,7 +17,7 @@ type Props = {
   open: boolean;
   kind: MediaAccessKind;
   onClose: () => void;
-  /** Called after permission is successfully granted */
+  /** Called after getUserMedia actually succeeds — parent should retry the call. */
   onGranted?: () => void;
 };
 
@@ -25,22 +25,40 @@ export function MediaPermissionModal({ open, kind, onClose, onGranted }: Props) 
   const titleId = useId();
   const [busy, setBusy] = useState(false);
   const [openingSettings, setOpeningSettings] = useState(false);
-  const [status, setStatus] = useState<PermissionState | 'unsupported'>('unsupported');
+  const [status, setStatus] = useState<PermissionState | 'unsupported'>('prompt');
   const [hint, setHint] = useState<string | null>(null);
   const steps = mediaPermissionSteps(kind);
   const desktop = isTauriApp();
   const title =
     kind === 'video' ? 'Allow camera & microphone' : 'Allow microphone';
   const Icon = kind === 'video' ? IconVideo : IconMic;
+  const onGrantedRef = useRef(onGranted);
+  onGrantedRef.current = onGranted;
+  const openRef = useRef(open);
+  openRef.current = open;
+
+  function finishGranted() {
+    setStatus('granted');
+    onGrantedRef.current?.();
+  }
 
   useEffect(() => {
     if (!open) {
       setBusy(false);
       setOpeningSettings(false);
       setHint(null);
+      setStatus('prompt');
       return;
     }
-    void queryMediaPermission(kind).then(setStatus);
+
+    let cancelled = false;
+    void queryMediaPermission(kind).then((queried) => {
+      if (cancelled || !openRef.current) return;
+      setStatus(queried === 'denied' ? 'denied' : 'prompt');
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [open, kind]);
 
   useEffect(() => {
@@ -52,49 +70,37 @@ export function MediaPermissionModal({ open, kind, onClose, onGranted }: Props) 
     return () => window.removeEventListener('keydown', onKey);
   }, [open, busy, openingSettings, onClose]);
 
-  if (!open) return null;
+  function applyAccessError(err: unknown) {
+    const denied = isMediaPermissionError(err);
+    const invalid = err instanceof Error && /invalid constraint/i.test(err.message);
+    if (denied) setStatus('denied');
+    else setStatus('prompt');
 
-  async function openSettingsHint(opened: boolean) {
-    setHint(
-      opened
-        ? 'Opened system settings. Enable DockX, then return here and tap “Allow access” again.'
-        : desktop
-          ? 'Could not open settings automatically. Enable DockX under Privacy & Security, then try again.'
-          : 'Use the lock icon in the address bar to allow camera/microphone, then try again.',
-    );
+    if (denied) {
+      setHint(
+        desktop
+          ? 'macOS blocked access. Tap Open Settings, enable DockX under Camera and Microphone, then tap Allow access again.'
+          : 'Permission was blocked. Allow camera/microphone, then try again.',
+      );
+    } else if (invalid) {
+      setHint('This camera/microphone could not be opened. Check that no other app is using them.');
+    } else {
+      setHint(err instanceof Error ? err.message : 'Could not access media devices.');
+    }
   }
+
+  if (!open) return null;
 
   async function onAllow() {
     if (busy) return;
     setBusy(true);
     setHint(null);
     try {
-      // Already blocked — OS will not show a prompt again; jump to Settings.
-      if (status === 'denied') {
-        const opened = await openMediaPrivacySettings(kind);
-        await openSettingsHint(opened);
-        return;
-      }
-
       const stream = await requestMediaAccess(kind);
       stopMediaStream(stream);
-      setStatus('granted');
-      setHint('Access enabled. You can start your call now.');
-      onGranted?.();
+      finishGranted();
     } catch (err) {
-      const denied = isMediaPermissionError(err);
-      const invalid =
-        err instanceof Error && /invalid constraint/i.test(err.message);
-      if (denied) setStatus('denied');
-
-      if (denied || invalid || desktop) {
-        // Prompt failed or unavailable — open privacy settings so the user can enable DockX.
-        const opened = await openMediaPrivacySettings(kind);
-        await openSettingsHint(opened);
-      } else {
-        setHint(err instanceof Error ? err.message : 'Could not access media devices.');
-      }
-      void queryMediaPermission(kind).then(setStatus);
+      applyAccessError(err);
     } finally {
       setBusy(false);
     }
@@ -185,13 +191,7 @@ export function MediaPermissionModal({ open, kind, onClose, onGranted }: Props) 
         </ol>
 
         {hint ? (
-          <p
-            className={`mt-4 text-[13px] leading-relaxed ${
-              status === 'granted' ? 'text-[#4BDE80]' : 'text-ink-300'
-            }`}
-          >
-            {hint}
-          </p>
+          <p className="mt-4 text-[13px] leading-relaxed text-ink-300">{hint}</p>
         ) : null}
 
         <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-end">
@@ -202,7 +202,7 @@ export function MediaPermissionModal({ open, kind, onClose, onGranted }: Props) 
             disabled={busy || openingSettings}
             onClick={onClose}
           >
-            {status === 'granted' ? 'Close' : 'Not now'}
+            Not now
           </Button>
           {desktop || status === 'denied' ? (
             <Button
@@ -218,18 +218,13 @@ export function MediaPermissionModal({ open, kind, onClose, onGranted }: Props) 
           <Button
             type="button"
             size="sm"
-            disabled={busy || openingSettings || status === 'granted'}
-            onClick={() => void onAllow()}
+            disabled={busy || openingSettings}
+            onClick={() => {
+              if (status === 'granted') onGrantedRef.current?.();
+              else void onAllow();
+            }}
           >
-            {busy
-              ? status === 'denied'
-                ? 'Opening…'
-                : 'Requesting…'
-              : status === 'granted'
-                ? 'Access enabled'
-                : status === 'denied'
-                  ? 'Open Settings'
-                  : 'Allow access'}
+            {busy ? 'Requesting…' : status === 'granted' ? 'Start call' : 'Allow access'}
           </Button>
         </div>
       </div>

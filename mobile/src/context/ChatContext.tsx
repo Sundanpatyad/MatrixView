@@ -12,6 +12,7 @@ import { attachmentKindOf } from '@/lib/attachments';
 import { patchSocketHandlers, socketActions } from '@/lib/socket/socket';
 
 import { useAuth } from './AuthContext';
+import { useSocket } from './SocketContext';
 
 interface SendInput {
   body: string;
@@ -85,17 +86,16 @@ function mergeMessages(existing: ChatMessage[], incoming: ChatMessage[]): ChatMe
 
 export function ChatProvider({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, user } = useAuth();
+  const { connected, presence, seedPresence } = useSocket();
 
   const [conversations, setConversations] = useState<ChatConversation[]>([]);
   const [users, setUsers] = useState<ChatMember[]>([]);
-  const [presence, setPresence] = useState<Record<string, PresenceUser>>({});
   const [unread, setUnread] = useState<Record<string, number>>({});
   const [messages, setMessages] = useState<Record<string, ChatMessage[]>>({});
   const [hasMore, setHasMore] = useState<Record<string, boolean>>({});
   const [loadingMessages, setLoadingMessages] = useState<Record<string, boolean>>({});
   const [typing, setTypingState] = useState<Record<string, Record<string, string>>>({});
   const [isLoading, setIsLoading] = useState(false);
-  const [connected, setConnected] = useState(false);
 
   const activeConversationRef = useRef<string | null>(null);
   const typingTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -104,7 +104,6 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const reset = useCallback(() => {
     setConversations([]);
     setUsers([]);
-    setPresence({});
     setUnread({});
     setMessages({});
     setHasMore({});
@@ -122,21 +121,11 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       ]);
       setConversations(sortConversations(conversationResult.conversations ?? []));
       setUsers(userResult.users ?? []);
-      setPresence((prev) => {
-        const next = { ...prev };
-        for (const member of userResult.users ?? []) {
-          next[member.id] = {
-            userId: member.id,
-            checkedIn: Boolean(member.checkedIn),
-            online: prev[member.id]?.online ?? Boolean(member.online),
-          };
-        }
-        return next;
-      });
+      seedPresence(userResult.users ?? []);
     } finally {
       setIsLoading(false);
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, seedPresence]);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -160,44 +149,6 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     patchSocketHandlers({
-      onConnectionChange: (next) => {
-        setConnected(next);
-        const meId = user?.id;
-        if (!meId) return;
-        setPresence((prev) => ({
-          ...prev,
-          [meId]: {
-            userId: meId,
-            checkedIn: prev[meId]?.checkedIn ?? false,
-            online: next,
-          },
-        }));
-      },
-
-      onPresenceSnapshot: ({ users: snapshot }) => {
-        setPresence((prev) => {
-          const next = { ...prev };
-          for (const entry of snapshot ?? []) {
-            next[entry.userId] = {
-              userId: entry.userId,
-              checkedIn: Boolean(entry.checkedIn),
-              online: Boolean(entry.online),
-            };
-          }
-          return next;
-        });
-      },
-      onPresenceUpdate: (entry) => {
-        setPresence((prev) => ({
-          ...prev,
-          [entry.userId]: {
-            userId: entry.userId,
-            checkedIn: Boolean(entry.checkedIn),
-            online: Boolean(entry.online),
-          },
-        }));
-      },
-
       onMessageNew: ({ message }) => {
         setMessages((prev) => ({
           ...prev,

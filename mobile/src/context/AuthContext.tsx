@@ -1,9 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { AppState, type AppStateStatus } from 'react-native';
 
 import { authApi, configureApiAuth, type AuthResponse, type AuthUser, type PickedFile } from '@/lib/api';
 import { GoogleSignInCancelledError, signInWithGoogleNative, signOutGoogleNative } from '@/lib/auth/googleSignIn';
-import { connectSocket, disconnectSocket, ensureSocketConnected } from '@/lib/socket/socket';
 import { clearSession, loadSession, saveSession, saveUser } from '@/lib/storage/authStorage';
 
 interface AuthContextValue {
@@ -47,13 +45,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       refreshToken: payload.refreshToken,
       user: payload.user,
     });
-    await connectSocket(payload.accessToken);
   }, []);
 
   const teardown = useCallback(async () => {
     tokensRef.current = { accessToken: null, refreshToken: null };
     setUser(null);
-    disconnectSocket();
     await clearSession();
     await signOutGoogleNative();
   }, []);
@@ -115,13 +111,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (cancelled) return;
         setUser(fresh);
         await saveUser(fresh);
-        await connectSocket(tokensRef.current.accessToken!);
       } catch {
         const token = await refreshAccessToken();
         if (cancelled) return;
-        if (token) {
-          await connectSocket(token);
-        } else {
+        if (!token) {
           await teardown();
         }
       } finally {
@@ -133,17 +126,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       cancelled = true;
     };
   }, [refreshAccessToken, teardown]);
-
-  // A socket that dropped while the app was backgrounded reconnects on resume.
-  useEffect(() => {
-    const handler = (state: AppStateStatus) => {
-      if (state === 'active' && tokensRef.current.accessToken) {
-        ensureSocketConnected();
-      }
-    };
-    const subscription = AppState.addEventListener('change', handler);
-    return () => subscription.remove();
-  }, []);
 
   const login = useCallback(
     async (email: string, password: string) => {

@@ -26,6 +26,10 @@ export function configureApiAuth(handlers: {
   refreshAccessToken = handlers.refreshAccessToken;
 }
 
+export function peekAccessToken(): string | null {
+  return getAccessToken();
+}
+
 export function refreshApiAccessToken(): Promise<string | null> {
   return refreshAccessToken();
 }

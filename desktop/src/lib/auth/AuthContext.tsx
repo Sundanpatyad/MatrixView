@@ -20,10 +20,9 @@ import {
   type AuthResponse,
   type AuthUser,
 } from '@/lib/api/auth';
-import { configureApiAuth } from '@/lib/api/client';
-import { connectChatSocket, disconnectChatSocket } from '@/lib/socket/chatSocket';
+import { configureApiAuth, DESKTOP_AUTH_STORAGE_KEY } from '@/lib/api/client';
 
-const STORAGE_KEY = 'dockx.desktop.auth';
+const STORAGE_KEY = DESKTOP_AUTH_STORAGE_KEY;
 
 export type DesktopUser = AuthUser;
 
@@ -92,9 +91,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
     writeStored(next);
     setUser(next?.user ?? null);
-    if (!next) {
-      disconnectChatSocket();
-    }
   }, []);
 
   const applyAuth = useCallback(
@@ -104,8 +100,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         accessToken: result.accessToken,
         refreshToken: result.refreshToken,
       });
-      // Establish live socket as soon as the session exists (before Chat opens)
-      void connectChatSocket();
     },
     [persist],
   );
@@ -134,12 +128,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return refreshPromiseRef.current;
   }, [applyAuth, persist]);
 
-  useEffect(() => {
-    configureApiAuth({
-      getAccessToken: () => tokensRef.current.accessToken,
-      refreshAccessToken,
-    });
-  }, [refreshAccessToken]);
+  configureApiAuth({
+    getAccessToken: () => tokensRef.current.accessToken,
+    refreshAccessToken,
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -160,11 +152,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const { user: me } = await meRequest();
         if (cancelled) return;
         persist({ ...stored, user: me });
-        void connectChatSocket();
       } catch {
         const token = await refreshAccessToken();
         if (!token && !cancelled) persist(null);
-        else if (token && !cancelled) void connectChatSocket();
       } finally {
         if (!cancelled) setIsBootstrapping(false);
       }

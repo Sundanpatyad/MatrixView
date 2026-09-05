@@ -1,0 +1,7 @@
+expo.modules.callringtone.call-ringtone-pngs-0 /Volumes/PSQUARE SSD/MatrixView/mobile/modules/call-ringtone/android/build/generated/res/pngs/release
+expo.modules.callringtone.call-ringtone-resValues-1 /Volumes/PSQUARE SSD/MatrixView/mobile/modules/call-ringtone/android/build/generated/res/resValues/release
+expo.modules.callringtone.call-ringtone-mergeReleaseResources-2 /Volumes/PSQUARE SSD/MatrixView/mobile/modules/call-ringtone/android/build/intermediates/incremental/release/mergeReleaseResources/merged.dir
+expo.modules.callringtone.call-ringtone-mergeReleaseResources-3 /Volumes/PSQUARE SSD/MatrixView/mobile/modules/call-ringtone/android/build/intermediates/incremental/release/mergeReleaseResources/stripped.dir
+expo.modules.callringtone.call-ringtone-release-4 /Volumes/PSQUARE SSD/MatrixView/mobile/modules/call-ringtone/android/build/intermediates/merged_res/release/mergeReleaseResources
+expo.modules.callringtone.call-ringtone-main-5 /Volumes/PSQUARE SSD/MatrixView/mobile/modules/call-ringtone/android/src/main/res
+expo.modules.callringtone.call-ringtone-release-6 /Volumes/PSQUARE SSD/MatrixView/mobile/modules/call-ringtone/android/src/release/res

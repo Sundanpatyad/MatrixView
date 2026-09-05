@@ -162,6 +162,21 @@ export function useAudioCall(meId: string) {
   const dmRef = useRef<AudioCallSession | null>(null);
   const groupRef = useRef<GroupCallSession | null>(null);
   const scopeRef = useRef<'dm' | 'group' | null>(null);
+  const lastOutgoingRef = useRef<{
+    conversationId: string;
+    peerUserId?: string;
+    peerName?: string;
+    conversationName?: string;
+    mediaKind?: CallMediaKind;
+    isGroup?: boolean;
+  } | null>(null);
+  const lastJoinRef = useRef<{
+    conversationId: string;
+    callId: string;
+    mediaKind?: CallMediaKind;
+    conversationName?: string;
+  } | null>(null);
+  const lastIntentRef = useRef<'start' | 'join' | 'accept' | null>(null);
   const ringtoneRef = useRef<CallRingtone | null>(null);
   const presentingUserIdRef = useRef<string | null>(null);
   presentingUserIdRef.current = presentingUserId;
@@ -353,6 +368,12 @@ export function useAudioCall(meId: string) {
     else tone.stop();
   }, [call.phase, getRingtone]);
 
+  const releaseScopeIfIdle = useCallback(() => {
+    const dmIdle = !dmRef.current || dmRef.current.getState().phase === 'idle';
+    const groupIdle = !groupRef.current || groupRef.current.getState().phase === 'idle';
+    if (dmIdle && groupIdle) scopeRef.current = null;
+  }, []);
+
   const startCall = useCallback(
     async (input: {
       conversationId: string;
@@ -362,17 +383,44 @@ export function useAudioCall(meId: string) {
       mediaKind?: CallMediaKind;
       isGroup?: boolean;
     }) => {
+      lastOutgoingRef.current = input;
+      lastIntentRef.current = 'start';
       if (!meId) throw new Error('Not signed in');
       if (scopeRef.current) throw new Error('Already in a call');
       const mediaKind = input.mediaKind ?? 'audio';
 
-      if (input.isGroup) {
-        scopeRef.current = 'group';
-        const session = getGroup();
-        const callId = await session.startHost({
+      try {
+        if (input.isGroup) {
+          scopeRef.current = 'group';
+          const session = getGroup();
+          const callId = await session.startHost({
+            meId,
+            conversationId: input.conversationId,
+            conversationName: input.conversationName ?? 'Group',
+            mediaKind,
+          });
+          const res = await emitCallInvite({
+            conversationId: input.conversationId,
+            callId,
+            mediaKind,
+          });
+          if (!res.ok) {
+            session.endLocal(res.error ?? 'Could not start call');
+            scopeRef.current = null;
+            throw new Error(res.error ?? 'Could not start call');
+          }
+          await session.enterCall({ peers: res.peers ?? [] });
+          return;
+        }
+
+        if (!input.peerUserId) throw new Error('Missing peer');
+        scopeRef.current = 'dm';
+        const session = getDm();
+        const callId = await session.startOutgoing({
           meId,
           conversationId: input.conversationId,
-          conversationName: input.conversationName ?? 'Group',
+          peerUserId: input.peerUserId,
+          peerName: input.peerName ?? 'User',
           mediaKind,
         });
         const res = await emitCallInvite({
@@ -385,32 +433,12 @@ export function useAudioCall(meId: string) {
           scopeRef.current = null;
           throw new Error(res.error ?? 'Could not start call');
         }
-        await session.enterCall({ peers: res.peers ?? [] });
-        return;
-      }
-
-      if (!input.peerUserId) throw new Error('Missing peer');
-      scopeRef.current = 'dm';
-      const session = getDm();
-      const callId = await session.startOutgoing({
-        meId,
-        conversationId: input.conversationId,
-        peerUserId: input.peerUserId,
-        peerName: input.peerName ?? 'User',
-        mediaKind,
-      });
-      const res = await emitCallInvite({
-        conversationId: input.conversationId,
-        callId,
-        mediaKind,
-      });
-      if (!res.ok) {
-        session.endLocal(res.error ?? 'Could not start call');
-        scopeRef.current = null;
-        throw new Error(res.error ?? 'Could not start call');
+      } catch (err) {
+        releaseScopeIfIdle();
+        throw err;
       }
     },
-    [getDm, getGroup, meId],
+    [getDm, getGroup, meId, releaseScopeIfIdle],
   );
 
   const joinGroupCall = useCallback(
@@ -420,6 +448,8 @@ export function useAudioCall(meId: string) {
       mediaKind?: CallMediaKind;
       conversationName?: string;
     }) => {
+      lastJoinRef.current = input;
+      lastIntentRef.current = 'join';
       if (!meId) throw new Error('Not signed in');
       if (scopeRef.current) throw new Error('Already in a call');
       scopeRef.current = 'group';
@@ -463,6 +493,7 @@ export function useAudioCall(meId: string) {
   );
 
   const acceptCall = useCallback(async () => {
+    lastIntentRef.current = 'accept';
     getRingtone().stop();
     if (scopeRef.current === 'group' || call.isGroup) {
       const session = getGroup();
@@ -495,7 +526,12 @@ export function useAudioCall(meId: string) {
     const st = session.getState();
     if (!st.callId || !st.conversationId) return;
     await session.acceptIncoming();
-    await emitCallAccept({ callId: st.callId, conversationId: st.conversationId });
+    const res = await emitCallAccept({ callId: st.callId, conversationId: st.conversationId });
+    if (!res.ok) {
+      session.endLocal(res.error ?? 'Could not accept');
+      scopeRef.current = null;
+      throw new Error(res.error ?? 'Could not accept');
+    }
   }, [call.isGroup, getDm, getGroup, getRingtone]);
 
   const rejectCall = useCallback(() => {
@@ -536,6 +572,21 @@ export function useAudioCall(meId: string) {
     getDm().clearError();
     getGroup().clearError();
   }, [getDm, getGroup]);
+
+  const retryAfterMediaPermission = useCallback(async () => {
+    const intent = lastIntentRef.current;
+    try {
+      if (intent === 'start' && lastOutgoingRef.current) {
+        await startCall(lastOutgoingRef.current);
+      } else if (intent === 'join' && lastJoinRef.current) {
+        await joinGroupCall(lastJoinRef.current);
+      } else if (intent === 'accept') {
+        await acceptCall();
+      }
+    } catch {
+      /* Permission modal reopens if media is still blocked. */
+    }
+  }, [startCall, joinGroupCall, acceptCall]);
 
   const toggleMute = useCallback(() => {
     if (scopeRef.current === 'group') {
@@ -871,6 +922,7 @@ export function useAudioCall(meId: string) {
     acceptCall,
     rejectCall,
     hangup,
+    retryAfterMediaPermission,
     clearCallError,
     toggleMute,
     toggleCamera,

@@ -57,17 +57,15 @@ import {
   type ChatMessage,
 } from '@/lib/api/chat';
 import {
-  connectChatSocket,
   clearChatSocketHandlerKeys,
   emitMessagesRead,
   emitTypingStart,
   emitTypingStop,
-  getChatSocket,
   joinConversation,
   patchChatSocketHandlers,
-  requestPresenceSnapshot,
   type PresenceUser,
 } from '@/lib/socket/chatSocket';
+import { useSocket } from '@/lib/socket/SocketContext';
 import { useCall } from '@/lib/calls/CallContext';
 import {
   buildOptimisticMessage,
@@ -1373,7 +1371,6 @@ export function ChatPage() {
   const {
     call,
     activeRooms,
-    socketReady,
     socketRetrying,
     reconnectSocket,
     focusConversationId,
@@ -1381,6 +1378,7 @@ export function ChatPage() {
     startCall,
     joinGroupCall,
   } = useCall();
+  const { connected: socketReady, presence, seedPresence } = useSocket();
   const [conversations, setConversations] = useState<ChatConversation[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -1403,7 +1401,6 @@ export function ChatPage() {
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [hasMoreOlder, setHasMoreOlder] = useState(false);
   const [orgUsers, setOrgUsers] = useState<ChatMember[]>([]);
-  const [presence, setPresence] = useState<Record<string, PresenceUser>>({});
   const [typingUsers, setTypingUsers] = useState<Record<string, string>>({});
   const [modal, setModal] = useState<'dm' | 'group' | 'manage' | null>(null);
   const [menuMsgId, setMenuMsgId] = useState<string | null>(null);
@@ -1616,18 +1613,7 @@ export function ChatPage() {
       ]);
       if (cancelled) return;
       setOrgUsers(users);
-      setPresence((prev) => {
-        const next = { ...prev };
-        for (const u of users) {
-          next[u.id] = {
-            userId: u.id,
-            checkedIn: Boolean(u.checkedIn),
-            // Prefer live socket presence; fall back to API online flag
-            online: prev[u.id]?.online ?? Boolean(u.online),
-          };
-        }
-        return next;
-      });
+      seedPresence(users);
       if (remote) {
         setConversations(remote);
         setActiveId((prev) => {
@@ -1645,49 +1631,26 @@ export function ChatPage() {
     return () => {
       cancelled = true;
     };
-  }, [meId]);
+  }, [meId, seedPresence]);
+
+  useEffect(() => {
+    setOrgUsers((prev) => {
+      let changed = false;
+      const next = prev.map((member) => {
+        const live = presence[member.id];
+        if (!live) return member;
+        if (member.online === live.online && member.checkedIn === live.checkedIn) return member;
+        changed = true;
+        return { ...member, online: live.online, checkedIn: live.checkedIn };
+      });
+      return changed ? next : prev;
+    });
+  }, [presence]);
 
   useEffect(() => {
     if (!user) return;
 
     patchChatSocketHandlers({
-      onPresenceSnapshot: (users) => {
-        setPresence((prev) => {
-          const next = { ...prev };
-          for (const u of users) {
-            next[u.userId] = {
-              userId: u.userId,
-              checkedIn: Boolean(u.checkedIn),
-              online: Boolean(u.online),
-            };
-          }
-          return next;
-        });
-        setOrgUsers((prev) => {
-          const byId = new Map(users.map((u) => [u.userId, u]));
-          return prev.map((m) => {
-            const live = byId.get(m.id);
-            return live ? { ...m, checkedIn: live.checkedIn, online: live.online } : m;
-          });
-        });
-      },
-      onPresenceUpdate: (u) => {
-        setPresence((prev) => ({
-          ...prev,
-          [u.userId]: {
-            userId: u.userId,
-            checkedIn: Boolean(u.checkedIn),
-            online: Boolean(u.online),
-          },
-        }));
-        setOrgUsers((prev) =>
-          prev.map((m) =>
-            m.id === u.userId
-              ? { ...m, checkedIn: u.checkedIn, online: u.online }
-              : m,
-          ),
-        );
-      },
       onMessageNew: (message) => {
         void upsertLiveMessage(meId, message);
         const convId = message.conversationId;
@@ -1799,20 +1762,8 @@ export function ChatPage() {
       },
     });
 
-    // Socket is owned by Auth/CallProvider for the whole session — just ensure it's up
-    if (online && !getChatSocket()?.connected) {
-      void connectChatSocket().then((s) => {
-        if (s?.connected) requestPresenceSnapshot();
-      });
-    } else if (getChatSocket()?.connected) {
-      // Snapshot may have fired before Chat mounted — refresh online flags now
-      requestPresenceSnapshot();
-    }
-
     return () => {
       clearChatSocketHandlerKeys([
-        'onPresenceSnapshot',
-        'onPresenceUpdate',
         'onMessageNew',
         'onMessageEdited',
         'onMessageDeleted',
@@ -1822,7 +1773,7 @@ export function ChatPage() {
         'onConversationRemoved',
       ]);
     };
-  }, [user, meId, upsertConversationQuiet, online]);
+  }, [user, meId, upsertConversationQuiet]);
 
   useEffect(() => {
     setAttachMenuOpen(false);
@@ -1918,18 +1869,6 @@ export function ChatPage() {
       joinConversation(c.id);
     }
   }, [conversations, online, socketReady]);
-
-  useEffect(() => {
-    if (!meId) return;
-    setPresence((prev) => ({
-      ...prev,
-      [meId]: {
-        userId: meId,
-        checkedIn: prev[meId]?.checkedIn ?? false,
-        online: Boolean(socketReady),
-      },
-    }));
-  }, [meId, socketReady]);
 
   // Reset the local typing roster when switching threads.
   useEffect(() => {

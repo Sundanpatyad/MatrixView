@@ -100,8 +100,11 @@ name = "app"
 version = "0.1.0"
 dependencies = [
  "active-win-pos-rs",
+ "block2",
  "image 0.25.10",
  "log",
+ "objc2",
+ "objc2-av-foundation",
  "serde",
  "serde_json",
  "tauri",

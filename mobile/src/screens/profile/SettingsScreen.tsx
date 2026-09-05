@@ -6,9 +6,9 @@ import { AppHeader, ListRow, Screen } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
 import { useChat } from '@/context/ChatContext';
 import { useConfirm } from '@/context/ConfirmContext';
+import { useSocket } from '@/context/SocketContext';
 import { useToast } from '@/context/ToastContext';
 import { API_BASE } from '@/lib/config';
-import { ensureSocketConnected } from '@/lib/socket/socket';
 import type { RootStackParamList } from '@/navigation/types';
 import { useColors, useTheme, type ThemePreference } from '@/theme';
 
@@ -26,7 +26,8 @@ export function SettingsScreen({ navigation }: Props) {
   const toast = useToast();
   const confirm = useConfirm();
   const { user, logout, logoutEverywhere } = useAuth();
-  const { connected, refresh } = useChat();
+  const { refresh } = useChat();
+  const { connected, reconnect } = useSocket();
 
   const confirmLogout = async (everywhere: boolean) => {
     const ok = await confirm({
@@ -99,7 +100,7 @@ export function SettingsScreen({ navigation }: Props) {
             title="Reconnect and sync"
             subtitle="Refresh socket and reload data"
             onPress={async () => {
-              ensureSocketConnected();
+              await reconnect();
               await refresh();
               toast.success('Synced');
             }}

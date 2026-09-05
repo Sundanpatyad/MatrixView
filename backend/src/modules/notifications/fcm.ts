@@ -83,16 +83,20 @@ function asData(notification: SerializedNotification, title: string, body: strin
     messageId: notification.messageId ?? '',
     inviteId,
     categoryId,
+    categoryIdentifier: categoryId,
   };
 
   return {
     ...payload,
     title,
-    // Expo Android presents data-only FCM when `title` + `message` are set,
-    // and attaches actions when `categoryId` matches a registered category.
+    // Expo Android presents data-only FCM when `title` + `message` are set.
+    // Action buttons are attached by presenting a local notification with
+    // `categoryIdentifier` (see mobile presentActionable.ts).
     message: body,
     body: JSON.stringify(payload),
     channelId: 'default',
+    // Stable id so the local actionable notification replaces the FCM tray item.
+    tag: notification.id,
   };
 }
 

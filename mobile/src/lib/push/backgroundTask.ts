@@ -3,6 +3,7 @@ import * as Notifications from 'expo-notifications';
 import { handleNotificationAction, payloadFromNotification } from './actions';
 import { registerNotificationCategories } from './categories';
 import { incomingFromPushData } from './incomingCall';
+import { presentActionableFromData, recordFromTaskData } from './presentActionable';
 import { startCallRingtone, stopCallRingtone } from './callRingtone';
 
 export const BACKGROUND_NOTIFICATION_TASK = 'DOCKX_NOTIFICATION_TASK';
@@ -22,7 +23,7 @@ function defineBackgroundTask() {
       }
       const record = data as Record<string, unknown>;
       const notification = record.notification as Notifications.Notification | undefined;
-      const payload = notification ? payloadFromNotification(notification) : record;
+      const payload = notification ? payloadFromNotification(notification) : recordFromTaskData(record);
       const type = typeof payload.type === 'string' ? payload.type : '';
       if (type === 'call.incoming' && incomingFromPushData(payload)) {
         startCallRingtone();
@@ -30,7 +31,9 @@ function defineBackgroundTask() {
       }
       if (type === 'call.ended' || type === 'call.missed') {
         stopCallRingtone();
+        return;
       }
+      await presentActionableFromData(payload);
     });
   } catch (err) {
     console.warn('[push] expo-task-manager unavailable', err);

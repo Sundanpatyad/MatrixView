@@ -5,11 +5,7 @@ import {
   type RTCMediaStream,
   type RTCPeer,
 } from './webrtcModule';
-
-const ICE_SERVERS = [
-  { urls: 'stun:stun.l.google.com:19302' },
-  { urls: 'stun:stun1.l.google.com:19302' },
-];
+import { callIceServers } from './iceServers';
 
 export type CallPhase = 'idle' | 'outgoing' | 'incoming' | 'connecting' | 'connected';
 
@@ -277,7 +273,7 @@ export class CallSession {
     const webrtc = getWebRTC();
     if (!webrtc) throw new Error('Calling is not available in this build.');
 
-    const pc = new webrtc.RTCPeerConnection({ iceServers: ICE_SERVERS }) as RTCPeer;
+    const pc = new webrtc.RTCPeerConnection({ iceServers: callIceServers() }) as RTCPeer;
     const slot: PeerSlot = {
       userId,
       name,

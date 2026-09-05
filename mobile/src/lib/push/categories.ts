@@ -24,6 +24,7 @@ export const QUICK_REPLY_TEXT: Record<string, string> = {
 const shadeOnly = { opensAppToForeground: false };
 
 export async function registerNotificationCategories(): Promise<void> {
+  // Android shows at most 3 shade actions. Extra buttons are dropped.
   await Notifications.setNotificationCategoryAsync(MESSAGE_CATEGORY, [
     {
       identifier: ACTION.reply,
@@ -42,16 +43,6 @@ export async function registerNotificationCategories(): Promise<void> {
     {
       identifier: ACTION.mute,
       buttonTitle: 'Mute',
-      options: shadeOnly,
-    },
-    {
-      identifier: ACTION.qrWhatsUp,
-      buttonTitle: "What's up?",
-      options: shadeOnly,
-    },
-    {
-      identifier: ACTION.qrHowAreYou,
-      buttonTitle: 'How are you?',
       options: shadeOnly,
     },
   ]);

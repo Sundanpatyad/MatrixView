@@ -16,6 +16,7 @@ import type { CreateTaskInput, UpdateTaskInput } from '@/lib/api/workspace';
 import { patchSocketHandlers, socketActions } from '@/lib/socket/socket';
 
 import { useAuth } from './AuthContext';
+import { useSocket } from './SocketContext';
 import { useToast } from './ToastContext';
 
 const ACTIVE_PROJECT_KEY = 'dockx.activeProjectId';
@@ -119,6 +120,7 @@ function isActiveProjectMember(
 
 export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, user } = useAuth();
+  const { connected: socketConnected } = useSocket();
   const toast = useToast();
 
   const [projects, setProjects] = useState<Project[]>([]);
@@ -207,7 +209,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
 
   // Board realtime only reaches sockets that have joined the project room.
   useEffect(() => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated || !socketConnected) return;
     const wanted = new Set(projects.map((project) => project.id));
 
     wanted.forEach((projectId) => {
@@ -223,7 +225,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         joinedRooms.current.delete(projectId);
       }
     });
-  }, [isAuthenticated, projects]);
+  }, [isAuthenticated, projects, socketConnected]);
 
   useEffect(() => {
     const applyProject = (
