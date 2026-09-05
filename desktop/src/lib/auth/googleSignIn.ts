@@ -32,13 +32,17 @@ export function dockxGoogleDeepLink(code: string): string {
 export async function signInWithGoogleDesktop(): Promise<AuthResponse> {
   const started = await invoke<LoopbackStart>('google_oauth_loopback_start');
   try {
+    // Accept as soon as the port is bound so a fast Google redirect cannot
+    // hit 127.0.0.1 before the app is waiting.
+    const wait = invoke<LoopbackResult>('google_oauth_loopback_wait', {
+      timeoutMs: 180_000,
+    });
+
     const { url } = await googleDesktopUrlRequest(started.redirectUri);
     const { openUrl } = await import('@tauri-apps/plugin-opener');
     await openUrl(url);
 
-    const result = await invoke<LoopbackResult>('google_oauth_loopback_wait', {
-      timeoutMs: 180_000,
-    });
+    const result = await wait;
 
     if (result.error) {
       throw new Error(

@@ -10,6 +10,7 @@ import { RegisterScreen } from '@/screens/auth/RegisterScreen';
 import { WelcomeScreen } from '@/screens/auth/WelcomeScreen';
 import { CreateTaskScreen } from '@/screens/board/CreateTaskScreen';
 import { ManageTeamsScreen } from '@/screens/board/ManageTeamsScreen';
+import { ManageSprintsScreen } from '@/screens/board/ManageSprintsScreen';
 import { ProjectMembersScreen } from '@/screens/board/ProjectMembersScreen';
 import { TaskDetailScreen } from '@/screens/board/TaskDetailScreen';
 import { ChatThreadScreen } from '@/screens/chat/ChatThreadScreen';
@@ -123,6 +124,7 @@ export function RootNavigator() {
             />
             <Stack.Screen name="ProjectMembers" component={ProjectMembersScreen} />
             <Stack.Screen name="ManageTeams" component={ManageTeamsScreen} />
+            <Stack.Screen name="ManageSprints" component={ManageSprintsScreen} />
 
             <Stack.Screen name="ChatThread" component={ChatThreadScreen} />
             <Stack.Screen name="NewChat" component={NewChatScreen} options={{ animation: 'slide_from_bottom' }} />

@@ -2,6 +2,8 @@ import { loadAvatarMap } from '../auth/avatars.js';
 import type { ProjectDoc } from './models/Project.js';
 import type { TaskDoc } from './models/Task.js';
 import type { TimelineDoc } from './models/TimelineItem.js';
+import type { PhaseDoc } from './models/Phase.js';
+import type { SprintDoc } from './models/Sprint.js';
 
 function iso(d: Date | string | null | undefined): string {
   if (!d) return '';
@@ -86,6 +88,7 @@ export function serializeTask(doc: TaskDoc) {
     endDate: doc.endDate ?? '',
     dueDate: doc.dueDate ?? '',
     teamId: doc.teamId ? String(doc.teamId) : null,
+    sprintId: doc.sprintId ? String(doc.sprintId) : null,
     comments: (doc.comments ?? []).map((c) => ({
       id: c.id,
       authorId: c.authorId ?? '',
@@ -98,6 +101,61 @@ export function serializeTask(doc: TaskDoc) {
     attachments: (doc.attachments ?? []).map(mapAttachment),
     createdAt: iso(doc.createdAt),
     updatedAt: iso(doc.updatedAt),
+  };
+}
+
+export function serializePhase(doc: PhaseDoc | {
+  _id: unknown;
+  projectId: unknown;
+  name: string;
+  order?: number;
+  status?: string;
+  startDate?: string;
+  endDate?: string;
+  startedAt?: Date | string | null;
+  completedAt?: Date | string | null;
+}) {
+  return {
+    id: String(doc._id),
+    projectId: String(doc.projectId),
+    name: doc.name,
+    order: doc.order ?? 0,
+    status: (doc.status ?? 'planned') as 'planned' | 'active' | 'done',
+    startDate: doc.startDate ?? '',
+    endDate: doc.endDate ?? '',
+    startedAt: doc.startedAt ? iso(doc.startedAt) : null,
+    completedAt: doc.completedAt ? iso(doc.completedAt) : null,
+  };
+}
+
+export function serializeSprint(doc: SprintDoc | {
+  _id: unknown;
+  projectId: unknown;
+  phaseId?: unknown;
+  name: string;
+  status?: string;
+  startDate: string;
+  endDate: string;
+  columns?: Array<{ id: string; label: string; accent: string; locked?: boolean }>;
+  startedAt?: Date | string | null;
+  completedAt?: Date | string | null;
+}) {
+  return {
+    id: String(doc._id),
+    projectId: String(doc.projectId),
+    phaseId: doc.phaseId ? String(doc.phaseId) : null,
+    name: doc.name,
+    status: (doc.status ?? 'planned') as 'planned' | 'active' | 'done',
+    startDate: doc.startDate,
+    endDate: doc.endDate,
+    columns: (doc.columns ?? []).map((c) => ({
+      id: c.id,
+      label: c.label,
+      accent: c.accent,
+      locked: Boolean(c.locked),
+    })),
+    startedAt: doc.startedAt ? iso(doc.startedAt) : null,
+    completedAt: doc.completedAt ? iso(doc.completedAt) : null,
   };
 }
 

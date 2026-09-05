@@ -74,6 +74,13 @@ export function setConversationMuted(conversationId: string, muted: boolean) {
   );
 }
 
+export function markConversationRead(conversationId: string) {
+  return apiFetch<{ ok: true }>(`/api/chat/conversations/${conversationId}/read`, {
+    method: 'POST',
+    auth: true,
+  });
+}
+
 export function clearConversationMessages(conversationId: string) {
   return apiFetch<{ conversation: ChatConversation }>(
     `/api/chat/conversations/${conversationId}/clear`,
@@ -93,6 +100,18 @@ export function deleteGroup(conversationId: string) {
     `/api/chat/conversations/${conversationId}/group`,
     { method: 'DELETE', auth: true },
   );
+}
+
+export function respondToCall(input: {
+  callId: string;
+  conversationId: string;
+  action: 'decline';
+}) {
+  return apiFetch<{ ok: boolean; error?: string }>('/api/chat/calls/respond', {
+    method: 'POST',
+    body: input,
+    auth: true,
+  });
 }
 
 export function listMessages(

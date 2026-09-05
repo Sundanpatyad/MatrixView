@@ -16,10 +16,11 @@ export type RootStackParamList = {
   Tabs: NavigatorScreenParams<TabParamList> | undefined;
 
   TaskDetail: { taskId: string };
-  CreateTask: { projectId: string; status?: string };
+  CreateTask: { projectId: string; status?: string; sprintId?: string };
   CreateProject: undefined;
   ProjectMembers: { projectId: string };
   ManageTeams: { projectId: string };
+  ManageSprints: { projectId: string };
 
   ChatThread: { conversationId: string };
   NewChat: undefined;

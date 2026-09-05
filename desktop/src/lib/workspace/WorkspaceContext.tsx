@@ -23,6 +23,13 @@ import {
   deleteProjectRequest,
   deleteTeamRequest,
   deleteTimelineRequest,
+  completeSprintRequest,
+  completePhaseRequest,
+  createPhasesRequest,
+  createSprintRequest,
+  extendSprintRequest,
+  startPhaseRequest,
+  startSprintRequest,
   fetchWorkspace,
   listInvitesRequest,
   acceptInviteRequest,
@@ -59,7 +66,9 @@ import {
   type BoardTask,
   type Project,
   type ProjectMember,
+  type ProjectPhase,
   type ProjectRole,
+  type ProjectSprint,
   type ProjectTeam,
   type TaskPriority,
   type TaskStatus,
@@ -73,6 +82,8 @@ type WorkspaceState = {
   tasks: BoardTask[];
   timeline: TimelineItem[];
   teams: ProjectTeam[];
+  phases: ProjectPhase[];
+  sprints: ProjectSprint[];
 };
 
 type CreateProjectInput = {
@@ -92,6 +103,7 @@ type CreateTaskInput = {
   assigneeId?: string;
   dueDate: string;
   teamId?: string | null;
+  sprintId?: string | null;
 };
 
 type CreateTimelineInput = {
@@ -127,6 +139,8 @@ type WorkspaceContextValue = {
   tasks: BoardTask[];
   timeline: TimelineItem[];
   teams: ProjectTeam[];
+  phases: ProjectPhase[];
+  sprints: ProjectSprint[];
   pendingInvites: PendingInvite[];
   isLoading: boolean;
   /** Currently focused project on dashboard / filters (`all` = every membership). */
@@ -148,14 +162,15 @@ type WorkspaceContextValue = {
   addTaskAttachments: (taskId: string, files: File[]) => Promise<void>;
   removeTaskAttachment: (taskId: string, attachmentId: string) => Promise<void>;
   getTask: (taskId: string) => BoardTask | undefined;
-  addColumn: (projectId: string, label: string) => Promise<BoardColumn | null>;
-  renameColumn: (projectId: string, columnId: string, label: string) => Promise<void>;
+  addColumn: (projectId: string, label: string, sprintId?: string) => Promise<BoardColumn | null>;
+  renameColumn: (projectId: string, columnId: string, label: string, sprintId?: string) => Promise<void>;
   removeColumn: (
     projectId: string,
     columnId: string,
     moveToStatus?: string,
+    sprintId?: string,
   ) => Promise<void>;
-  reorderColumns: (projectId: string, columnIds: string[]) => Promise<void>;
+  reorderColumns: (projectId: string, columnIds: string[], sprintId?: string) => Promise<void>;
   addMember: (
     projectId: string,
     input: { name?: string; email: string; role: ProjectRole },
@@ -190,6 +205,21 @@ type WorkspaceContextValue = {
   removeTeamMember: (teamId: string, memberId: string) => Promise<ProjectTeam>;
   deleteTeam: (teamId: string) => Promise<void>;
   getProjectTeams: (projectId: string) => ProjectTeam[];
+  getProjectPhases: (projectId: string) => ProjectPhase[];
+  getProjectSprints: (projectId: string) => ProjectSprint[];
+  createPhases: (
+    projectId: string,
+    phases: Array<{ name: string; startDate?: string; endDate?: string }>,
+  ) => Promise<void>;
+  startPhase: (projectId: string, phaseId: string) => Promise<void>;
+  completePhase: (projectId: string, phaseId: string) => Promise<void>;
+  createSprint: (
+    projectId: string,
+    input: { name: string; phaseId?: string | null; startDate: string; endDate: string },
+  ) => Promise<ProjectSprint | undefined>;
+  startSprint: (projectId: string, sprintId: string) => Promise<void>;
+  extendSprint: (projectId: string, sprintId: string, endDate: string) => Promise<void>;
+  completeSprint: (projectId: string, sprintId: string) => Promise<void>;
   isProjectAdmin: (projectId: string) => boolean;
 };
 
@@ -242,6 +272,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     tasks: [],
     timeline: [],
     teams: [],
+    phases: [],
+    sprints: [],
   });
   const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -263,6 +295,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       tasks: prev.tasks.filter((t) => t.projectId !== projectId),
       timeline: prev.timeline.filter((t) => t.projectId !== projectId),
       teams: prev.teams.filter((t) => t.projectId !== projectId),
+      phases: prev.phases.filter((p) => p.projectId !== projectId),
+      sprints: prev.sprints.filter((s) => s.projectId !== projectId),
     }));
     setActiveProjectIdState((cur) => {
       const next: ActiveProjectId = cur === projectId ? 'all' : cur;
@@ -277,7 +311,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
   const refresh = useCallback(async () => {
     if (!isAuthenticated) {
-      setState({ projects: [], tasks: [], timeline: [], teams: [] });
+      setState({ projects: [], tasks: [], timeline: [], teams: [], phases: [], sprints: [] });
       setPendingInvites([]);
       return;
     }
@@ -295,6 +329,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           attachments: item.attachments ?? [],
         })),
         teams: data.teams ?? [],
+        phases: data.phases ?? [],
+        sprints: data.sprints ?? [],
       });
       setPendingInvites(inviteData.invites ?? []);
     } finally {
@@ -363,6 +399,20 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           ...prev,
           projects: upsertProject(prev.projects, ensureProjectColumns(payload.project)),
           tasks,
+          phases: payload.phases
+            ? [
+                ...prev.phases.filter((p) => p.projectId !== payload.project.id),
+                ...payload.phases,
+              ].sort((a, b) => a.order - b.order)
+            : prev.phases,
+          sprints: payload.sprint
+            ? prev.sprints.map((s) => (s.id === payload.sprint!.id ? payload.sprint! : s))
+            : payload.sprints
+              ? [
+                  ...prev.sprints.filter((s) => s.projectId !== payload.project.id),
+                  ...payload.sprints,
+                ]
+              : prev.sprints,
         };
       });
     };
@@ -480,6 +530,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       tasks: prev.tasks.filter((t) => t.projectId !== projectId),
       timeline: prev.timeline.filter((t) => t.projectId !== projectId),
       teams: prev.teams.filter((t) => t.projectId !== projectId),
+      phases: prev.phases.filter((p) => p.projectId !== projectId),
+      sprints: prev.sprints.filter((s) => s.projectId !== projectId),
     }));
     setActiveProjectIdState((cur) => {
       const next: ActiveProjectId = cur === projectId ? 'all' : cur;
@@ -573,31 +625,42 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     }));
   }, []);
 
-  const addColumn = useCallback(async (projectId: string, label: string) => {
+  const addColumn = useCallback(async (projectId: string, label: string, sprintId?: string) => {
     const trimmed = label.trim();
     if (!trimmed) return null;
-    const { project, column } = await addColumnRequest(projectId, trimmed);
+    const { project, column, sprint } = await addColumnRequest(projectId, trimmed, sprintId);
     setState((prev) => ({
       ...prev,
       projects: upsertProject(prev.projects, ensureProjectColumns(project)),
+      sprints: sprint
+        ? prev.sprints.map((s) => (s.id === sprint.id ? sprint : s))
+        : prev.sprints,
     }));
     return column;
   }, []);
 
   const renameColumn = useCallback(
-    async (projectId: string, columnId: string, label: string) => {
-      const { project } = await renameColumnRequest(projectId, columnId, label);
+    async (projectId: string, columnId: string, label: string, sprintId?: string) => {
+      const { project, sprint } = await renameColumnRequest(projectId, columnId, label, sprintId);
       setState((prev) => ({
         ...prev,
         projects: upsertProject(prev.projects, ensureProjectColumns(project)),
+        sprints: sprint
+          ? prev.sprints.map((s) => (s.id === sprint.id ? sprint : s))
+          : prev.sprints,
       }));
     },
     [],
   );
 
   const removeColumn = useCallback(
-    async (projectId: string, columnId: string, moveToStatus?: string) => {
-      const { project, tasks } = await removeColumnRequest(projectId, columnId, moveToStatus);
+    async (projectId: string, columnId: string, moveToStatus?: string, sprintId?: string) => {
+      const { project, tasks, sprint } = await removeColumnRequest(
+        projectId,
+        columnId,
+        moveToStatus,
+        sprintId,
+      );
       setState((prev) => ({
         ...prev,
         projects: upsertProject(prev.projects, ensureProjectColumns(project)),
@@ -605,16 +668,22 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           const updated = tasks.find((x) => x.id === t.id);
           return updated ? ensureTaskFields(updated) : t;
         }),
+        sprints: sprint
+          ? prev.sprints.map((s) => (s.id === sprint.id ? sprint : s))
+          : prev.sprints,
       }));
     },
     [],
   );
 
-  const reorderColumns = useCallback(async (projectId: string, columnIds: string[]) => {
-    const { project } = await reorderColumnsRequest(projectId, columnIds);
+  const reorderColumns = useCallback(async (projectId: string, columnIds: string[], sprintId?: string) => {
+    const { project, sprint } = await reorderColumnsRequest(projectId, columnIds, sprintId);
     setState((prev) => ({
       ...prev,
       projects: upsertProject(prev.projects, ensureProjectColumns(project)),
+      sprints: sprint
+        ? prev.sprints.map((s) => (s.id === sprint.id ? sprint : s))
+        : prev.sprints,
     }));
   }, []);
 
@@ -839,12 +908,95 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     }));
   }, []);
 
+  const mergePlan = useCallback(
+    (projectId: string, phases: ProjectPhase[], sprints: ProjectSprint[], project?: Project) => {
+      setState((prev) => ({
+        ...prev,
+        projects: project
+          ? upsertProject(prev.projects, ensureProjectColumns(project))
+          : prev.projects,
+        phases: [...prev.phases.filter((p) => p.projectId !== projectId), ...phases].sort(
+          (a, b) => a.order - b.order,
+        ),
+        sprints: [...prev.sprints.filter((s) => s.projectId !== projectId), ...sprints],
+      }));
+    },
+    [],
+  );
+
+  const createPhases = useCallback(
+    async (
+      projectId: string,
+      phases: Array<{ name: string; startDate?: string; endDate?: string }>,
+    ) => {
+      const res = await createPhasesRequest(projectId, phases);
+      mergePlan(projectId, res.phases, res.sprints, res.project);
+    },
+    [mergePlan],
+  );
+
+  const startPhase = useCallback(
+    async (projectId: string, phaseId: string) => {
+      const res = await startPhaseRequest(projectId, phaseId);
+      mergePlan(projectId, res.phases, res.sprints, res.project);
+    },
+    [mergePlan],
+  );
+
+  const completePhase = useCallback(
+    async (projectId: string, phaseId: string) => {
+      const res = await completePhaseRequest(projectId, phaseId);
+      mergePlan(projectId, res.phases, res.sprints, res.project);
+      await refresh();
+    },
+    [mergePlan, refresh],
+  );
+
+  const createSprint = useCallback(
+    async (
+      projectId: string,
+      input: { name: string; phaseId?: string | null; startDate: string; endDate: string },
+    ) => {
+      const res = await createSprintRequest(projectId, input);
+      mergePlan(projectId, res.phases, res.sprints, res.project);
+      return res.sprint;
+    },
+    [mergePlan],
+  );
+
+  const startSprint = useCallback(
+    async (projectId: string, sprintId: string) => {
+      const res = await startSprintRequest(projectId, sprintId);
+      mergePlan(projectId, res.phases, res.sprints, res.project);
+    },
+    [mergePlan],
+  );
+
+  const extendSprint = useCallback(
+    async (projectId: string, sprintId: string, endDate: string) => {
+      const res = await extendSprintRequest(projectId, sprintId, endDate);
+      mergePlan(projectId, res.phases, res.sprints, res.project);
+    },
+    [mergePlan],
+  );
+
+  const completeSprint = useCallback(
+    async (projectId: string, sprintId: string) => {
+      const res = await completeSprintRequest(projectId, sprintId);
+      mergePlan(projectId, res.phases, res.sprints, res.project);
+      await refresh();
+    },
+    [mergePlan, refresh],
+  );
+
   const value = useMemo<WorkspaceContextValue>(
     () => ({
       projects: state.projects.map(ensureProjectColumns),
       tasks: state.tasks.map(ensureTaskFields),
       timeline: state.timeline,
       teams: state.teams,
+      phases: state.phases,
+      sprints: state.sprints,
       pendingInvites,
       isLoading,
       activeProjectId,
@@ -889,6 +1041,19 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       removeTeamMember,
       deleteTeam,
       getProjectTeams: (projectId) => state.teams.filter((t) => t.projectId === projectId),
+      getProjectPhases: (projectId) =>
+        state.phases.filter((p) => p.projectId === projectId).sort((a, b) => a.order - b.order),
+      getProjectSprints: (projectId) =>
+        state.sprints
+          .filter((s) => s.projectId === projectId)
+          .sort((a, b) => a.startDate.localeCompare(b.startDate)),
+      createPhases,
+      startPhase,
+      completePhase,
+      createSprint,
+      startSprint,
+      extendSprint,
+      completeSprint,
       isProjectAdmin,
     }),
     [
@@ -926,6 +1091,13 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       addTeamMembers,
       removeTeamMember,
       deleteTeam,
+      createPhases,
+      startPhase,
+      completePhase,
+      createSprint,
+      startSprint,
+      extendSprint,
+      completeSprint,
       isProjectAdmin,
     ],
   );

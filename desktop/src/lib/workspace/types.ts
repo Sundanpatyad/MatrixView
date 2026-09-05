@@ -64,6 +64,33 @@ export type Project = {
   members: ProjectMember[];
 };
 
+export type PlanStatus = 'planned' | 'active' | 'done';
+
+export type ProjectPhase = {
+  id: string;
+  projectId: string;
+  name: string;
+  order: number;
+  status: PlanStatus;
+  startDate: string;
+  endDate: string;
+  startedAt: string | null;
+  completedAt: string | null;
+};
+
+export type ProjectSprint = {
+  id: string;
+  projectId: string;
+  phaseId: string | null;
+  name: string;
+  status: PlanStatus;
+  startDate: string;
+  endDate: string;
+  columns: BoardColumn[];
+  startedAt: string | null;
+  completedAt: string | null;
+};
+
 /** Sub-group inside a project — optional filter on tasks, not a permission boundary. */
 export type ProjectTeam = {
   id: string;
@@ -119,6 +146,7 @@ export type BoardTask = {
   dueDate: string;
   /** null = project-global (default when project has no teams) */
   teamId: string | null;
+  sprintId: string | null;
   comments: TaskComment[];
   attachments: TaskAttachment[];
   createdAt: string;
@@ -178,11 +206,12 @@ export function ensureTaskFields(task: BoardTask): BoardTask {
     ...task,
     remainingHours: task.remainingHours ?? Math.max((task.estimateHours ?? 0) - (task.loggedHours ?? 0), 0),
     reporterName: task.reporterName || task.createdByName || 'Unknown',
+    teamId: task.teamId ?? null,
+    sprintId: task.sprintId ?? null,
     labels: task.labels ?? [],
     startDate: task.startDate ?? '',
     endDate: task.endDate ?? '',
     dueDate: task.dueDate ?? '',
-    teamId: task.teamId ?? null,
     attachments: task.attachments ?? [],
     comments: (task.comments ?? []).map((c) => ({
       ...c,

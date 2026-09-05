@@ -1,8 +1,9 @@
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useEffect, useMemo, useState } from 'react';
-import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Platform, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
 import { TaskCard } from '@/components/board/TaskCard';
 import {
@@ -18,12 +19,39 @@ import {
   type SheetOption,
 } from '@/components/ui';
 import { useToast } from '@/context/ToastContext';
+import { useAuth } from '@/context/AuthContext';
 import { useWorkspace } from '@/context/WorkspaceContext';
-import type { BoardTask } from '@/lib/api';
+import type { BoardTask, ProjectPhase, ProjectSprint } from '@/lib/api';
+import { formatDate, toIsoDate } from '@/lib/format';
 import type { RootStackParamList } from '@/navigation/types';
-import { radius, resolveAccentColor, statusAccent, tintColor, useColors } from '@/theme';
+import { radius, resolveAccentColor, statusAccent, tintColor, useColors, useTheme } from '@/theme';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
+
+function addDays(date: Date, days: number) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function sprintsForSwitcher(phases: ProjectPhase[], sprints: ProjectSprint[]) {
+  const ordered: ProjectSprint[] = [];
+  const seen = new Set<string>();
+  for (const sprint of sprints.filter((item) => !item.phaseId)) {
+    ordered.push(sprint);
+    seen.add(sprint.id);
+  }
+  for (const phase of phases) {
+    for (const sprint of sprints.filter((item) => item.phaseId === phase.id)) {
+      ordered.push(sprint);
+      seen.add(sprint.id);
+    }
+  }
+  for (const sprint of sprints) {
+    if (!seen.has(sprint.id)) ordered.push(sprint);
+  }
+  return ordered;
+}
 
 export function BoardScreen() {
   const navigation = useNavigation<Nav>();
@@ -40,8 +68,17 @@ export function BoardScreen() {
     isProjectAdmin,
     moveTask,
     teamsForProject,
+    phasesForProject,
+    sprintsForProject,
     addColumn,
+    startSprint,
+    extendSprint,
+    completeSprint,
+    boardSprintId,
+    setBoardSprintId,
   } = useWorkspace();
+  const { isDark } = useTheme();
+  const { user } = useAuth();
 
   const [projectSheet, setProjectSheet] = useState(false);
   const [moveTarget, setMoveTarget] = useState<BoardTask | null>(null);
@@ -52,6 +89,12 @@ export function BoardScreen() {
   const [teamFilter, setTeamFilter] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const [boardSheet, setBoardSheet] = useState(false);
+  const [moreSheet, setMoreSheet] = useState(false);
+  const [peopleSheet, setPeopleSheet] = useState(false);
+  const [assigneeFilter, setAssigneeFilter] = useState<string[]>([]);
+  const [pickingExtend, setPickingExtend] = useState(false);
+  const [extendDraft, setExtendDraft] = useState(new Date());
 
   // The board always needs a concrete project, unlike the dashboard's "all" view.
   const project = useMemo(() => {
@@ -62,21 +105,41 @@ export function BoardScreen() {
     return projects[0] ?? null;
   }, [activeProjectId, projects]);
 
+  const teams = project ? teamsForProject(project.id) : [];
+  const phases = project ? phasesForProject(project.id) : [];
+  const sprints = project ? sprintsForProject(project.id) : [];
+  const switcherSprints = sprintsForSwitcher(phases, sprints);
+  const activeSprint = boardSprintId ? sprints.find((sprint) => sprint.id === boardSprintId) : undefined;
+  const boardColumns = activeSprint?.columns ?? project?.columns ?? [];
+  const isAdmin = project ? isProjectAdmin(project.id) : false;
+
   useEffect(() => {
     if (!project) return;
     setActiveColumn((current) => {
-      if (current && project.columns.some((column) => column.id === current)) return current;
-      return project.columns[0]?.id ?? null;
+      if (current && boardColumns.some((column) => column.id === current)) return current;
+      return boardColumns[0]?.id ?? null;
     });
     setTeamFilter(null);
-  }, [project]);
+    setAssigneeFilter([]);
+  }, [project, activeSprint?.id]);
 
-  const teams = project ? teamsForProject(project.id) : [];
-  const isAdmin = project ? isProjectAdmin(project.id) : false;
+  useEffect(() => {
+    if (boardSprintId && !sprints.some((sprint) => sprint.id === boardSprintId)) {
+      setBoardSprintId(null);
+    }
+  }, [boardSprintId, sprints, setBoardSprintId]);
 
   const projectTasks = useMemo(
-    () => (project ? tasks.filter((task) => task.projectId === project.id) : []),
-    [project, tasks],
+    () =>
+      project
+        ? tasks.filter((task) => {
+            if (task.projectId !== project.id) return false;
+            const sprintId = task.sprintId ?? null;
+            if (activeSprint) return sprintId === activeSprint.id;
+            return !sprintId;
+          })
+        : [],
+    [project, tasks, activeSprint],
   );
 
   const countsByColumn = useMemo(() => {
@@ -87,9 +150,28 @@ export function BoardScreen() {
 
   const columnTasks = useMemo(() => {
     const term = search.trim().toLowerCase();
+    const members = project?.members ?? [];
     return projectTasks
       .filter((task) => task.status === activeColumn)
       .filter((task) => (teamFilter ? task.teamId === teamFilter : true))
+      .filter((task) => {
+        if (assigneeFilter.length === 0) return true;
+        return assigneeFilter.some((token) => {
+          if (token === 'unassigned') {
+            const name = (task.assigneeName ?? '').trim().toLowerCase();
+            return !task.assigneeId || !name || name === 'unassigned';
+          }
+          if (token === 'me') {
+            return task.assigneeId === user?.id || task.assigneeName === user?.name;
+          }
+          const member = members.find((item) => item.id === token);
+          if (!member) return false;
+          return (
+            task.assigneeId === member.id ||
+            task.assigneeName.trim().toLowerCase() === member.name.trim().toLowerCase()
+          );
+        });
+      })
       .filter((task) =>
         term
           ? task.title.toLowerCase().includes(term) ||
@@ -98,7 +180,7 @@ export function BoardScreen() {
           : true,
       )
       .sort((a, b) => new Date(b.updatedAt ?? 0).getTime() - new Date(a.updatedAt ?? 0).getTime());
-  }, [activeColumn, projectTasks, search, teamFilter]);
+  }, [activeColumn, projectTasks, search, teamFilter, assigneeFilter, project?.members, user]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -122,7 +204,7 @@ export function BoardScreen() {
     if (!project || !newColumn.trim()) return;
     setSavingColumn(true);
     try {
-      await addColumn(project.id, newColumn.trim());
+      await addColumn(project.id, newColumn.trim(), activeSprint?.id);
       setNewColumn('');
       setColumnSheet(false);
       toast.success('Column added');
@@ -144,14 +226,65 @@ export function BoardScreen() {
     [projects],
   );
 
+  const boardOptions = useMemo<SheetOption<string>[]>(
+    () => [
+      { value: 'backlog', label: 'Backlog', description: 'Unscheduled work', icon: 'file-tray-outline' },
+      ...switcherSprints.map((sprint) => {
+        const phase = phases.find((item) => item.id === sprint.phaseId);
+        return {
+          value: sprint.id,
+          label: sprint.name,
+          description: `${phase ? `${phase.name} · ` : 'No phase · '}${sprint.status}`,
+          icon: 'calendar-outline' as const,
+        };
+      }),
+    ],
+    [phases, switcherSprints],
+  );
+
   const moveOptions = useMemo<SheetOption<string>[]>(
     () =>
-      (project?.columns ?? []).map((column) => ({
+      (boardColumns).map((column) => ({
         value: column.id,
         label: column.label,
         color: resolveAccentColor(column.accent || statusAccent[column.id], colors.brand),
       })),
-    [colors.brand, project],
+    [colors.brand, boardColumns],
+  );
+
+  function toggleAssignee(token: string) {
+    if (token === 'everyone') {
+      setAssigneeFilter([]);
+      return;
+    }
+    setAssigneeFilter((prev) =>
+      prev.includes(token) ? prev.filter((item) => item !== token) : [...prev, token],
+    );
+  }
+
+  const peopleLabel = useMemo(() => {
+    if (assigneeFilter.length === 0) return 'Everyone';
+    const members = project?.members ?? [];
+    const names = assigneeFilter.map((token) => {
+      if (token === 'unassigned') return 'Unassigned';
+      if (token === 'me') return 'Me';
+      return members.find((member) => member.id === token)?.name.split(' ')[0] ?? 'Person';
+    });
+    return names.length === 1 ? names[0]! : `${names[0]} +${names.length - 1}`;
+  }, [assigneeFilter, project?.members]);
+
+  const moreOptions = useMemo<SheetOption<string>[]>(
+    () => [
+      { value: 'members', label: 'Members', icon: 'people-outline' },
+      { value: 'teams', label: 'Teams', icon: 'git-branch-outline' },
+      ...(isAdmin
+        ? [
+            { value: 'plan', label: 'Plan sprints', icon: 'calendar-outline' as const },
+            { value: 'activity', label: 'Team activity', icon: 'pulse-outline' as const },
+          ]
+        : []),
+    ],
+    [isAdmin],
   );
 
   if (isLoading && projects.length === 0) {
@@ -181,36 +314,49 @@ export function BoardScreen() {
     <Screen>
       <AppHeader
         title={project.name}
-        subtitle={`${projectTasks.length} tasks · ${project.members.length} members`}
+        subtitle={`${activeSprint ? activeSprint.name : 'Backlog'} · ${projectTasks.length} tasks`}
+        onTitlePress={() => setProjectSheet(true)}
         actions={[
           {
-            icon: 'swap-horizontal-outline',
-            onPress: () => setProjectSheet(true),
-            accessibilityLabel: 'Switch project',
+            icon: 'albums-outline',
+            onPress: () => setBoardSheet(true),
+            accessibilityLabel: 'Switch board',
           },
           {
-            icon: 'people-outline',
-            onPress: () => navigation.navigate('ProjectMembers', { projectId: project.id }),
-            accessibilityLabel: 'Project members',
-          },
-          ...(isAdmin
-            ? [
-                {
-                  icon: 'pulse-outline' as const,
-                  onPress: () => navigation.navigate('TeamActivity', { projectId: project.id }),
-                  accessibilityLabel: 'Team activity',
-                },
-              ]
-            : []),
-          {
-            icon: 'git-branch-outline',
-            onPress: () => navigation.navigate('ManageTeams', { projectId: project.id }),
-            accessibilityLabel: 'Manage teams',
+            icon: 'ellipsis-horizontal',
+            onPress: () => setMoreSheet(true),
+            accessibilityLabel: 'More',
           },
         ]}
       />
 
       <View style={styles.controls}>
+        <View style={styles.filterRow}>
+          <Pressable
+            onPress={() => setPeopleSheet(true)}
+            style={[
+              styles.filterChip,
+              {
+                backgroundColor: assigneeFilter.length ? colors.brandSoft : colors.surfaceAlt,
+                borderColor: assigneeFilter.length ? colors.brandBorder : colors.border,
+              },
+            ]}
+          >
+            <Ionicons
+              name="person-outline"
+              size={14}
+              color={assigneeFilter.length ? colors.brand : colors.textSubtle}
+            />
+            <Text
+              style={[styles.filterChipLabel, { color: assigneeFilter.length ? colors.brand : colors.text }]}
+              numberOfLines={1}
+            >
+              {peopleLabel}
+            </Text>
+            <Ionicons name="chevron-down" size={12} color={colors.textSubtle} />
+          </Pressable>
+        </View>
+
         <Input
           placeholder="Search tasks, keys or people"
           icon="search-outline"
@@ -221,7 +367,7 @@ export function BoardScreen() {
         />
 
         <FlatList
-          data={project.columns}
+          data={boardColumns}
           keyExtractor={(column) => column.id}
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -301,6 +447,52 @@ export function BoardScreen() {
         ) : null}
       </View>
 
+      {activeSprint ? (
+        <View style={[styles.sprintBar, { borderColor: colors.border, backgroundColor: colors.surface }]}>
+          <Text style={[styles.sprintName, { color: colors.text }]} numberOfLines={1}>
+            {activeSprint.name}
+          </Text>
+          <Text style={[styles.sprintMeta, { color: colors.textSubtle }]} numberOfLines={1}>
+            {formatDate(activeSprint.startDate)} – {formatDate(activeSprint.endDate)} · {activeSprint.status}
+          </Text>
+          {isAdmin && activeSprint.status !== 'done' ? (
+            <View style={styles.sprintActions}>
+              {activeSprint.status === 'planned' ? (
+                <Pressable
+                  onPress={() =>
+                    void startSprint(project.id, activeSprint.id).catch((error) =>
+                      toast.fromError(error, 'Could not start the sprint.'),
+                    )
+                  }
+                  style={[styles.sprintLink, { borderColor: colors.border }]}
+                >
+                  <Text style={[styles.sprintLinkText, { color: colors.text }]}>Start</Text>
+                </Pressable>
+              ) : null}
+              <Pressable
+                onPress={() => {
+                  setExtendDraft(addDays(new Date(`${activeSprint.endDate}T12:00:00`), 7));
+                  setPickingExtend(true);
+                }}
+                style={[styles.sprintLink, { borderColor: colors.border }]}
+              >
+                <Text style={[styles.sprintLinkText, { color: colors.text }]}>Extend</Text>
+              </Pressable>
+              <Pressable
+                onPress={() =>
+                  void completeSprint(project.id, activeSprint.id).catch((error) =>
+                    toast.fromError(error, 'Could not complete the sprint.'),
+                  )
+                }
+                style={[styles.sprintLink, { borderColor: colors.border }]}
+              >
+                <Text style={[styles.sprintLinkText, { color: colors.danger }]}>Complete</Text>
+              </Pressable>
+            </View>
+          ) : null}
+        </View>
+      ) : null}
+
       <FlatList
         data={columnTasks}
         keyExtractor={(task) => task.id}
@@ -315,7 +507,11 @@ export function BoardScreen() {
             description="Add a task or move one across from another column."
             actionLabel="Add task"
             onAction={() =>
-              navigation.navigate('CreateTask', { projectId: project.id, status: activeColumn ?? undefined })
+              navigation.navigate('CreateTask', {
+                projectId: project.id,
+                status: activeColumn ?? undefined,
+                sprintId: activeSprint?.id,
+              })
             }
           />
         }
@@ -330,7 +526,11 @@ export function BoardScreen() {
 
       <Pressable
         onPress={() =>
-          navigation.navigate('CreateTask', { projectId: project.id, status: activeColumn ?? undefined })
+          navigation.navigate('CreateTask', {
+            projectId: project.id,
+            status: activeColumn ?? undefined,
+            sprintId: activeSprint?.id,
+          })
         }
         style={({ pressed }) => [
           styles.fab,
@@ -341,6 +541,65 @@ export function BoardScreen() {
       >
         <Ionicons name="add" size={26} color="#ffffff" />
       </Pressable>
+
+      <OptionSheet
+        visible={moreSheet}
+        onClose={() => setMoreSheet(false)}
+        title="More"
+        options={moreOptions}
+        onSelect={(value) => {
+          if (value === 'members') navigation.navigate('ProjectMembers', { projectId: project.id });
+          else if (value === 'teams') navigation.navigate('ManageTeams', { projectId: project.id });
+          else if (value === 'plan') navigation.navigate('ManageSprints', { projectId: project.id });
+          else if (value === 'activity') navigation.navigate('TeamActivity', { projectId: project.id });
+        }}
+      />
+
+      <Sheet visible={peopleSheet} onClose={() => setPeopleSheet(false)} title="Assigned to">
+        {[
+          { value: 'everyone', label: 'Everyone' },
+          { value: 'me', label: 'Assigned to me' },
+          { value: 'unassigned', label: 'Unassigned' },
+          ...(project.members ?? [])
+            .filter((member) => member.status !== 'pending')
+            .map((member) => ({
+              value: member.id,
+              label: member.id === user?.id || member.name === user?.name ? `${member.name} (you)` : member.name,
+            })),
+        ].map((option) => {
+          const checked =
+            option.value === 'everyone' ? assigneeFilter.length === 0 : assigneeFilter.includes(option.value);
+          return (
+            <Pressable
+              key={option.value}
+              onPress={() => toggleAssignee(option.value)}
+              style={[
+                styles.peopleRow,
+                {
+                  backgroundColor: checked ? colors.brandSoft : colors.surfaceAlt,
+                  borderColor: checked ? colors.brandBorder : 'transparent',
+                },
+              ]}
+            >
+              <Ionicons
+                name={checked ? 'checkbox' : 'square-outline'}
+                size={20}
+                color={checked ? colors.brand : colors.textSubtle}
+              />
+              <Text style={[styles.peopleLabel, { color: colors.text }]}>{option.label}</Text>
+            </Pressable>
+          );
+        })}
+      </Sheet>
+
+      <OptionSheet
+        visible={boardSheet}
+        onClose={() => setBoardSheet(false)}
+        title="Board"
+        options={boardOptions}
+        value={boardSprintId ?? 'backlog'}
+        onSelect={(value) => setBoardSprintId(value === 'backlog' ? null : value)}
+      />
 
       <OptionSheet
         visible={projectSheet}
@@ -384,6 +643,51 @@ export function BoardScreen() {
           style={{ marginTop: 16 }}
         />
       </Sheet>
+
+      {pickingExtend && Platform.OS === 'android' ? (
+        <DateTimePicker
+          value={extendDraft}
+          mode="date"
+          display="default"
+          onChange={(event, date) => {
+            setPickingExtend(false);
+            if (event.type === 'set' && date && activeSprint) {
+              void extendSprint(project.id, activeSprint.id, toIsoDate(date)).catch((error) =>
+                toast.fromError(error, 'Could not extend the sprint.'),
+              );
+            }
+          }}
+        />
+      ) : null}
+
+      <Sheet
+        visible={pickingExtend && Platform.OS === 'ios'}
+        onClose={() => setPickingExtend(false)}
+        title="Extend sprint"
+        scrollable={false}
+      >
+        <DateTimePicker
+          value={extendDraft}
+          mode="date"
+          display="spinner"
+          themeVariant={isDark ? 'dark' : 'light'}
+          onChange={(_, date) => {
+            if (date) setExtendDraft(date);
+          }}
+        />
+        <Button
+          label="Save new end date"
+          onPress={() => {
+            if (!activeSprint) return;
+            const sprint = activeSprint;
+            setPickingExtend(false);
+            void extendSprint(project.id, sprint.id, toIsoDate(extendDraft)).catch((error) =>
+              toast.fromError(error, 'Could not extend the sprint.'),
+            );
+          }}
+          fullWidth
+        />
+      </Sheet>
     </Screen>
   );
 }
@@ -393,6 +697,41 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 4,
     gap: 12,
+  },
+  filterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  filterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    height: 32,
+    paddingHorizontal: 10,
+    borderRadius: radius.pill,
+    borderWidth: StyleSheet.hairlineWidth,
+    maxWidth: '72%',
+  },
+  filterChipLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    flexShrink: 1,
+  },
+  peopleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    marginBottom: 8,
+  },
+  peopleLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    flex: 1,
   },
   columnStrip: {
     gap: 6,
@@ -450,16 +789,49 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
   },
+  sprintBar: {
+    marginHorizontal: 16,
+    marginBottom: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.md,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 6,
+  },
+  sprintName: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  sprintMeta: {
+    fontSize: 11,
+  },
+  sprintActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 2,
+  },
+  sprintLink: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: radius.pill,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  sprintLinkText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
   list: {
     padding: 16,
+    paddingTop: 8,
     gap: 10,
   },
   fab: {
     position: 'absolute',
-    right: 18,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    right: 16,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',

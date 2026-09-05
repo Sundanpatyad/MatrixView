@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { requireAuth, type AuthedRequest } from '../auth/middleware.js';
 import { AuthError } from '../auth/errors.js';
 import * as chat from './service.js';
+import { rejectCallByUser } from '../../gateway/socket.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -165,6 +166,15 @@ router.post('/chat/conversations/:id/mute', async (req, res, next) => {
   }
 });
 
+router.post('/chat/conversations/:id/read', async (req, res, next) => {
+  try {
+    await chat.markMessagesRead(actorFrom(req as AuthedRequest), param(req.params.id));
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.post('/chat/conversations/:id/clear', async (req, res, next) => {
   try {
     const data = await chat.clearConversationMessages(
@@ -287,6 +297,22 @@ router.delete('/chat/messages/:id', async (req, res, next) => {
       actorFrom(req as AuthedRequest),
       param(req.params.id),
     );
+    res.json(data);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/chat/calls/respond', async (req, res, next) => {
+  try {
+    const body = z
+      .object({
+        callId: z.string().min(1),
+        conversationId: z.string().min(1),
+        action: z.enum(['decline']),
+      })
+      .parse(req.body);
+    const data = await rejectCallByUser((req as AuthedRequest).auth!.sub, body);
     res.json(data);
   } catch (err) {
     next(err);

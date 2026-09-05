@@ -4,7 +4,9 @@ import type {
   BoardTask,
   PickedFile,
   Project,
+  ProjectPhase,
   ProjectRole,
+  ProjectSprint,
   ProjectTeam,
   TaskPriority,
   TaskType,
@@ -16,6 +18,8 @@ export interface WorkspaceSnapshot {
   tasks: BoardTask[];
   timeline: TimelineItem[];
   teams: ProjectTeam[];
+  phases: ProjectPhase[];
+  sprints: ProjectSprint[];
 }
 
 async function appendFiles(form: FormData, files: PickedFile[]) {
@@ -79,33 +83,39 @@ export function removeMemberRequest(projectId: string, memberId: string) {
   );
 }
 
-export function addColumnRequest(projectId: string, label: string) {
-  return apiFetch<{ project: Project }>(`/api/projects/${projectId}/columns`, {
+export function addColumnRequest(projectId: string, label: string, sprintId?: string) {
+  return apiFetch<{ project: Project; sprint?: ProjectSprint }>(`/api/projects/${projectId}/columns`, {
     method: 'POST',
-    body: { label },
+    body: { label, sprintId },
     auth: true,
   });
 }
 
-export function renameColumnRequest(projectId: string, columnId: string, label: string) {
-  return apiFetch<{ project: Project }>(`/api/projects/${projectId}/columns/${columnId}`, {
-    method: 'PATCH',
-    body: { label },
-    auth: true,
-  });
+export function renameColumnRequest(projectId: string, columnId: string, label: string, sprintId?: string) {
+  return apiFetch<{ project: Project; sprint?: ProjectSprint }>(
+    `/api/projects/${projectId}/columns/${columnId}`,
+    {
+      method: 'PATCH',
+      body: { label, sprintId },
+      auth: true,
+    },
+  );
 }
 
-export function reorderColumnsRequest(projectId: string, columnIds: string[]) {
-  return apiFetch<{ project: Project }>(`/api/projects/${projectId}/columns`, {
+export function reorderColumnsRequest(projectId: string, columnIds: string[], sprintId?: string) {
+  return apiFetch<{ project: Project; sprint?: ProjectSprint }>(`/api/projects/${projectId}/columns`, {
     method: 'PUT',
-    body: { columnIds },
+    body: { columnIds, sprintId },
     auth: true,
   });
 }
 
-export function removeColumnRequest(projectId: string, columnId: string, moveTo?: string) {
-  const query = moveTo ? `?moveTo=${encodeURIComponent(moveTo)}` : '';
-  return apiFetch<{ project: Project; tasks: BoardTask[] }>(
+export function removeColumnRequest(projectId: string, columnId: string, moveTo?: string, sprintId?: string) {
+  const params = new URLSearchParams();
+  if (moveTo) params.set('moveTo', moveTo);
+  if (sprintId) params.set('sprintId', sprintId);
+  const query = params.toString() ? `?${params}` : '';
+  return apiFetch<{ project: Project; tasks: BoardTask[]; sprint?: ProjectSprint }>(
     `/api/projects/${projectId}/columns/${columnId}${query}`,
     { method: 'DELETE', auth: true },
   );
@@ -121,6 +131,7 @@ export interface CreateTaskInput {
   assigneeId?: string;
   dueDate?: string;
   teamId?: string | null;
+  sprintId?: string | null;
 }
 
 export function createTaskRequest(projectId: string, input: CreateTaskInput) {
@@ -280,3 +291,72 @@ export function declineInviteRequest(inviteId: string) {
     auth: true,
   });
 }
+
+export type PlanPayload = {
+  project: Project;
+  phases: ProjectPhase[];
+  sprints: ProjectSprint[];
+};
+
+export function createPhasesRequest(
+  projectId: string,
+  phases: Array<{ name: string; startDate?: string; endDate?: string }>,
+) {
+  return apiFetch<PlanPayload>(`/api/projects/${projectId}/phases`, {
+    method: 'POST',
+    body: { phases },
+    auth: true,
+  });
+}
+
+export function startPhaseRequest(projectId: string, phaseId: string) {
+  return apiFetch<PlanPayload>(`/api/projects/${projectId}/phases/${phaseId}/start`, {
+    method: 'POST',
+    body: {},
+    auth: true,
+  });
+}
+
+export function completePhaseRequest(projectId: string, phaseId: string) {
+  return apiFetch<PlanPayload>(`/api/projects/${projectId}/phases/${phaseId}/complete`, {
+    method: 'POST',
+    body: {},
+    auth: true,
+  });
+}
+
+export function createSprintRequest(
+  projectId: string,
+  input: { name: string; phaseId?: string | null; startDate: string; endDate: string },
+) {
+  return apiFetch<PlanPayload & { sprint: ProjectSprint }>(`/api/projects/${projectId}/sprints`, {
+    method: 'POST',
+    body: input,
+    auth: true,
+  });
+}
+
+export function startSprintRequest(projectId: string, sprintId: string) {
+  return apiFetch<PlanPayload>(`/api/projects/${projectId}/sprints/${sprintId}/start`, {
+    method: 'POST',
+    body: {},
+    auth: true,
+  });
+}
+
+export function extendSprintRequest(projectId: string, sprintId: string, endDate: string) {
+  return apiFetch<PlanPayload>(`/api/projects/${projectId}/sprints/${sprintId}/extend`, {
+    method: 'POST',
+    body: { endDate },
+    auth: true,
+  });
+}
+
+export function completeSprintRequest(projectId: string, sprintId: string) {
+  return apiFetch<PlanPayload>(`/api/projects/${projectId}/sprints/${sprintId}/complete`, {
+    method: 'POST',
+    body: {},
+    auth: true,
+  });
+}
+

@@ -120,6 +120,14 @@ fn write_response(stream: &mut std::net::TcpStream, ok: bool) {
   let _ = stream.flush();
 }
 
+fn is_callback_request(first_line: &str) -> bool {
+  let upper = first_line.to_ascii_uppercase();
+  if upper.starts_with("OPTIONS ") || upper.starts_with("HEAD ") {
+    return false;
+  }
+  first_line.contains("code=") || first_line.contains("error=")
+}
+
 fn wait_for_callback(listener: TcpListener, timeout_ms: u64) -> Result<LoopbackResult, String> {
   let deadline = Instant::now() + Duration::from_millis(timeout_ms.max(5_000));
   loop {
@@ -135,6 +143,12 @@ fn wait_for_callback(listener: TcpListener, timeout_ms: u64) -> Result<LoopbackR
         let n = stream.read(&mut buf).unwrap_or(0);
         let req = String::from_utf8_lossy(&buf[..n]);
         let first_line = req.lines().next().unwrap_or("");
+        // Chrome may probe 127.0.0.1 (OPTIONS / empty connect / favicon) before
+        // the real OAuth redirect. Keep listening until we see code or error.
+        if !is_callback_request(first_line) {
+          write_response(&mut stream, true);
+          continue;
+        }
         let (code, error) = parse_query(first_line);
         let ok = code.is_some() && error.is_none();
         write_response(&mut stream, ok);

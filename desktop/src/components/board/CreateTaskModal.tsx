@@ -19,6 +19,7 @@ type Props = {
   onClose: () => void;
   defaultAssignee?: { id: string; name: string };
   defaultTeamId?: string | null;
+  sprintId?: string | null;
 };
 
 export function CreateTaskModal({
@@ -26,6 +27,7 @@ export function CreateTaskModal({
   onClose,
   defaultAssignee,
   defaultTeamId = null,
+  sprintId = null,
 }: Props) {
   const { user } = useAuth();
   const { createTask, getProject, getProjectTeams } = useWorkspace();
@@ -69,6 +71,7 @@ export function CreateTaskModal({
         assigneeId: member?.id ?? '',
         dueDate,
         teamId: teams.length > 0 ? teamId || null : null,
+        sprintId,
       });
       onClose();
     } finally {

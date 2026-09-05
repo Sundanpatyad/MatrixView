@@ -8,6 +8,7 @@ import { ActivitySession } from '../modules/activity/models/ActivitySession.js';
 import { Conversation } from '../modules/chat/models/Conversation.js';
 import { Project } from '../modules/workspace/models/Project.js';
 import * as chat from '../modules/chat/service.js';
+import { sendCallPushToUser, type CallPushInput } from '../modules/notifications/fcm.js';
 import { verifyAccessToken, type AccessTokenPayload } from '../utils/tokens.js';
 import {
   emitPresenceUpdate,
@@ -58,8 +59,42 @@ const groupRooms = new Map<string, GroupRoom>();
 /** userId → conversationId of group call they're in (joined) */
 const userGroupCall = new Map<string, string>();
 
+const RING_TIMEOUT_MS = 45_000;
+const ringTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
+
 function isUserBusy(uid: string) {
   return userCalls.has(uid) || userGroupCall.has(uid);
+}
+
+function clearRingTimeout(callId: string) {
+  const timer = ringTimeouts.get(callId);
+  if (timer) clearTimeout(timer);
+  ringTimeouts.delete(callId);
+}
+
+function callPushInfo(input: {
+  callId: string;
+  conversationId: string;
+  fromUserId: string;
+  fromName: string;
+  mediaKind: 'audio' | 'video';
+  isGroup: boolean;
+  conversationName?: string;
+}): CallPushInput {
+  return {
+    kind: 'incoming',
+    callId: input.callId,
+    conversationId: input.conversationId,
+    fromUserId: input.fromUserId,
+    fromName: input.fromName,
+    mediaKind: input.mediaKind,
+    isGroup: input.isGroup,
+    conversationName: input.conversationName,
+  };
+}
+
+function pushCall(userId: string, kind: CallPushInput['kind'], info: Omit<CallPushInput, 'kind'>) {
+  void sendCallPushToUser(userId, { ...info, kind });
 }
 
 function roomSnapshot(room: GroupRoom) {
@@ -112,9 +147,23 @@ async function endGroupRoom(room: GroupRoom, conversationId: string) {
     });
   }
   room.participants.clear();
+  const ringingIds = [...room.ringing];
   room.ringing.clear();
   groupRooms.delete(conversationId);
   const durationSeconds = Math.max(1, Math.round((Date.now() - room.startedAt) / 1000));
+  const caller = await User.findById(room.initiatedBy).select('name').lean();
+  const info = {
+    callId: room.callId,
+    conversationId,
+    fromUserId: room.initiatedBy,
+    fromName: caller?.name ?? 'Someone',
+    mediaKind: room.mediaKind,
+    isGroup: true as const,
+    conversationName: undefined as string | undefined,
+  };
+  for (const uid of ringingIds) {
+    pushCall(uid, room.hadPeer ? 'ended' : 'missed', info);
+  }
   try {
     await chat.recordCallHistory({
       conversationId,
@@ -207,6 +256,7 @@ function clearCall(userId: string, callId?: string) {
   const cur = userCalls.get(userId);
   if (!cur) return;
   if (callId && cur.callId !== callId) return;
+  clearRingTimeout(cur.callId);
   userCalls.delete(userId);
   const peer = userCalls.get(cur.peerId);
   if (peer && peer.callId === cur.callId) userCalls.delete(cur.peerId);
@@ -252,6 +302,82 @@ async function finalizeCall(
   }
 
   return meta;
+}
+
+function armDmRingTimeout(
+  callId: string,
+  calleeId: string,
+  info: Omit<CallPushInput, 'kind'>,
+) {
+  clearRingTimeout(callId);
+  ringTimeouts.set(
+    callId,
+    setTimeout(() => {
+      void (async () => {
+        ringTimeouts.delete(callId);
+        const cur = userCalls.get(calleeId);
+        if (!cur || cur.callId !== callId || cur.acceptedAt) return;
+        emitToUser(cur.initiatedBy, 'call:ended', {
+          callId,
+          conversationId: cur.conversationId,
+          fromUserId: calleeId,
+          reason: 'missed',
+        });
+        emitToUser(calleeId, 'call:ended', {
+          callId,
+          conversationId: cur.conversationId,
+          fromUserId: cur.initiatedBy,
+          reason: 'missed',
+        });
+        pushCall(calleeId, 'missed', info);
+        await finalizeCall(calleeId, callId, 'disconnected');
+      })();
+    }, RING_TIMEOUT_MS),
+  );
+}
+
+export async function rejectCallByUser(
+  userId: string,
+  payload: { callId: string; conversationId?: string },
+): Promise<{ ok: boolean; error?: string }> {
+  const callId = payload.callId;
+  const conversationId = payload.conversationId;
+
+  if (conversationId && groupRooms.has(conversationId)) {
+    const room = groupRooms.get(conversationId)!;
+    if (room.callId === callId) {
+      room.ringing.delete(userId);
+      pushCall(userId, 'ended', {
+        callId: room.callId,
+        conversationId,
+        fromUserId: room.initiatedBy,
+        fromName: '',
+        mediaKind: room.mediaKind,
+        isGroup: true,
+      });
+    }
+    return { ok: true };
+  }
+
+  const cur = userCalls.get(userId);
+  if (cur && cur.callId === callId) {
+    emitToUser(cur.peerId, 'call:ended', {
+      callId,
+      conversationId: cur.conversationId,
+      fromUserId: userId,
+      reason: 'rejected',
+    });
+    pushCall(userId, 'ended', {
+      callId,
+      conversationId: cur.conversationId,
+      fromUserId: cur.peerId,
+      fromName: '',
+      mediaKind: cur.mediaKind,
+      isGroup: false,
+    });
+    await finalizeCall(userId, callId, 'rejected');
+  }
+  return { ok: true };
 }
 
 async function authenticateSocket(socket: Socket): Promise<SocketAuth> {
@@ -550,7 +676,7 @@ export function initSocket(httpServer: HttpServer) {
             userGroupCall.set(userId, room.conversationId);
 
             for (const memberId of room.ringing) {
-              emitToUser(memberId, 'call:incoming', {
+              const incoming = {
                 callId,
                 conversationId: room.conversationId,
                 fromUserId: userId,
@@ -558,7 +684,9 @@ export function initSocket(httpServer: HttpServer) {
                 mediaKind,
                 isGroup: true,
                 conversationName: conversation.name || 'Group',
-              });
+              };
+              emitToUser(memberId, 'call:incoming', incoming);
+              pushCall(memberId, 'incoming', callPushInfo(incoming));
             }
             emitGroupRoom(room.conversationId, room);
             ack?.({ ok: true, isGroup: true, peers: [] });
@@ -599,6 +727,16 @@ export function initSocket(httpServer: HttpServer) {
             mediaKind,
             isGroup: false,
           });
+          const incoming = callPushInfo({
+            callId,
+            conversationId: dm.conversationId,
+            fromUserId: userId,
+            fromName,
+            mediaKind,
+            isGroup: false,
+          });
+          pushCall(dm.peerId, 'incoming', incoming);
+          armDmRingTimeout(callId, dm.peerId, incoming);
           ack?.({ ok: true, peerId: dm.peerId, isGroup: false });
         } catch (err) {
           ack?.({ ok: false, error: err instanceof Error ? err.message : 'Failed' });
@@ -654,6 +792,14 @@ export function initSocket(httpServer: HttpServer) {
           room.ringing.delete(userId);
           if (userId !== room.initiatedBy) room.hadPeer = true;
           userGroupCall.set(userId, conversationId);
+          pushCall(userId, 'ended', {
+            callId: room.callId,
+            conversationId,
+            fromUserId: room.initiatedBy,
+            fromName: '',
+            mediaKind: room.mediaKind,
+            isGroup: true,
+          });
 
           for (const peerId of room.participants.keys()) {
             if (peerId === userId) continue;
@@ -724,6 +870,14 @@ export function initSocket(httpServer: HttpServer) {
             room.ringing.delete(userId);
             room.hadPeer = true;
             userGroupCall.set(userId, conversationId);
+            pushCall(userId, 'ended', {
+              callId: room.callId,
+              conversationId,
+              fromUserId: room.initiatedBy,
+              fromName: '',
+              mediaKind: room.mediaKind,
+              isGroup: true,
+            });
             for (const peerId of room.participants.keys()) {
               if (peerId === userId) continue;
               emitToUser(peerId, 'call:peer-joined', {
@@ -748,6 +902,15 @@ export function initSocket(httpServer: HttpServer) {
           cur.acceptedAt = acceptedAt;
           const peer = userCalls.get(cur.peerId);
           if (peer && peer.callId === callId) peer.acceptedAt = acceptedAt;
+          clearRingTimeout(callId);
+          pushCall(userId, 'ended', {
+            callId,
+            conversationId: cur.conversationId,
+            fromUserId: cur.peerId,
+            fromName: '',
+            mediaKind: cur.mediaKind,
+            isGroup: false,
+          });
           emitToUser(cur.peerId, 'call:accepted', {
             callId,
             conversationId: cur.conversationId,
@@ -760,32 +923,19 @@ export function initSocket(httpServer: HttpServer) {
       },
     );
 
-    socket.on(
+        socket.on(
       'call:reject',
       async (payload: { callId?: string; conversationId?: string }, ack?) => {
         const callId = payload?.callId;
-        const conversationId = payload?.conversationId;
-
-        if (conversationId && groupRooms.has(conversationId)) {
-          const room = groupRooms.get(conversationId)!;
-          if (!callId || room.callId === callId) {
-            room.ringing.delete(userId);
-          }
+        if (!callId) {
           ack?.({ ok: true });
           return;
         }
-
-        const cur = callId ? userCalls.get(userId) : undefined;
-        if (callId && cur && cur.callId === callId) {
-          emitToUser(cur.peerId, 'call:ended', {
-            callId,
-            conversationId: cur.conversationId,
-            fromUserId: userId,
-            reason: 'rejected',
-          });
-          await finalizeCall(userId, callId, 'rejected');
-        }
-        ack?.({ ok: true });
+        const result = await rejectCallByUser(userId, {
+          callId,
+          conversationId: payload?.conversationId,
+        });
+        ack?.(result);
       },
     );
 
@@ -806,11 +956,23 @@ export function initSocket(httpServer: HttpServer) {
 
         const cur = callId ? userCalls.get(userId) : undefined;
         if (callId && cur && cur.callId === callId) {
+          const stillRinging = !cur.acceptedAt;
+          const callerHungUp = stillRinging && userId === cur.initiatedBy;
+          const calleeId = userId === cur.initiatedBy ? cur.peerId : userId;
+          const caller = await User.findById(cur.initiatedBy).select('name').lean();
           emitToUser(cur.peerId, 'call:ended', {
             callId,
             conversationId: cur.conversationId,
             fromUserId: userId,
             reason: payload?.reason ?? 'hangup',
+          });
+          pushCall(calleeId, callerHungUp ? 'missed' : 'ended', {
+            callId,
+            conversationId: cur.conversationId,
+            fromUserId: cur.initiatedBy,
+            fromName: caller?.name ?? 'Someone',
+            mediaKind: cur.mediaKind,
+            isGroup: false,
           });
           await finalizeCall(userId, callId, 'hangup');
         }
@@ -1034,23 +1196,43 @@ export function initSocket(httpServer: HttpServer) {
     );
 
     socket.on('disconnect', async () => {
-      const active = userCalls.get(userId);
-      if (active) {
-        emitToUser(active.peerId, 'call:ended', {
-          callId: active.callId,
-          conversationId: active.conversationId,
-          fromUserId: userId,
-          reason: 'disconnected',
-        });
-        await finalizeCall(userId, active.callId, 'disconnected');
-      }
-      if (userGroupCall.has(userId)) {
-        await leaveGroupCall(userId, undefined, 'disconnected');
-      }
-
       const next = (onlineCounts.get(userId) ?? 1) - 1;
       if (next <= 0) onlineCounts.delete(userId);
       else onlineCounts.set(userId, next);
+
+      const active = userCalls.get(userId);
+      if (active && next <= 0) {
+        if (active.acceptedAt) {
+          emitToUser(active.peerId, 'call:ended', {
+            callId: active.callId,
+            conversationId: active.conversationId,
+            fromUserId: userId,
+            reason: 'disconnected',
+          });
+          await finalizeCall(userId, active.callId, 'disconnected');
+        } else if (userId === active.initiatedBy) {
+          const caller = await User.findById(userId).select('name').lean();
+          emitToUser(active.peerId, 'call:ended', {
+            callId: active.callId,
+            conversationId: active.conversationId,
+            fromUserId: userId,
+            reason: 'hangup',
+          });
+          pushCall(active.peerId, 'missed', {
+            callId: active.callId,
+            conversationId: active.conversationId,
+            fromUserId: userId,
+            fromName: caller?.name ?? 'Someone',
+            mediaKind: active.mediaKind,
+            isGroup: false,
+          });
+          await finalizeCall(userId, active.callId, 'hangup');
+        }
+        // Callee went offline while ringing: keep the call so FCM accept/decline still works.
+      }
+      if (userGroupCall.has(userId) && next <= 0) {
+        await leaveGroupCall(userId, undefined, 'disconnected');
+      }
 
       if (next <= 0) {
         const stillCheckedIn = await ActivitySession.exists({

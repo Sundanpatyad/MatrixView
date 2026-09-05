@@ -60,6 +60,33 @@ export interface Project {
   members: ProjectMember[];
 }
 
+export type PlanStatus = 'planned' | 'active' | 'done';
+
+export interface ProjectPhase {
+  id: string;
+  projectId: string;
+  name: string;
+  order: number;
+  status: PlanStatus;
+  startDate: string;
+  endDate: string;
+  startedAt: string | null;
+  completedAt: string | null;
+}
+
+export interface ProjectSprint {
+  id: string;
+  projectId: string;
+  phaseId: string | null;
+  name: string;
+  status: PlanStatus;
+  startDate: string;
+  endDate: string;
+  columns: BoardColumn[];
+  startedAt: string | null;
+  completedAt: string | null;
+}
+
 export interface ProjectTeam {
   id: string;
   projectId: string;
@@ -112,6 +139,7 @@ export interface BoardTask {
   endDate: string;
   dueDate: string;
   teamId: string | null;
+  sprintId: string | null;
   comments: TaskComment[];
   attachments: TaskAttachment[];
   createdAt: string;

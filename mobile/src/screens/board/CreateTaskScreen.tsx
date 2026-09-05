@@ -63,7 +63,7 @@ function validateDueDate(date: Date | null): string | null {
 }
 
 export function CreateTaskScreen({ route, navigation }: Props) {
-  const { projectId, status } = route.params;
+  const { projectId, status, sprintId } = route.params;
   const { isDark } = useTheme();
   const toast = useToast();
   const { getProject, createTask, updateTask, teamsForProject } = useWorkspace();
@@ -185,6 +185,7 @@ export function CreateTaskScreen({ route, navigation }: Props) {
         estimateHours: estimateHours ?? undefined,
         dueDate: dueDate ? toIsoDate(dueDate) : undefined,
         teamId: teamId ?? undefined,
+        sprintId: sprintId ?? undefined,
       });
 
       // The API always drops new tasks in the first column, so honour the

@@ -38,6 +38,9 @@ export interface BoardColumnsEvent {
   project: Project;
   actorId: string;
   tasks?: BoardTask[];
+  sprint?: import('../api/types').ProjectSprint;
+  phases?: import('../api/types').ProjectPhase[];
+  sprints?: import('../api/types').ProjectSprint[];
 }
 
 export interface BoardTeamEvent {
@@ -398,6 +401,29 @@ export function isSocketConnected(): boolean {
 export function ensureSocketConnected() {
   if (!socket) return;
   if (!socket.connected) socket.connect();
+}
+
+export function waitUntilSocketConnected(timeoutMs = 8000): Promise<boolean> {
+  if (socket?.connected) return Promise.resolve(true);
+  ensureSocketConnected();
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (ok: boolean) => {
+      if (settled) return;
+      settled = true;
+      clearInterval(poll);
+      clearTimeout(timer);
+      socket?.off('connect', onConnect);
+      resolve(ok);
+    };
+    const onConnect = () => finish(true);
+    socket?.once('connect', onConnect);
+    const poll = setInterval(() => {
+      if (socket?.connected) finish(true);
+      else ensureSocketConnected();
+    }, 250);
+    const timer = setTimeout(() => finish(Boolean(socket?.connected)), timeoutMs);
+  });
 }
 
 function emit(event: string, payload?: unknown) {

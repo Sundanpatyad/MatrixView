@@ -29,3 +29,4 @@ xcap = "0.4"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 tauri-plugin-opener = "2.5.4"
 tauri-plugin-deep-link = "2.4.9"
+tauri-plugin-notification = "2"

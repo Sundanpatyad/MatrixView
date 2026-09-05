@@ -9,13 +9,24 @@ import React, {
 } from 'react';
 import { Vibration } from 'react-native';
 
+import { chatApi } from '@/lib/api';
 import {
   callSocket,
   clearSocketHandlerKeys,
+  ensureSocketConnected,
+  isSocketConnected,
   patchSocketHandlers,
+  waitUntilSocketConnected,
+  type CallIncomingPayload,
   type CallMediaKind,
   type CallRoom,
 } from '@/lib/socket/socket';
+import {
+  dismissIncomingCallNotification,
+  presentIncomingCallNotification,
+  subscribeCallDismiss,
+  subscribeIncomingCall,
+} from '@/lib/push/incomingCall';
 import {
   CallSession,
   idleCallState,
@@ -110,10 +121,47 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
 
   const endCall = useCallback(
     (error: string | null = null) => {
+      const callId = stateRef.current.callId;
       stopRinging();
+      if (callId) void dismissIncomingCallNotification(callId);
       session.end(error);
     },
     [session, stopRinging],
+  );
+
+  const acceptRef = useRef<() => Promise<void>>(async () => undefined);
+
+  const applyIncoming = useCallback(
+    (payload: CallIncomingPayload, autoAccept = false) => {
+      const current = stateRef.current;
+      if (current.callId === payload.callId && current.phase !== 'idle') {
+        if (autoAccept && current.phase === 'incoming') void acceptRef.current();
+        return;
+      }
+      if (current.phase !== 'idle') {
+        void chatApi
+          .respondToCall({
+            callId: payload.callId,
+            conversationId: payload.conversationId,
+            action: 'decline',
+          })
+          .catch(() => undefined);
+        callSocket.reject({ callId: payload.callId, conversationId: payload.conversationId });
+        return;
+      }
+
+      session.ringIncoming({
+        callId: payload.callId,
+        conversationId: payload.conversationId,
+        isGroup: Boolean(payload.isGroup),
+        mediaKind: payload.mediaKind ?? 'audio',
+        title: payload.isGroup ? (payload.conversationName ?? 'Group call') : payload.fromName,
+        peerUserId: payload.fromUserId,
+      });
+      void presentIncomingCallNotification(payload);
+      if (autoAccept) void acceptRef.current();
+    },
+    [session],
   );
 
   // Ring only while an incoming call is pending.
@@ -142,24 +190,26 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   }, [isAuthenticated, endCall]);
 
   useEffect(() => {
+    return subscribeIncomingCall((event) => {
+      applyIncoming(event.payload, Boolean(event.autoAccept));
+    });
+  }, [applyIncoming]);
+
+  useEffect(() => {
+    return subscribeCallDismiss((callId) => {
+      if (stateRef.current.callId !== callId) return;
+      if (stateRef.current.phase === 'idle') return;
+      stopRinging();
+      session.end();
+    });
+  }, [session, stopRinging]);
+
+  useEffect(() => {
     if (!isAuthenticated) return undefined;
 
     patchSocketHandlers({
       onCallIncoming: (payload) => {
-        const busy = stateRef.current.phase !== 'idle';
-        if (busy || !callingSupported) {
-          callSocket.reject({ callId: payload.callId, conversationId: payload.conversationId });
-          return;
-        }
-
-        session.ringIncoming({
-          callId: payload.callId,
-          conversationId: payload.conversationId,
-          isGroup: Boolean(payload.isGroup),
-          mediaKind: payload.mediaKind ?? 'audio',
-          title: payload.isGroup ? (payload.conversationName ?? 'Group call') : payload.fromName,
-          peerUserId: payload.fromUserId,
-        });
+        applyIncoming(payload);
       },
 
       // DM only: the callee picked up, so the caller drives the offer.
@@ -235,7 +285,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
         'onCallRoom',
         'onCallScreen',
       ]);
-  }, [isAuthenticated, callingSupported, session, endCall]);
+  }, [isAuthenticated, callingSupported, session, endCall, applyIncoming]);
 
   const startCall = useCallback(
     async (input: StartCallInput) => {
@@ -315,6 +365,14 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     if (current.phase !== 'incoming' || !current.callId || !current.conversationId) return;
 
     stopRinging();
+    void dismissIncomingCallNotification(current.callId);
+
+    if (!callingSupported) {
+      toast.error(CALLING_UNSUPPORTED_MESSAGE);
+      callSocket.reject({ callId: current.callId, conversationId: current.conversationId });
+      endCall();
+      return;
+    }
 
     try {
       await session.acceptIncoming();
@@ -322,6 +380,15 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       callSocket.reject({ callId: current.callId, conversationId: current.conversationId });
       endCall(error instanceof Error ? error.message : 'Could not access your microphone.');
       return;
+    }
+
+    if (!isSocketConnected()) {
+      ensureSocketConnected();
+      const ready = await waitUntilSocketConnected();
+      if (!ready) {
+        endCall('Could not reconnect to the call.');
+        return;
+      }
     }
 
     const ack = await callSocket.accept({
@@ -340,11 +407,20 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
         .forEach((peer) => session.addExpectedPeer(peer.userId, peer.name));
       session.markConnectedIfAlone();
     }
-  }, [endCall, session, stopRinging, user?.id]);
+  }, [callingSupported, endCall, session, stopRinging, toast, user?.id]);
+
+  acceptRef.current = acceptCall;
 
   const rejectCall = useCallback(() => {
     const current = stateRef.current;
     if (!current.callId || !current.conversationId) return;
+    void chatApi
+      .respondToCall({
+        callId: current.callId,
+        conversationId: current.conversationId,
+        action: 'decline',
+      })
+      .catch(() => undefined);
     callSocket.reject({ callId: current.callId, conversationId: current.conversationId });
     endCall();
   }, [endCall]);

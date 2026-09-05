@@ -5,27 +5,87 @@ import { AppState, Platform } from 'react-native';
 
 import { useAuth } from '@/context/AuthContext';
 import { registerDeviceToken, unregisterDeviceToken } from '@/lib/push/api';
-import { dataFromNotificationPayload, navigateToNotification } from '@/navigation/navigationRef';
+import {
+  handleNotificationAction,
+  navigateFromNotificationResponse,
+  payloadFromNotification,
+} from '@/lib/push/actions';
+import { registerNotificationCategories } from '@/lib/push/categories';
+import {
+  deliverCallDismiss,
+  deliverIncomingCall,
+  incomingFromPushData,
+} from '@/lib/push/incomingCall';
+import { ensureIncomingCallChannel } from '@/lib/push/callRingtone';
+import { navigateToNotification } from '@/navigation/navigationRef';
+
+function dataType(data: Record<string, unknown>) {
+  const value = data.type;
+  return typeof value === 'string' ? value : '';
+}
+
+function dataCallId(data: Record<string, unknown>) {
+  const value = data.callId;
+  return typeof value === 'string' ? value.trim() : '';
+}
 
 Notifications.setNotificationHandler({
-  handleNotification: async () => {
+  handleNotification: async (notification) => {
+    const data = payloadFromNotification(notification);
+    const isIncomingCall = dataType(data) === 'call.incoming';
     const inForeground = AppState.currentState === 'active';
     return {
       shouldShowAlert: !inForeground,
-      shouldPlaySound: !inForeground,
+      shouldPlaySound: isIncomingCall || !inForeground,
       shouldSetBadge: true,
       shouldShowBanner: !inForeground,
-      shouldShowList: true,
+      shouldShowList: !isIncomingCall || !inForeground,
     };
   },
 });
 
 let handledLaunchResponse = false;
 
-function readData(response: Notifications.NotificationResponse | null) {
-  const data = response?.notification.request.content.data;
-  if (!data || typeof data !== 'object') return undefined;
-  return data as Record<string, unknown>;
+async function onNotificationResponse(response: Notifications.NotificationResponse) {
+  const data = payloadFromNotification(response.notification);
+  const incoming = incomingFromPushData(data);
+  const isDefault =
+    !response.actionIdentifier ||
+    response.actionIdentifier === Notifications.DEFAULT_ACTION_IDENTIFIER;
+  if (incoming && dataType(data) === 'call.incoming' && isDefault) {
+    deliverIncomingCall({ payload: incoming });
+  }
+
+  const result = await handleNotificationAction(response);
+  if (result.handled) {
+    if (result.navigate) navigateToNotification(result.navigate);
+    return;
+  }
+  navigateFromNotificationResponse(response);
+}
+
+function onNotificationReceived(notification: Notifications.Notification) {
+  const data = payloadFromNotification(notification);
+  const type = dataType(data);
+  const callId = dataCallId(data);
+  if ((type === 'call.ended' || type === 'call.missed') && callId) {
+    deliverCallDismiss(callId);
+    return;
+  }
+  if (type !== 'call.incoming') return;
+  const incoming = incomingFromPushData(data);
+  if (incoming) deliverIncomingCall({ payload: incoming });
+}
+
+async function ensureCallChannel() {
+  if (Platform.OS !== 'android') return;
+  ensureIncomingCallChannel();
+  await Notifications.setNotificationChannelAsync('default', {
+    name: 'Default',
+    importance: Notifications.AndroidImportance.HIGH,
+    vibrationPattern: [0, 250, 250, 250],
+    lightColor: '#3B82F6',
+  });
 }
 
 export function PushTokenRegistrar() {
@@ -33,10 +93,37 @@ export function PushTokenRegistrar() {
   const tokenRef = useRef<string | null>(null);
 
   useEffect(() => {
+    void registerNotificationCategories().catch((err) => {
+      console.warn('[push] failed to register categories', err);
+    });
+    void ensureCallChannel().catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const subscriptions = [
+      Notifications.addNotificationResponseReceivedListener(onNotificationResponse),
+      Notifications.addNotificationReceivedListener(onNotificationReceived),
+    ];
+
+    if (!handledLaunchResponse) {
+      handledLaunchResponse = true;
+      void Notifications.getLastNotificationResponseAsync().then((response) => {
+        if (!response) return;
+        void onNotificationResponse(response);
+      });
+    }
+
+    return () => {
+      subscriptions.forEach((sub) => sub.remove());
+    };
+  }, [isAuthenticated]);
+
+  useEffect(() => {
     if (Platform.OS !== 'android' || !isAuthenticated) return;
 
     let cancelled = false;
-    const subscriptions: { remove: () => void }[] = [];
 
     async function sendToken(token: string) {
       if (!token || cancelled) return;
@@ -53,12 +140,8 @@ export function PushTokenRegistrar() {
         const permission = await Notifications.requestPermissionsAsync();
         if (!permission.granted) return;
 
-        await Notifications.setNotificationChannelAsync('default', {
-          name: 'Default',
-          importance: Notifications.AndroidImportance.HIGH,
-          vibrationPattern: [0, 250, 250, 250],
-          lightColor: '#3B82F6',
-        });
+        await ensureCallChannel();
+        await registerNotificationCategories();
 
         const devicePush = await Notifications.getDevicePushTokenAsync();
         const token = typeof devicePush.data === 'string' ? devicePush.data : '';
@@ -70,30 +153,14 @@ export function PushTokenRegistrar() {
 
     void register();
 
-    subscriptions.push(
-      Notifications.addPushTokenListener((devicePush) => {
-        const token = typeof devicePush.data === 'string' ? devicePush.data : '';
-        void sendToken(token).catch((err) => console.warn('[push] token refresh failed', err));
-      }),
-    );
-
-    subscriptions.push(
-      Notifications.addNotificationResponseReceivedListener((response) => {
-        navigateToNotification(dataFromNotificationPayload(readData(response)));
-      }),
-    );
-
-    if (!handledLaunchResponse) {
-      handledLaunchResponse = true;
-      void Notifications.getLastNotificationResponseAsync().then((response) => {
-        if (!response) return;
-        navigateToNotification(dataFromNotificationPayload(readData(response)));
-      });
-    }
+    const tokenSub = Notifications.addPushTokenListener((devicePush) => {
+      const token = typeof devicePush.data === 'string' ? devicePush.data : '';
+      void sendToken(token).catch((err) => console.warn('[push] token refresh failed', err));
+    });
 
     return () => {
       cancelled = true;
-      subscriptions.forEach((sub) => sub.remove());
+      tokenSub.remove();
     };
   }, [isAuthenticated]);
 

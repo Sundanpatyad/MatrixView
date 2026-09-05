@@ -82,6 +82,7 @@
           "defaultChannel": "default"
         }
       ],
+      "expo-task-manager",
       [
         "expo-splash-screen",
         {

@@ -36,6 +36,7 @@ import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { UserAvatar } from '@/components/ui/UserAvatar';
 import { Input } from '@/components/ui/Input';
 import { useAuth } from '@/lib/auth/AuthContext';
+import { setDesktopPushContext } from '@/lib/notifications/desktopPush';
 import { cn } from '@/lib/cn';
 import { MessagePreviewLabel } from '@/lib/messagePreview';
 import { resolveMediaUrl } from '@/lib/mediaUrl';
@@ -1450,6 +1451,11 @@ export function ChatPage() {
     setActiveId(focusConversationId);
     clearFocusConversationId();
   }, [focusConversationId, clearFocusConversationId]);
+
+  useEffect(() => {
+    setDesktopPushContext({ conversationId: activeId });
+    return () => setDesktopPushContext({ conversationId: null });
+  }, [activeId]);
 
   useEffect(() => {
     if (!deepLinkConversationId) return;

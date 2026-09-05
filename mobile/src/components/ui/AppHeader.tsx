@@ -45,6 +45,7 @@ interface AppHeaderProps {
   left?: React.ReactNode;
   center?: React.ReactNode;
   border?: boolean;
+  onTitlePress?: () => void;
   /**
    * Pins the header above the screen. The screen is then responsible for
    * padding its content by `useFloatingHeaderHeight()`.
@@ -65,6 +66,7 @@ export function AppHeader({
   left,
   center,
   floating = false,
+  onTitlePress,
 }: AppHeaderProps) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -147,16 +149,27 @@ export function AppHeader({
         {left}
 
         {center ?? (
-          <View style={styles.titles} pointerEvents="none">
-            <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>
-              {title}
-            </Text>
+          <Pressable
+            onPress={onTitlePress}
+            disabled={!onTitlePress}
+            style={styles.titles}
+            accessibilityRole={onTitlePress ? 'button' : undefined}
+            accessibilityLabel={onTitlePress ? 'Switch project' : undefined}
+          >
+            <View style={styles.titleRow}>
+              <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>
+                {title}
+              </Text>
+              {onTitlePress ? (
+                <Ionicons name="chevron-down" size={16} color={colors.textSubtle} />
+              ) : null}
+            </View>
             {subtitle ? (
               <Text style={[styles.subtitle, { color: colors.textSubtle }]} numberOfLines={1}>
                 {subtitle}
               </Text>
             ) : null}
-          </View>
+          </Pressable>
         )}
 
         {actionControls}
@@ -184,7 +197,14 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    minWidth: 0,
+  },
   title: {
+    flexShrink: 1,
     fontSize: 20,
     fontWeight: '600',
     letterSpacing: 0.15,
@@ -196,8 +216,9 @@ const styles = StyleSheet.create({
   actions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginLeft: 'auto',
+    gap: 6,
+    marginLeft: 8,
+    flexShrink: 0,
   },
   plainBtn: {
     width: 40,

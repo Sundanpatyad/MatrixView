@@ -19,6 +19,11 @@ import {
 } from '@/lib/api/notifications';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { patchChatSocketHandlers } from '@/lib/socket/chatSocket';
+import {
+  DESKTOP_OPEN_HREF_EVENT,
+  ensureDesktopNotificationPermission,
+  showDesktopPush,
+} from '@/lib/notifications/desktopPush';
 
 type NotificationContextValue = {
   items: AppNotification[];
@@ -96,12 +101,33 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!isAuthenticated) return;
+    void ensureDesktopNotificationPermission();
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    const onOpen = (event: Event) => {
+      const href = (event as CustomEvent<{ href?: string }>).detail?.href?.trim();
+      if (!href) return;
+      navigate(href);
+    };
+    window.addEventListener(DESKTOP_OPEN_HREF_EVENT, onOpen);
+    return () => window.removeEventListener(DESKTOP_OPEN_HREF_EVENT, onOpen);
+  }, [navigate]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
     patchChatSocketHandlers({
       onNotificationNew: (notification) => {
         setItems((prev) => upsertFront(prev, notification));
         if (notification.type === 'project.invited') {
           window.dispatchEvent(new Event('dockx:pending-invites'));
         }
+        void showDesktopPush({
+          title: notification.title,
+          body: notification.body,
+          href: notification.href,
+          tag: notification.conversationId || notification.taskId || notification.id,
+        });
       },
       onNotificationUnreadCount: (count) => {
         setUnreadCount(count);

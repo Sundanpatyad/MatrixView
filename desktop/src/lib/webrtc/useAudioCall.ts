@@ -37,6 +37,7 @@ import {
   type GroupCallState,
   type GroupPeerInfo,
 } from '@/lib/webrtc/groupCall';
+import { showDesktopPush } from '@/lib/notifications/desktopPush';
 import type { CaptureTarget } from '@/lib/webrtc/screenShare';
 
 export type CallLayoutMode = 'auto' | 'grid' | 'spotlight' | 'sidebar';
@@ -625,25 +626,38 @@ export function useAudioCall(meId: string) {
               callId: payload.callId,
               conversationId: payload.conversationId,
             });
+            return;
           }
-          return;
-        }
-        scopeRef.current = 'dm';
-        const ok = getDm().ringIncoming({
-          meId,
-          callId: payload.callId,
-          conversationId: payload.conversationId,
-          peerUserId: payload.fromUserId,
-          peerName: payload.fromName,
-          mediaKind: payload.mediaKind === 'video' ? 'video' : 'audio',
-        });
-        if (!ok) {
-          scopeRef.current = null;
-          emitCallReject({
+        } else {
+          scopeRef.current = 'dm';
+          const ok = getDm().ringIncoming({
+            meId,
             callId: payload.callId,
             conversationId: payload.conversationId,
+            peerUserId: payload.fromUserId,
+            peerName: payload.fromName,
+            mediaKind: payload.mediaKind === 'video' ? 'video' : 'audio',
           });
+          if (!ok) {
+            scopeRef.current = null;
+            emitCallReject({
+              callId: payload.callId,
+              conversationId: payload.conversationId,
+            });
+            return;
+          }
         }
+        const kind = payload.mediaKind === 'video' ? 'Video' : 'Voice';
+        void showDesktopPush({
+          title: payload.isGroup
+            ? `${kind} call`
+            : `${kind} call from ${payload.fromName}`,
+          body: payload.isGroup
+            ? `${payload.fromName} is calling ${payload.conversationName ?? 'the group'}`
+            : 'Incoming call',
+          href: `/chat?c=${encodeURIComponent(payload.conversationId)}`,
+          tag: `call:${payload.callId}`,
+        });
       },
       onCallAccepted: (payload: CallAcceptedPayload) => {
         if (scopeRef.current !== 'dm') return;

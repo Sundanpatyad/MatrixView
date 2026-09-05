@@ -296,11 +296,15 @@ router.delete('/teams/:teamId', async (req, res, next) => {
 
 router.post('/projects/:projectId/columns', async (req, res, next) => {
   try {
-    const body = z.object({ label: z.string().min(1).max(80) }).parse(req.body);
+    const body = z.object({
+      label: z.string().min(1).max(80),
+      sprintId: z.string().min(1).optional(),
+    }).parse(req.body);
     const result = await workspace.addColumn(
       await actorFrom(req as AuthedRequest),
       param(req.params.projectId),
       body.label,
+      body.sprintId,
     );
     res.status(201).json(result);
   } catch (err) {
@@ -310,14 +314,18 @@ router.post('/projects/:projectId/columns', async (req, res, next) => {
 
 router.patch('/projects/:projectId/columns/:columnId', async (req, res, next) => {
   try {
-    const body = z.object({ label: z.string().min(1).max(80) }).parse(req.body);
-    const project = await workspace.renameColumn(
+    const body = z.object({
+      label: z.string().min(1).max(80),
+      sprintId: z.string().min(1).optional(),
+    }).parse(req.body);
+    const result = await workspace.renameColumn(
       await actorFrom(req as AuthedRequest),
       param(req.params.projectId),
       param(req.params.columnId),
       body.label,
+      body.sprintId,
     );
-    res.json({ project });
+    res.json(result);
   } catch (err) {
     next(err);
   }
@@ -325,13 +333,17 @@ router.patch('/projects/:projectId/columns/:columnId', async (req, res, next) =>
 
 router.put('/projects/:projectId/columns', async (req, res, next) => {
   try {
-    const body = z.object({ columnIds: z.array(z.string().min(1)).min(1) }).parse(req.body);
-    const project = await workspace.reorderColumns(
+    const body = z.object({
+      columnIds: z.array(z.string().min(1)).min(1),
+      sprintId: z.string().min(1).optional(),
+    }).parse(req.body);
+    const result = await workspace.reorderColumns(
       await actorFrom(req as AuthedRequest),
       param(req.params.projectId),
       body.columnIds,
+      body.sprintId,
     );
-    res.json({ project });
+    res.json(result);
   } catch (err) {
     next(err);
   }
@@ -341,11 +353,131 @@ router.delete('/projects/:projectId/columns/:columnId', async (req, res, next) =
   try {
     const moveToStatus =
       typeof req.query.moveTo === 'string' ? req.query.moveTo : undefined;
+    const sprintId =
+      typeof req.query.sprintId === 'string' ? req.query.sprintId : undefined;
     const result = await workspace.removeColumn(
       await actorFrom(req as AuthedRequest),
       param(req.params.projectId),
       param(req.params.columnId),
       moveToStatus,
+      sprintId,
+    );
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+const isoDay = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Must be YYYY-MM-DD');
+
+router.post('/projects/:projectId/phases', async (req, res, next) => {
+  try {
+    const body = z
+      .object({
+        phases: z
+          .array(
+            z.object({
+              name: z.string().min(1).max(120),
+              startDate: z.union([isoDay, z.literal('')]).optional(),
+              endDate: z.union([isoDay, z.literal('')]).optional(),
+            }),
+          )
+          .min(1)
+          .max(20),
+      })
+      .parse(req.body);
+    const result = await workspace.createPhases(
+      await actorFrom(req as AuthedRequest),
+      param(req.params.projectId),
+      body,
+    );
+    res.status(201).json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/projects/:projectId/phases/:phaseId/start', async (req, res, next) => {
+  try {
+    const result = await workspace.startPhase(
+      await actorFrom(req as AuthedRequest),
+      param(req.params.projectId),
+      param(req.params.phaseId),
+    );
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/projects/:projectId/phases/:phaseId/complete', async (req, res, next) => {
+  try {
+    const result = await workspace.completePhase(
+      await actorFrom(req as AuthedRequest),
+      param(req.params.projectId),
+      param(req.params.phaseId),
+    );
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/projects/:projectId/sprints', async (req, res, next) => {
+  try {
+    const body = z
+      .object({
+        name: z.string().min(1).max(120),
+        phaseId: z.string().min(1).nullable().optional(),
+        startDate: isoDay,
+        endDate: isoDay,
+      })
+      .parse(req.body);
+    const result = await workspace.createSprint(
+      await actorFrom(req as AuthedRequest),
+      param(req.params.projectId),
+      body,
+    );
+    res.status(201).json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/projects/:projectId/sprints/:sprintId/start', async (req, res, next) => {
+  try {
+    const result = await workspace.startSprint(
+      await actorFrom(req as AuthedRequest),
+      param(req.params.projectId),
+      param(req.params.sprintId),
+    );
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/projects/:projectId/sprints/:sprintId/extend', async (req, res, next) => {
+  try {
+    const body = z.object({ endDate: isoDay }).parse(req.body);
+    const result = await workspace.extendSprint(
+      await actorFrom(req as AuthedRequest),
+      param(req.params.projectId),
+      param(req.params.sprintId),
+      body.endDate,
+    );
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/projects/:projectId/sprints/:sprintId/complete', async (req, res, next) => {
+  try {
+    const result = await workspace.completeSprint(
+      await actorFrom(req as AuthedRequest),
+      param(req.params.projectId),
+      param(req.params.sprintId),
     );
     res.json(result);
   } catch (err) {
@@ -380,6 +512,7 @@ router.post('/projects/:projectId/tasks', async (req, res, next) => {
         assigneeId: z.string().max(64).optional(),
         dueDate: z.string().max(40).optional(),
         teamId: z.string().max(64).nullable().optional(),
+        sprintId: z.string().max(64).nullable().optional(),
       })
       .parse(req.body);
     const task = await workspace.createTask(
@@ -412,6 +545,7 @@ router.patch('/tasks/:taskId', async (req, res, next) => {
         endDate: z.string().max(40).optional(),
         dueDate: z.string().max(40).optional(),
         teamId: z.string().max(64).nullable().optional(),
+        sprintId: z.string().max(64).nullable().optional(),
       })
       .parse(req.body);
     const task = await workspace.updateTask(

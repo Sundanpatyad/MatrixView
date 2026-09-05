@@ -10,6 +10,8 @@ import { sendInviteEmail } from '../../utils/mail.js';
 import { COLUMN_ACCENTS, DEFAULT_BOARD_COLUMNS } from './constants.js';
 import { Project, type ProjectDoc } from './models/Project.js';
 import { ProjectInvite } from './models/ProjectInvite.js';
+import { Phase } from './models/Phase.js';
+import { Sprint, type SprintDoc } from './models/Sprint.js';
 import { Task, type TaskDoc } from './models/Task.js';
 import { Team } from './models/Team.js';
 import { TimelineItem } from './models/TimelineItem.js';
@@ -20,6 +22,8 @@ import {
   presentTasks,
   serializeTeam,
   serializeTimeline,
+  serializePhase,
+  serializeSprint,
 } from './serialize.js';
 import { broadcastProjectEvent } from './boardRealtime.js';
 import { emitToUser, leaveProjectRoomForUser } from '../../gateway/io.js';
@@ -77,6 +81,117 @@ function requireAdmin(project: ProjectDoc, email: string) {
   return member;
 }
 
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+function requireIsoDay(value: string, label: string) {
+  const trimmed = value.trim();
+  if (!ISO_DAY.test(trimmed)) {
+    throw new AuthError(`${label} must be YYYY-MM-DD`, 400);
+  }
+  return trimmed;
+}
+
+function optionalIsoDay(value?: string | null) {
+  if (!value) return '';
+  return requireIsoDay(value, 'Date');
+}
+
+type BoardColumnLike = { id: string; label: string; accent: string; locked?: boolean };
+
+function isDoneColumn(col: { id: string; label: string }) {
+  return col.id === 'done' || col.label.trim().toLowerCase() === 'done';
+}
+
+function doneColumnIds(columns: BoardColumnLike[]) {
+  const ids = columns.filter(isDoneColumn).map((c) => c.id);
+  if (ids.length === 0 && columns.length > 0) ids.push(columns[columns.length - 1]!.id);
+  return new Set(ids);
+}
+
+function firstColumnId(columns: BoardColumnLike[]) {
+  return columns[0]?.id ?? 'todo';
+}
+
+function cloneColumns(columns: BoardColumnLike[]): BoardColumnLike[] {
+  const source = columns.length ? columns : DEFAULT_BOARD_COLUMNS;
+  return source.map((c) => ({
+    id: c.id,
+    label: c.label,
+    accent: c.accent,
+    locked: Boolean(c.locked),
+  }));
+}
+
+async function loadPlan(projectId: Types.ObjectId | string) {
+  const [phases, sprints] = await Promise.all([
+    Phase.find({ projectId }).sort({ order: 1, createdAt: 1 }),
+    Sprint.find({ projectId }).sort({ startDate: 1, createdAt: 1 }),
+  ]);
+  return {
+    phases: phases.map(serializePhase),
+    sprints: sprints.map(serializeSprint),
+  };
+}
+
+async function broadcastPlan(project: ProjectDoc, actorId: string) {
+  const plan = await loadPlan(project._id);
+  const presented = await presentProject(project);
+  await broadcastProjectEvent(project, 'project:updated', {
+    project: presented,
+    ...plan,
+    actorId,
+  });
+  return { project: presented, ...plan };
+}
+
+async function getSprintInProject(project: ProjectDoc, sprintId: string) {
+  if (!Types.ObjectId.isValid(sprintId)) {
+    throw new AuthError('Sprint not found', 404, 'NOT_FOUND');
+  }
+  const sprint = await Sprint.findOne({ _id: sprintId, projectId: project._id });
+  if (!sprint) throw new AuthError('Sprint not found', 404, 'NOT_FOUND');
+  return sprint;
+}
+
+async function getPhaseInProject(project: ProjectDoc, phaseId: string) {
+  if (!Types.ObjectId.isValid(phaseId)) {
+    throw new AuthError('Phase not found', 404, 'NOT_FOUND');
+  }
+  const phase = await Phase.findOne({ _id: phaseId, projectId: project._id });
+  if (!phase) throw new AuthError('Phase not found', 404, 'NOT_FOUND');
+  return phase;
+}
+
+function remapStatusToBacklog(status: string, project: ProjectDoc, fromColumns: BoardColumnLike[]) {
+  const backlog = (project.columns ?? []) as BoardColumnLike[];
+  const backlogIds = new Set(backlog.map((c) => c.id));
+  if (backlogIds.has(status)) return status;
+  const fromDone = doneColumnIds(fromColumns);
+  if (fromDone.has(status)) {
+    return [...doneColumnIds(backlog)][0] ?? firstColumnId(backlog);
+  }
+  return firstColumnId(backlog);
+}
+
+async function completeSprintDoc(project: ProjectDoc, sprint: SprintDoc) {
+  if (sprint.status === 'done') return [] as TaskDoc[];
+  const fromColumns = (sprint.columns ?? []) as BoardColumnLike[];
+  const doneIds = doneColumnIds(fromColumns);
+  const tasks = await Task.find({ projectId: project._id, sprintId: sprint._id });
+  const moved: TaskDoc[] = [];
+  for (const task of tasks) {
+    if (doneIds.has(task.status)) continue;
+    task.sprintId = null;
+    task.status = remapStatusToBacklog(task.status, project, fromColumns);
+    await task.save();
+    moved.push(task);
+  }
+  sprint.status = 'done';
+  sprint.completedAt = new Date();
+  await sprint.save();
+  return moved;
+}
+
 /** Projects the user belongs to — pending invites are not visible here. */
 export async function getWorkspace(actor: Actor) {
   const email = actor.email.toLowerCase();
@@ -104,12 +219,22 @@ export async function getWorkspace(actor: Actor) {
     visibleIds.length === 0
       ? []
       : await Team.find({ projectId: { $in: visibleIds } }).sort({ name: 1 });
+  const phases =
+    visibleIds.length === 0
+      ? []
+      : await Phase.find({ projectId: { $in: visibleIds } }).sort({ order: 1, createdAt: 1 });
+  const sprints =
+    visibleIds.length === 0
+      ? []
+      : await Sprint.find({ projectId: { $in: visibleIds } }).sort({ startDate: 1, createdAt: 1 });
 
   return {
     projects: await presentProjects(visible),
     tasks: await presentTasks(tasks),
     timeline: timeline.map(serializeTimeline),
     teams: teams.map(serializeTeam),
+    phases: phases.map(serializePhase),
+    sprints: sprints.map(serializeSprint),
   };
 }
 
@@ -230,6 +355,8 @@ export async function deleteProject(actor: Actor, projectId: string) {
   await TimelineItem.deleteMany({ projectId: pid });
   await ProjectInvite.deleteMany({ projectId: pid });
   await Team.deleteMany({ projectId: pid });
+  await Phase.deleteMany({ projectId: pid });
+  await Sprint.deleteMany({ projectId: pid });
   await project.deleteOne();
   await deleteStoredMediaMany(mediaRefs);
 
@@ -713,12 +840,31 @@ export async function removeMember(actor: Actor, projectId: string, memberId: st
   return { project: presented, tasks: presentedTasks, timeline: presentedTimeline };
 }
 
-export async function addColumn(actor: Actor, projectId: string, label: string) {
+export async function addColumn(actor: Actor, projectId: string, label: string, sprintId?: string) {
   const project = await getAccessibleProject(projectId, actor);
   requireMembership(project, actor.email);
 
   const trimmed = label.trim();
   if (!trimmed) throw new AuthError('Column label required', 400);
+
+  if (sprintId) {
+    const sprint = await getSprintInProject(project, sprintId);
+    const column = {
+      id: newId('col'),
+      label: trimmed,
+      accent: COLUMN_ACCENTS[sprint.columns.length % COLUMN_ACCENTS.length],
+      locked: false,
+    };
+    sprint.columns.push(column);
+    await sprint.save();
+    const presented = await presentProject(project);
+    await broadcastProjectEvent(project, 'project:columns', {
+      project: presented,
+      sprint: serializeSprint(sprint),
+      actorId: actor.sub,
+    });
+    return { project: presented, sprint: serializeSprint(sprint), column };
+  }
 
   const column = {
     id: newId('col'),
@@ -741,11 +887,27 @@ export async function renameColumn(
   projectId: string,
   columnId: string,
   label: string,
+  sprintId?: string,
 ) {
   const project = await getAccessibleProject(projectId, actor);
   requireMembership(project, actor.email);
   const trimmed = label.trim();
   if (!trimmed) throw new AuthError('Column label required', 400);
+
+  if (sprintId) {
+    const sprint = await getSprintInProject(project, sprintId);
+    const col = sprint.columns.find((c) => c.id === columnId);
+    if (!col) throw new AuthError('Column not found', 404, 'NOT_FOUND');
+    col.label = trimmed;
+    await sprint.save();
+    const presented = await presentProject(project);
+    await broadcastProjectEvent(project, 'project:columns', {
+      project: presented,
+      sprint: serializeSprint(sprint),
+      actorId: actor.sub,
+    });
+    return { project: presented, sprint: serializeSprint(sprint) };
+  }
 
   const col = project.columns.find((c) => c.id === columnId);
   if (!col) throw new AuthError('Column not found', 404, 'NOT_FOUND');
@@ -756,7 +918,7 @@ export async function renameColumn(
     project: presented,
     actorId: actor.sub,
   });
-  return presented;
+  return { project: presented };
 }
 
 export async function removeColumn(
@@ -764,9 +926,43 @@ export async function removeColumn(
   projectId: string,
   columnId: string,
   moveToStatus?: string,
+  sprintId?: string,
 ) {
   const project = await getAccessibleProject(projectId, actor);
   requireMembership(project, actor.email);
+
+  if (sprintId) {
+    const sprint = await getSprintInProject(project, sprintId);
+    const col = sprint.columns.find((c) => c.id === columnId);
+    if (!col) throw new AuthError('Column not found', 404, 'NOT_FOUND');
+    if (sprint.columns.length <= 1) {
+      throw new AuthError('Cannot remove the last column', 400);
+    }
+    const fallback =
+      moveToStatus ||
+      sprint.columns.find((c) => c.id !== columnId)?.id ||
+      'todo';
+    sprint.columns = sprint.columns.filter((c) => c.id !== columnId) as typeof sprint.columns;
+    await sprint.save();
+    await Task.updateMany(
+      { projectId: project._id, sprintId: sprint._id, status: columnId },
+      { $set: { status: fallback } },
+    );
+    const tasks = await Task.find({ projectId: project._id });
+    const presentedProject = await presentProject(project);
+    const presentedTasks = await presentTasks(tasks);
+    await broadcastProjectEvent(project, 'project:columns', {
+      project: presentedProject,
+      sprint: serializeSprint(sprint),
+      tasks: presentedTasks,
+      actorId: actor.sub,
+    });
+    return {
+      project: presentedProject,
+      sprint: serializeSprint(sprint),
+      tasks: presentedTasks,
+    };
+  }
 
   const col = project.columns.find((c) => c.id === columnId);
   if (!col) throw new AuthError('Column not found', 404, 'NOT_FOUND');
@@ -783,7 +979,7 @@ export async function removeColumn(
   await project.save();
 
   await Task.updateMany(
-    { projectId: project._id, status: columnId },
+    { projectId: project._id, sprintId: null, status: columnId },
     { $set: { status: fallback } },
   );
 
@@ -805,9 +1001,32 @@ export async function reorderColumns(
   actor: Actor,
   projectId: string,
   columnIds: string[],
+  sprintId?: string,
 ) {
   const project = await getAccessibleProject(projectId, actor);
   requireMembership(project, actor.email);
+
+  if (sprintId) {
+    const sprint = await getSprintInProject(project, sprintId);
+    const currentIds = sprint.columns.map((c) => c.id);
+    if (
+      columnIds.length !== currentIds.length ||
+      new Set(columnIds).size !== columnIds.length ||
+      !columnIds.every((id) => currentIds.includes(id))
+    ) {
+      throw new AuthError('Column order must include every column exactly once', 400);
+    }
+    const byId = new Map(sprint.columns.map((c) => [c.id, c]));
+    sprint.columns = columnIds.map((id) => byId.get(id)!) as typeof sprint.columns;
+    await sprint.save();
+    const presented = await presentProject(project);
+    await broadcastProjectEvent(project, 'project:columns', {
+      project: presented,
+      sprint: serializeSprint(sprint),
+      actorId: actor.sub,
+    });
+    return { project: presented, sprint: serializeSprint(sprint) };
+  }
 
   const currentIds = project.columns.map((c) => c.id);
   if (
@@ -826,7 +1045,7 @@ export async function reorderColumns(
     project: presented,
     actorId: actor.sub,
   });
-  return presented;
+  return { project: presented };
 }
 
 export async function createTask(
@@ -842,13 +1061,20 @@ export async function createTask(
     assigneeId?: string;
     dueDate?: string;
     teamId?: string | null;
+    sprintId?: string | null;
   },
 ) {
   const project = await getAccessibleProject(projectId, actor);
   requireMembership(project, actor.email);
 
   const displayName = await actorName(actor);
-  const firstCol = project.columns[0]?.id ?? 'todo';
+  let firstCol = project.columns[0]?.id ?? 'todo';
+  let sprintOid: Types.ObjectId | null = null;
+  if (input.sprintId) {
+    const sprint = await getSprintInProject(project, input.sprintId);
+    sprintOid = sprint._id;
+    firstCol = sprint.columns[0]?.id ?? firstCol;
+  }
   project.taskSeq = (project.taskSeq ?? 0) + 1;
   await project.save();
 
@@ -892,6 +1118,7 @@ export async function createTask(
     endDate: '',
     dueDate: input.dueDate ?? '',
     teamId: teamOid,
+    sprintId: sprintOid,
     comments: [],
     attachments: [],
   });
@@ -960,6 +1187,16 @@ export async function updateTask(
     if (patch[key] !== undefined) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (task as any)[key] = patch[key];
+    }
+  }
+
+  if (patch.sprintId !== undefined) {
+    const raw = patch.sprintId;
+    if (raw === null || raw === '') {
+      task.sprintId = null;
+    } else if (typeof raw === 'string') {
+      const sprint = await getSprintInProject(project, raw);
+      task.sprintId = sprint._id;
     }
   }
 
@@ -1541,6 +1778,223 @@ function eligibleTeamMemberIds(
     out.push(id);
   }
   return out;
+}
+
+export async function createPhases(
+  actor: Actor,
+  projectId: string,
+  input: { phases: Array<{ name: string; startDate?: string; endDate?: string }> },
+) {
+  const project = await getAccessibleProject(projectId, actor);
+  requireAdmin(project, actor.email);
+
+  const rows = input.phases
+    .map((p) => ({
+      name: p.name.trim(),
+      startDate: optionalIsoDay(p.startDate),
+      endDate: optionalIsoDay(p.endDate),
+    }))
+    .filter((p) => p.name);
+  if (rows.length === 0) throw new AuthError('At least one phase name is required', 400);
+
+  for (const row of rows) {
+    if (row.startDate && row.endDate && row.endDate < row.startDate) {
+      throw new AuthError('Phase end date must be on or after the start date', 400);
+    }
+  }
+
+  const last = await Phase.findOne({ projectId: project._id }).sort({ order: -1 }).select('order').lean();
+  let order = (last?.order ?? -1) + 1;
+  const created = await Phase.insertMany(
+    rows.map((row) => ({
+      orgId: project.orgId,
+      projectId: project._id,
+      name: row.name,
+      order: order++,
+      status: 'planned' as const,
+      startDate: row.startDate,
+      endDate: row.endDate,
+    })),
+  );
+
+  const plan = await broadcastPlan(project, actor.sub);
+  return { ...plan, created: created.map(serializePhase) };
+}
+
+export async function startPhase(actor: Actor, projectId: string, phaseId: string) {
+  const project = await getAccessibleProject(projectId, actor);
+  requireAdmin(project, actor.email);
+  const phase = await getPhaseInProject(project, phaseId);
+  if (phase.status === 'done') {
+    throw new AuthError('This phase is already complete', 400);
+  }
+  if (phase.status !== 'active') {
+    const otherActive = await Phase.findOne({
+      projectId: project._id,
+      status: 'active',
+      _id: { $ne: phase._id },
+    });
+    if (otherActive) {
+      throw new AuthError('Another phase is already active. Complete it first.', 409, 'PHASE_ACTIVE');
+    }
+    phase.status = 'active';
+    phase.startedAt = new Date();
+    await phase.save();
+  }
+  return broadcastPlan(project, actor.sub);
+}
+
+export async function completePhase(actor: Actor, projectId: string, phaseId: string) {
+  const project = await getAccessibleProject(projectId, actor);
+  requireAdmin(project, actor.email);
+  const phase = await getPhaseInProject(project, phaseId);
+  if (phase.status === 'done') return broadcastPlan(project, actor.sub);
+
+  const sprints = await Sprint.find({ projectId: project._id, phaseId: phase._id });
+  const moved: TaskDoc[] = [];
+  for (const sprint of sprints) {
+    moved.push(...(await completeSprintDoc(project, sprint)));
+  }
+  phase.status = 'done';
+  phase.completedAt = new Date();
+  await phase.save();
+
+  const plan = await broadcastPlan(project, actor.sub);
+  if (moved.length) {
+    const presentedTasks = await presentTasks(moved);
+    for (const task of presentedTasks) {
+      await broadcastProjectEvent(project, 'task:updated', {
+        task,
+        actorId: actor.sub,
+        changed: ['sprintId', 'status'],
+      });
+    }
+  }
+  return plan;
+}
+
+export async function createSprint(
+  actor: Actor,
+  projectId: string,
+  input: { name: string; phaseId?: string | null; startDate: string; endDate: string },
+) {
+  const project = await getAccessibleProject(projectId, actor);
+  requireAdmin(project, actor.email);
+
+  const name = input.name.trim();
+  if (!name) throw new AuthError('Sprint name required', 400);
+  const startDate = requireIsoDay(input.startDate, 'Start date');
+  const endDate = requireIsoDay(input.endDate, 'End date');
+  if (endDate < startDate) {
+    throw new AuthError('Sprint end date must be on or after the start date', 400);
+  }
+
+  let phaseOid: Types.ObjectId | null = null;
+  if (input.phaseId) {
+    const phase = await getPhaseInProject(project, input.phaseId);
+    if (phase.status === 'done') {
+      throw new AuthError('Cannot add a sprint to a completed phase', 400);
+    }
+    phaseOid = phase._id;
+  }
+
+  const sprint = await Sprint.create({
+    orgId: project.orgId,
+    projectId: project._id,
+    phaseId: phaseOid,
+    name,
+    startDate,
+    endDate,
+    status: 'planned',
+    columns: cloneColumns((project.columns ?? []) as BoardColumnLike[]),
+  });
+
+  const plan = await broadcastPlan(project, actor.sub);
+  return { ...plan, sprint: serializeSprint(sprint) };
+}
+
+export async function startSprint(actor: Actor, projectId: string, sprintId: string) {
+  const project = await getAccessibleProject(projectId, actor);
+  requireAdmin(project, actor.email);
+  const sprint = await getSprintInProject(project, sprintId);
+  if (sprint.status === 'done') {
+    throw new AuthError('This sprint is already complete', 400);
+  }
+  if (sprint.status === 'active') return broadcastPlan(project, actor.sub);
+
+  if (sprint.phaseId) {
+    const phase = await Phase.findById(sprint.phaseId);
+    if (!phase || phase.status !== 'active') {
+      throw new AuthError('Start the phase before starting this sprint', 400);
+    }
+    const other = await Sprint.findOne({
+      projectId: project._id,
+      phaseId: sprint.phaseId,
+      status: 'active',
+      _id: { $ne: sprint._id },
+    });
+    if (other) {
+      throw new AuthError('Another sprint is already active in this phase', 409, 'SPRINT_ACTIVE');
+    }
+  } else {
+    const other = await Sprint.findOne({
+      projectId: project._id,
+      phaseId: null,
+      status: 'active',
+      _id: { $ne: sprint._id },
+    });
+    if (other) {
+      throw new AuthError('Another sprint is already active', 409, 'SPRINT_ACTIVE');
+    }
+  }
+
+  sprint.status = 'active';
+  sprint.startedAt = new Date();
+  await sprint.save();
+  return broadcastPlan(project, actor.sub);
+}
+
+export async function extendSprint(
+  actor: Actor,
+  projectId: string,
+  sprintId: string,
+  endDateRaw: string,
+) {
+  const project = await getAccessibleProject(projectId, actor);
+  requireAdmin(project, actor.email);
+  const sprint = await getSprintInProject(project, sprintId);
+  if (sprint.status === 'done') {
+    throw new AuthError('Cannot extend a completed sprint', 400);
+  }
+  const endDate = requireIsoDay(endDateRaw, 'End date');
+  if (endDate <= sprint.endDate) {
+    throw new AuthError('New end date must be after the current end date', 400);
+  }
+  if (endDate < sprint.startDate) {
+    throw new AuthError('End date must be on or after the start date', 400);
+  }
+  sprint.endDate = endDate;
+  await sprint.save();
+  return broadcastPlan(project, actor.sub);
+}
+
+export async function completeSprint(actor: Actor, projectId: string, sprintId: string) {
+  const project = await getAccessibleProject(projectId, actor);
+  requireAdmin(project, actor.email);
+  const sprint = await getSprintInProject(project, sprintId);
+  const moved = await completeSprintDoc(project, sprint);
+  const plan = await broadcastPlan(project, actor.sub);
+  if (moved.length) {
+    const presentedTasks = await presentTasks(moved);
+    for (const task of presentedTasks) {
+      await broadcastProjectEvent(project, 'task:updated', {
+        task,
+        actorId: actor.sub,
+        changed: ['sprintId', 'status'],
+      });
+    }
+  }
+  return plan;
 }
 
 export async function createTeam(

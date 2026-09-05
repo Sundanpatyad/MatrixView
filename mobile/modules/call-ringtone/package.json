@@ -1,0 +1,6 @@
+{
+  "name": "call-ringtone",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Play the device phone ringtone for incoming DockX calls"
+}

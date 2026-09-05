@@ -10,6 +10,7 @@ import {
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CreateTaskModal } from '@/components/board/CreateTaskModal';
 import { ManageTeamsModal } from '@/components/board/ManageTeamsModal';
+import { PlanSprintsModal } from '@/components/board/PlanSprintsModal';
 import { ProjectAvatar } from '@/components/board/ProjectAvatar';
 import { ProjectSelect } from '@/components/board/ProjectSelect';
 import { TaskDetailModal } from '@/components/board/TaskDetailModal';
@@ -18,7 +19,9 @@ import { DashboardTaskCard } from '@/components/dashboard/DashboardTaskCard';
 import { InviteMembersModal } from '@/components/dashboard/InviteMembersModal';
 import { Button } from '@/components/ui/Button';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
+import { DatePicker } from '@/components/ui/DatePicker';
 import { IconUsers, IconX } from '@/components/ui/Icons';
+import { MultiSelect } from '@/components/ui/MultiSelect';
 import { Select } from '@/components/ui/Select';
 import { UserAvatar, avatarFromMembers } from '@/components/ui/UserAvatar';
 import { useAuth } from '@/lib/auth/AuthContext';
@@ -43,8 +46,26 @@ import { useWorkspace } from '@/lib/workspace/WorkspaceContext';
 
 /** 'all' = every task; 'global' = no group; otherwise a group id */
 type GroupFilter = 'all' | 'global' | string;
-/** everyone = full project; me / unassigned / member id */
-type AssigneeFilter = 'everyone' | 'me' | 'unassigned' | string;
+/** empty = Everyone. Tokens: unassigned, me, or a member id. */
+type AssigneeToken = string;
+
+const EVERYONE: AssigneeToken[] = [];
+
+function parseAssigneeParam(raw: string): AssigneeToken[] {
+  if (!raw || raw === 'everyone') return [];
+  return [...new Set(raw.split(',').map((part) => part.trim()).filter(Boolean))];
+}
+
+function serializeAssigneeParam(tokens: AssigneeToken[]): string | null {
+  if (tokens.length === 0) return null;
+  return tokens.join(',');
+}
+
+function addIsoDays(iso: string, days: number) {
+  const [y, m, d] = iso.split('-').map(Number);
+  const dt = new Date(y, (m ?? 1) - 1, (d ?? 1) + days);
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+}
 
 export function BoardWorkspacePage() {
   const { user } = useAuth();
@@ -56,6 +77,8 @@ export function BoardWorkspacePage() {
     getProject,
     getProjectTasks,
     getProjectTeams,
+    getProjectPhases,
+    getProjectSprints,
     updateTaskStatus,
     addColumn,
     renameColumn,
@@ -65,20 +88,25 @@ export function BoardWorkspacePage() {
     uploadProjectAvatar,
     removeProjectAvatar,
     removeMember,
+    startSprint,
+    extendSprint,
+    completeSprint,
+    isLoading,
   } = useWorkspace();
 
   const queryProjectId = searchParams.get('project') ?? '';
   const queryTaskId = searchParams.get('task') ?? '';
   const queryAssignee = searchParams.get('assignee') ?? 'everyone';
   const queryGroup = searchParams.get('group') ?? 'all';
+  const querySprintId = searchParams.get('sprint') ?? '';
   const [projectId, setProjectId] = useState(queryProjectId || projects[0]?.id || '');
   const [query, setQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<TaskType | 'all'>('all');
   const [priorityFilter, setPriorityFilter] = useState<TaskPriority | 'all'>('all');
   const [statusFilter, setStatusFilter] = useState<TaskStatus | 'all'>('all');
   const [groupFilter, setGroupFilter] = useState<GroupFilter>(queryGroup);
-  const [assigneeFilter, setAssigneeFilter] = useState<AssigneeFilter>(
-    queryAssignee || 'everyone',
+  const [assigneeFilter, setAssigneeFilter] = useState<AssigneeToken[]>(
+    parseAssigneeParam(queryAssignee),
   );
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -86,6 +114,9 @@ export function BoardWorkspacePage() {
   const [showInvite, setShowInvite] = useState(false);
   const [showTeams, setShowTeams] = useState(false);
   const [showCreateTask, setShowCreateTask] = useState(false);
+  const [showPlan, setShowPlan] = useState(false);
+  const [extendOpen, setExtendOpen] = useState(false);
+  const [extendDate, setExtendDate] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(queryTaskId || null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<TaskStatus | null>(null);
@@ -132,15 +163,15 @@ export function BoardWorkspacePage() {
   }, [projects, projectId, queryProjectId, searchParams, setSearchParams]);
 
   useEffect(() => {
-    if (!queryTaskId) return;
-    setSelectedId(queryTaskId);
+    if (queryTaskId) setSelectedId(queryTaskId);
   }, [queryTaskId]);
 
   function writeBoardParams(patch: {
     project?: string;
     task?: string | null;
-    assignee?: AssigneeFilter;
+    assignee?: AssigneeToken[];
     group?: GroupFilter;
+    sprint?: string | null;
   }) {
     const next = new URLSearchParams(searchParams);
     const project = patch.project ?? projectId;
@@ -152,21 +183,26 @@ export function BoardWorkspacePage() {
     else next.delete('task');
 
     const assignee = patch.assignee ?? assigneeFilter;
-    if (assignee && assignee !== 'everyone') next.set('assignee', assignee);
+    const assigneeParam = serializeAssigneeParam(assignee);
+    if (assigneeParam) next.set('assignee', assigneeParam);
     else next.delete('assignee');
 
     const group = patch.group ?? groupFilter;
     if (group && group !== 'all') next.set('group', group);
     else next.delete('group');
 
+    const sprint = patch.sprint !== undefined ? patch.sprint : querySprintId;
+    if (sprint) next.set('sprint', sprint);
+    else next.delete('sprint');
+
     setSearchParams(next, { replace: true });
   }
 
   function selectProject(id: string) {
     setProjectId(id);
-    setAssigneeFilter('everyone');
+    setAssigneeFilter(EVERYONE);
     setGroupFilter('all');
-    writeBoardParams({ project: id, assignee: 'everyone', group: 'all', task: null });
+    writeBoardParams({ project: id, assignee: EVERYONE, group: 'all', task: null, sprint: null });
   }
 
   function openTask(id: string | null) {
@@ -174,9 +210,19 @@ export function BoardWorkspacePage() {
     writeBoardParams({ task: id });
   }
 
-  function onAssigneeChange(value: AssigneeFilter) {
-    setAssigneeFilter(value);
-    writeBoardParams({ assignee: value });
+  function onAssigneeChange(tokens: AssigneeToken[]) {
+    const next = tokens.filter((token) => token !== 'everyone');
+    setAssigneeFilter(next);
+    writeBoardParams({ assignee: next });
+  }
+
+  function toggleAssignee(token: AssigneeToken) {
+    if (token === 'everyone') {
+      onAssigneeChange(EVERYONE);
+      return;
+    }
+    const has = assigneeFilter.includes(token);
+    onAssigneeChange(has ? assigneeFilter.filter((item) => item !== token) : [...assigneeFilter, token]);
   }
 
   function onGroupChange(value: GroupFilter) {
@@ -185,7 +231,55 @@ export function BoardWorkspacePage() {
   }
 
   const project = projectId ? getProject(projectId) : undefined;
-  const columns = project?.columns ?? [];
+  const phases = projectId ? getProjectPhases(projectId) : [];
+  const sprints = projectId ? getProjectSprints(projectId) : [];
+  const activeSprint = querySprintId ? sprints.find((s) => s.id === querySprintId) : undefined;
+  const columns = activeSprint?.columns ?? project?.columns ?? [];
+  const boardSprintId = activeSprint?.id;
+  const boardOptions = useMemo(
+    () => {
+      const ordered: typeof sprints = [];
+      const seen = new Set<string>();
+      for (const sprint of sprints.filter((s) => !s.phaseId)) {
+        ordered.push(sprint);
+        seen.add(sprint.id);
+      }
+      for (const phase of phases) {
+        for (const sprint of sprints.filter((s) => s.phaseId === phase.id)) {
+          ordered.push(sprint);
+          seen.add(sprint.id);
+        }
+      }
+      for (const sprint of sprints) {
+        if (!seen.has(sprint.id)) ordered.push(sprint);
+      }
+      return [
+        { value: 'backlog', label: 'Backlog' },
+        ...ordered.map((sprint) => {
+          const phase = phases.find((p) => p.id === sprint.phaseId);
+          const tag =
+            sprint.status === 'active' ? ' · live' : sprint.status === 'done' ? ' · done' : '';
+          return {
+            value: sprint.id,
+            label: `${phase ? `${phase.name} · ` : ''}${sprint.name}${tag}`,
+          };
+        }),
+      ];
+    },
+    [phases, sprints],
+  );
+
+  useEffect(() => {
+    setExtendOpen(false);
+  }, [boardSprintId]);
+
+  useEffect(() => {
+    if (!querySprintId || !projectId || isLoading) return;
+    if (!sprints.some((s) => s.id === querySprintId)) {
+      writeBoardParams({ sprint: null });
+    }
+  }, [querySprintId, projectId, sprints, isLoading]);
+
   const members = project?.members ?? [];
   const projectTeams = useMemo(
     () => (projectId ? getProjectTeams(projectId) : []),
@@ -231,7 +325,7 @@ export function BoardWorkspacePage() {
     if (current && current.label === label) return;
     setColumnBusy(true);
     try {
-      await renameColumn(projectId, colId, label);
+      await renameColumn(projectId, colId, label, boardSprintId);
     } finally {
       setColumnBusy(false);
     }
@@ -251,7 +345,7 @@ export function BoardWorkspacePage() {
     if (!projectId || !newColumnName.trim() || columnBusy) return;
     setColumnBusy(true);
     try {
-      await addColumn(projectId, newColumnName.trim());
+      await addColumn(projectId, newColumnName.trim(), boardSprintId);
       setNewColumnName('');
       setAddingColumn(false);
     } finally {
@@ -268,7 +362,7 @@ export function BoardWorkspacePage() {
     if (!projectId || !columnToRemove) return;
     setColumnBusy(true);
     try {
-      await removeColumn(projectId, columnToRemove.id);
+      await removeColumn(projectId, columnToRemove.id, undefined, boardSprintId);
       setColumnToRemove(null);
     } finally {
       setColumnBusy(false);
@@ -285,7 +379,7 @@ export function BoardWorkspacePage() {
     ordered.splice(next, 0, moved);
     setColumnBusy(true);
     try {
-      await reorderColumns(projectId, ordered);
+      await reorderColumns(projectId, ordered, boardSprintId);
     } finally {
       setColumnBusy(false);
     }
@@ -293,21 +387,22 @@ export function BoardWorkspacePage() {
 
   // Keep assignee filter valid when members change
   useEffect(() => {
-    if (
-      assigneeFilter === 'everyone' ||
-      assigneeFilter === 'me' ||
-      assigneeFilter === 'unassigned'
-    ) {
-      return;
-    }
-    if (!members.some((m) => m.id === assigneeFilter)) setAssigneeFilter('everyone');
+    const valid = new Set(['unassigned', 'me', ...members.map((m) => m.id)]);
+    const next = assigneeFilter.filter((token) => valid.has(token));
+    if (next.length !== assigneeFilter.length) setAssigneeFilter(next);
   }, [members, assigneeFilter]);
 
-  const selectedMember = useMemo(() => {
-    if (assigneeFilter === 'me') return meMember;
-    if (assigneeFilter === 'everyone' || assigneeFilter === 'unassigned') return null;
-    return members.find((m) => m.id === assigneeFilter) ?? null;
-  }, [assigneeFilter, meMember, members]);
+  const selectedMembers = useMemo(
+    () =>
+      assigneeFilter
+        .map((token) => {
+          if (token === 'me') return meMember;
+          if (token === 'unassigned') return null;
+          return members.find((m) => m.id === token) ?? null;
+        })
+        .filter((m): m is ProjectMember => Boolean(m)),
+    [assigneeFilter, meMember, members],
+  );
 
   const boardLabel = useMemo(() => {
     const parts: string[] = [];
@@ -316,41 +411,56 @@ export function BoardWorkspacePage() {
     } else if (groupFilter === 'global') {
       parts.push('No group');
     }
-    if (assigneeFilter === 'me') parts.push('Assigned to you');
-    else if (assigneeFilter === 'unassigned') parts.push('Unassigned');
-    else if (selectedMember) parts.push(`Assigned to ${selectedMember.name.split(' ')[0]}`);
-    else parts.push('Everyone');
+    if (assigneeFilter.length === 0) parts.push('Everyone');
+    else {
+      const labels = assigneeFilter.map((token) => {
+        if (token === 'unassigned') return 'Unassigned';
+        if (token === 'me') return 'You';
+        return members.find((m) => m.id === token)?.name.split(' ')[0] ?? 'Person';
+      });
+      parts.push(labels.length <= 2 ? labels.join(', ') : `${labels[0]} +${labels.length - 1}`);
+    }
     return parts.join(' · ');
-  }, [hasGroups, groupFilter, groupNameById, assigneeFilter, selectedMember]);
+  }, [hasGroups, groupFilter, groupNameById, assigneeFilter, members]);
 
   const defaultAssignee = useMemo(() => {
-    if (selectedMember) return selectedMember;
+    if (selectedMembers.length === 1) return selectedMembers[0];
     return meMember;
-  }, [selectedMember, meMember]);
+  }, [selectedMembers, meMember]);
 
   const boardTasks = useMemo(() => {
     if (!projectId) return [];
     return getProjectTasks(projectId).filter((t) => {
+      const taskSprint = t.sprintId ?? null;
+      if (boardSprintId) {
+        if (taskSprint !== boardSprintId) return false;
+      } else if (taskSprint) {
+        return false;
+      }
       if (hasGroups) {
         if (groupFilter === 'global' && t.teamId) return false;
         if (groupFilter !== 'all' && groupFilter !== 'global' && t.teamId !== groupFilter) {
           return false;
         }
       }
-      if (assigneeFilter === 'everyone') return true;
-      if (assigneeFilter === 'unassigned') return isUnassigned(t);
-      if (assigneeFilter === 'me') return isTaskAssignedToUser(t, user, project);
-      return isTaskAssignedTo(t, selectedMember);
+      if (assigneeFilter.length === 0) return true;
+      return assigneeFilter.some((token) => {
+        if (token === 'unassigned') return isUnassigned(t);
+        if (token === 'me') return isTaskAssignedToUser(t, user, project);
+        const member = members.find((m) => m.id === token);
+        return isTaskAssignedTo(t, member);
+      });
     });
   }, [
     getProjectTasks,
     projectId,
+    boardSprintId,
     hasGroups,
     groupFilter,
     assigneeFilter,
     user,
     project,
-    selectedMember,
+    members,
   ]);
 
   function viewGroupOnBoard(teamId: string) {
@@ -532,6 +642,11 @@ export function BoardWorkspacePage() {
               <span className="sm:hidden">Task</span>
               <span className="hidden sm:inline">New task</span>
             </Button>
+            {canManageProject ? (
+              <Button size="sm" variant="secondary" disabled={!project} onClick={() => setShowPlan(true)}>
+                Plan
+              </Button>
+            ) : null}
             {canEditColumns ? (
               addingColumn ? (
                 <form
@@ -644,15 +759,30 @@ export function BoardWorkspacePage() {
                   </p>
                 ) : null}
               </div>
+              {project ? (
+                <div className="w-[200px] shrink-0">
+                  <Select
+                    size="sm"
+                    value={boardSprintId ?? 'backlog'}
+                    onChange={(v) => {
+                      const next = v === 'backlog' ? null : String(v);
+                      writeBoardParams({ sprint: next });
+                    }}
+                    options={boardOptions}
+                    aria-label="Board"
+                  />
+                </div>
+              ) : null}
             </div>
 
             {project ? (
               <div className="flex items-center gap-2 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                <div className="w-[148px] shrink-0">
-                  <Select
+                <div className="w-[168px] shrink-0">
+                  <MultiSelect
                     size="sm"
-                    value={assigneeFilter}
-                    onChange={(v) => onAssigneeChange(v as AssigneeFilter)}
+                    value={assigneeFilter.length ? assigneeFilter : ['everyone']}
+                    exclusiveValue="everyone"
+                    onChange={onAssigneeChange}
                     options={[
                       { value: 'everyone', label: 'Everyone' },
                       { value: 'me', label: 'Assigned to me' },
@@ -661,8 +791,7 @@ export function BoardWorkspacePage() {
                         .filter((m) => m.status !== 'pending')
                         .map((m) => ({
                           value: m.id,
-                          label:
-                            meMember?.id === m.id ? `${m.name} (you)` : m.name,
+                          label: meMember?.id === m.id ? `${m.name} (you)` : m.name,
                         })),
                     ]}
                     aria-label="Assigned to"
@@ -742,6 +871,80 @@ export function BoardWorkspacePage() {
               </div>
             ) : null}
         </div>
+
+        {activeSprint ? (
+          <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-ink-600 bg-ink-800 px-3 py-1.5 sm:px-4">
+            <p className="text-[12px] text-ink-300">
+              <span className="font-semibold text-ink-50">{activeSprint.name}</span>
+              <span className="mx-1.5 text-ink-500">·</span>
+              {activeSprint.startDate} → {activeSprint.endDate}
+              <span className="mx-1.5 text-ink-500">·</span>
+              {activeSprint.status === 'active'
+                ? 'Active'
+                : activeSprint.status === 'done'
+                  ? 'Done'
+                  : 'Planned'}
+            </p>
+            {canManageProject && activeSprint.status !== 'done' ? (
+              <div className="flex flex-wrap items-center gap-1.5">
+                {activeSprint.status === 'planned' ? (
+                  <Button
+                    size="xs"
+                    variant="secondary"
+                    onClick={() => {
+                      void startSprint(projectId, activeSprint.id).catch((err) =>
+                        toast.fromError(err, 'Could not start the sprint.'),
+                      );
+                    }}
+                  >
+                    Start sprint
+                  </Button>
+                ) : null}
+                {extendOpen ? (
+                  <>
+                    <DatePicker size="xs" value={extendDate} onChange={setExtendDate} />
+                    <Button
+                      size="xs"
+                      disabled={!extendDate}
+                      onClick={() => {
+                        void extendSprint(projectId, activeSprint.id, extendDate)
+                          .then(() => setExtendOpen(false))
+                          .catch((err) => toast.fromError(err, 'Could not extend the sprint.'));
+                      }}
+                    >
+                      Save
+                    </Button>
+                    <Button size="xs" variant="ghost" onClick={() => setExtendOpen(false)}>
+                      Cancel
+                    </Button>
+                  </>
+                ) : (
+                  <Button
+                    size="xs"
+                    variant="secondary"
+                    onClick={() => {
+                      setExtendDate(addIsoDays(activeSprint.endDate, 7));
+                      setExtendOpen(true);
+                    }}
+                  >
+                    Extend
+                  </Button>
+                )}
+                <Button
+                  size="xs"
+                  variant="danger"
+                  onClick={() => {
+                    void completeSprint(projectId, activeSprint.id).catch((err) =>
+                      toast.fromError(err, 'Could not complete the sprint.'),
+                    );
+                  }}
+                >
+                  Complete
+                </Button>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
 
         {/* Board fills remaining viewport */}
         <div className="min-h-0 flex-1 overflow-hidden p-2 sm:p-2.5">
@@ -959,10 +1162,10 @@ export function BoardWorkspacePage() {
                   <li>
                     <button
                       type="button"
-                      onClick={() => onAssigneeChange('everyone')}
+                      onClick={() => toggleAssignee('everyone')}
                       className={cn(
                         'flex w-full items-center rounded-lg px-2 py-2 text-left text-xs font-semibold',
-                        assigneeFilter === 'everyone'
+                        assigneeFilter.length === 0
                           ? 'bg-brand-500/10 text-ink-50'
                           : 'text-ink-200 hover:bg-ink-700',
                       )}
@@ -973,10 +1176,10 @@ export function BoardWorkspacePage() {
                   <li>
                     <button
                       type="button"
-                      onClick={() => onAssigneeChange('unassigned')}
+                      onClick={() => toggleAssignee('unassigned')}
                       className={cn(
                         'flex w-full items-center rounded-lg px-2 py-2 text-left text-xs font-semibold',
-                        assigneeFilter === 'unassigned'
+                        assigneeFilter.includes('unassigned')
                           ? 'bg-brand-500/10 text-ink-50'
                           : 'text-ink-200 hover:bg-ink-700',
                       )}
@@ -989,7 +1192,8 @@ export function BoardWorkspacePage() {
                       const pending = m.status === 'pending';
                       const active =
                         !pending &&
-                        (assigneeFilter === m.id || (assigneeFilter === 'me' && isYou));
+                        (assigneeFilter.includes(m.id) ||
+                          (assigneeFilter.includes('me') && isYou));
                       const count = getProjectTasks(project.id).filter((t) =>
                         isTaskAssignedTo(t, m),
                       ).length;
@@ -1006,7 +1210,7 @@ export function BoardWorkspacePage() {
                             <button
                               type="button"
                               disabled={pending}
-                              onClick={() => onAssigneeChange(isYou ? 'me' : m.id)}
+                              onClick={() => toggleAssignee(isYou ? 'me' : m.id)}
                               className="flex min-w-0 flex-1 items-center gap-2.5 text-left disabled:cursor-default"
                             >
                             <UserAvatar
@@ -1082,6 +1286,7 @@ export function BoardWorkspacePage() {
       {showCreateTask && projectId ? (
         <CreateTaskModal
           projectId={projectId}
+          sprintId={boardSprintId ?? null}
           defaultAssignee={
             defaultAssignee
               ? { id: defaultAssignee.id, name: defaultAssignee.name }
@@ -1091,6 +1296,16 @@ export function BoardWorkspacePage() {
             hasGroups && groupFilter !== 'all' && groupFilter !== 'global' ? groupFilter : null
           }
           onClose={() => setShowCreateTask(false)}
+        />
+      ) : null}
+      {showPlan && projectId ? (
+        <PlanSprintsModal
+          projectId={projectId}
+          onClose={() => setShowPlan(false)}
+          onOpenSprint={(sprintId) => {
+            writeBoardParams({ sprint: sprintId });
+            setShowPlan(false);
+          }}
         />
       ) : null}
       {selected && project ? (

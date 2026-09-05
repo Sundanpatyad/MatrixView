@@ -139,6 +139,9 @@ export type BoardColumnsEventPayload = {
   project: Project;
   tasks?: BoardTask[];
   actorId?: string;
+  sprint?: import('@/lib/workspace/types').ProjectSprint;
+  phases?: import('@/lib/workspace/types').ProjectPhase[];
+  sprints?: import('@/lib/workspace/types').ProjectSprint[];
 };
 
 export type BoardTeamEventPayload = {

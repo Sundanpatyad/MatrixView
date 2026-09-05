@@ -30,6 +30,10 @@ export function refreshApiAccessToken(): Promise<string | null> {
   return refreshAccessToken();
 }
 
+export function hasAccessToken(): boolean {
+  return Boolean(getAccessToken());
+}
+
 export interface ApiRequestOptions {
   method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
   body?: unknown;
