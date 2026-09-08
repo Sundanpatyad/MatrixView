@@ -1,42 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { ThemeToggle } from "@/components/ThemeToggle";
 import { InquiryButton } from "@/components/inquiry/InquiryForm";
 import { CookieSettingsButton } from "@/components/consent/CookieBanner";
-import { APP_LOGIN_URL } from "@/lib/site";
+import { SiteHeader } from "@/components/site/SiteHeader";
 import type { ReactNode } from "react";
 
-export function SiteHeader() {
-  return (
-    <header className="border-b border-ink-600 bg-ink-900/90 backdrop-blur-md">
-      <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-5 sm:h-16 sm:px-8">
-        <Link href="/" className="flex items-center gap-2.5">
-          <img
-            src="/logo.png"
-            alt="DockX"
-            width={36}
-            height={36}
-            className="h-9 w-9 rounded-[22%] object-cover"
-          />
-          <span className="font-landing text-[15px] font-semibold tracking-tight text-ink-50">
-            DockX
-          </span>
-        </Link>
-        <div className="flex items-center gap-2">
-          <ThemeToggle />
-          <InquiryButton variant="nav" className="hidden sm:inline-flex px-3 py-1.5 text-[12px]" />
-          <a
-            href={APP_LOGIN_URL}
-            className="inline-flex rounded-full bg-brand-500 px-4 py-2 text-[13px] font-semibold text-on-brand hover:bg-brand-600"
-          >
-            Log in
-          </a>
-        </div>
-      </div>
-    </header>
-  );
-}
+export { SiteHeader } from "@/components/site/SiteHeader";
 
 export function SiteFooter() {
   return (
@@ -82,8 +52,8 @@ export function LegalPage({
 }) {
   return (
     <div className="flex min-h-[100dvh] flex-col bg-ink-900 text-ink-100">
-      <SiteHeader />
-      <main className="mx-auto w-full max-w-3xl flex-1 px-5 py-12 sm:px-8 sm:py-16">
+      <SiteHeader elevated />
+      <main className="mx-auto w-full max-w-3xl flex-1 px-5 pt-20 pb-12 sm:px-8 sm:pt-28 sm:pb-16">
         <p className="text-[12px] font-medium text-ink-400">Effective {effective}</p>
         <h1 className="mt-2 font-landing text-3xl font-semibold tracking-tight text-ink-50 sm:text-4xl">
           {title}

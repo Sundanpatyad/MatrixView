@@ -7,7 +7,7 @@ export const SITE_URL =
   "https://dockx.vercel.app";
 
 export const INQUIRY_TO_EMAIL =
-  process.env.INQUIRY_TO_EMAIL || "sundansharma600@gmail.com";
+  process.env.NEXT_PUBLIC_INQUIRY_TO_EMAIL || "sundansharma600@gmail.com";
 
 export const LEGAL_EFFECTIVE = "8 September 2026";
 

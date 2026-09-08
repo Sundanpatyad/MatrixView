@@ -253,6 +253,15 @@
   }
 }
 
+@keyframes dockx-drawer-in {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .landing-shimmer::after {
     animation: none;

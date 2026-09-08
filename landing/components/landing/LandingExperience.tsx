@@ -2,14 +2,9 @@
 import { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
-import { ThemeToggle } from "@/components/ThemeToggle";
+import { SiteHeader } from "@/components/site/SiteHeader";
 import { HeroScene } from "./HeroScene";
-import {
-  DownloadDesktopButton,
-  DownloadDesktopNavLink,
-  DownloadDesktopPlatformList,
-  DESKTOP_DOWNLOAD_URL,
-} from "./DownloadDesktop";
+import { DownloadDesktopButton, DownloadDesktopPlatformList, DESKTOP_DOWNLOAD_URL } from "./DownloadDesktop";
 import { CursorGlow, MagneticLink, SplitBrand } from "./InteractiveBits";
 import { DashboardMock } from "./DashboardMock";
 import {
@@ -229,60 +224,7 @@ export function LandingExperience() {
       <CursorGlow />
       <ScrollProgress />
 
-      <header
-        className={`fixed inset-x-0 top-0 z-50 border-b transition-colors duration-300 ${
-          navSolid
-            ? "border-ink-600 bg-ink-900/85 backdrop-blur-md"
-            : "border-transparent bg-transparent"
-        }`}
-      >
-        <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-5 sm:h-16 sm:px-8">
-          <a href="/" className="flex items-center gap-2.5" data-cursor="grow">
-            <img
-              src="/logo.png"
-              alt="DockX"
-              width={36}
-              height={36}
-              className="h-9 w-9 rounded-[22%] object-cover shadow-[0_6px_18px_rgba(0,0,0,0.28)]"
-            />
-            <span className="font-landing text-[15px] font-semibold tracking-tight text-ink-50">
-              DockX
-            </span>
-          </a>
-          <nav className="hidden items-center gap-6 text-[13px] font-medium text-ink-300 md:flex">
-            {[
-              ["#product", "Product"],
-              ["#dashboard", "Dashboard"],
-              ["#download", "Download"],
-              ["#play", "Try it"],
-              ["#faq", "FAQ"],
-            ].map(([href, label]) => (
-              <a
-                key={href}
-                href={href}
-                className="transition hover:text-ink-50"
-                data-cursor="grow"
-              >
-                {label}
-              </a>
-            ))}
-          </nav>
-          <div className="flex items-center gap-2">
-            <ThemeToggle />
-            <InquiryButton
-              variant="nav"
-              className="hidden px-3 py-1.5 text-[12px] sm:inline-flex"
-            />
-            <DownloadDesktopNavLink />
-            <MagneticLink
-              href={APP_LOGIN_URL}
-              className="hidden rounded-full bg-brand-500 px-4 py-2 text-[13px] font-semibold text-on-brand hover:bg-brand-600 sm:inline-flex"
-            >
-              Log in
-            </MagneticLink>
-          </div>
-        </div>
-      </header>
+      <SiteHeader elevated={navSolid} />
 
       {/* Hero */}
       <section className="relative flex min-h-[100dvh] items-center overflow-x-hidden pb-16 pt-28 sm:pb-20 sm:pt-32">

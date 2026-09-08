@@ -11,8 +11,8 @@ export const metadata: Metadata = {
 export default function InquiryPage() {
   return (
     <div className="flex min-h-[100dvh] flex-col bg-ink-900 text-ink-100">
-      <SiteHeader />
-      <main className="mx-auto w-full max-w-lg flex-1 px-5 py-12 sm:px-8 sm:py-16">
+      <SiteHeader elevated />
+      <main className="mx-auto w-full max-w-lg flex-1 px-5 pt-20 pb-12 sm:px-8 sm:pt-28 sm:pb-16">
         <h1 className="font-landing text-3xl font-semibold tracking-tight text-ink-50 sm:text-4xl">
           Inquiry
         </h1>

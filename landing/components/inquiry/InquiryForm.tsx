@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { useInquiry } from "./InquiryContext";
+import { INQUIRY_TO_EMAIL } from "@/lib/site";
 
 const fieldClass =
   "mt-1.5 w-full rounded-xl border border-ink-600 bg-ink-900/80 px-3 py-2.5 text-sm text-ink-50 outline-none transition placeholder:text-ink-500 focus:border-brand-400/60 focus:ring-2 focus:ring-brand-500/30";
@@ -21,20 +22,42 @@ export function InquiryForm({ onSent }: { onSent?: () => void }) {
     setError(null);
     setBusy(true);
     try {
-      const res = await fetch("/api/inquiry", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name,
-          email,
-          organization,
-          message,
-          website: honeypot,
-        }),
-      });
-      const data = (await res.json().catch(() => ({}))) as { error?: string };
-      if (!res.ok) {
-        throw new Error(data.error || "Could not send your inquiry.");
+      if (honeypot.trim()) {
+        setDone(true);
+        onSent?.();
+        return;
+      }
+      const res = await fetch(
+        `https://formsubmit.co/ajax/${encodeURIComponent(INQUIRY_TO_EMAIL)}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          body: JSON.stringify({
+            name: name.trim(),
+            email: email.trim(),
+            organization: organization.trim() || "(not provided)",
+            message: message.trim(),
+            _subject: `DockX inquiry from ${name.trim()}`,
+            _template: "table",
+            _captcha: "false",
+            _replyto: email.trim(),
+          }),
+        },
+      );
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        message?: string;
+        success?: boolean | string;
+      };
+      const failed =
+        !res.ok ||
+        data.success === false ||
+        data.success === "false";
+      if (failed) {
+        throw new Error(data.error || data.message || "Could not send your inquiry.");
       }
       setDone(true);
       onSent?.();
@@ -190,9 +213,11 @@ export function InquiryDialog() {
 export function InquiryButton({
   className = "",
   variant = "ghost",
+  onClick,
 }: {
   className?: string;
   variant?: "ghost" | "primary" | "nav";
+  onClick?: () => void;
 }) {
   const { openInquiry } = useInquiry();
   const styles = {
@@ -205,8 +230,11 @@ export function InquiryButton({
   return (
     <button
       type="button"
-      onClick={openInquiry}
-      className={`inline-flex items-center rounded-full px-4 py-2 text-[13px] font-semibold transition active:scale-[0.98] ${styles[variant]} ${className}`}
+      onClick={() => {
+        onClick?.();
+        openInquiry();
+      }}
+      className={`inline-flex items-center rounded-full px-4 py-2 text-[13px] font-semibold whitespace-nowrap transition active:scale-[0.98] ${styles[variant]} ${className}`}
     >
       Inquiry
     </button>
