@@ -16,7 +16,7 @@ import { cn } from '@/lib/cn';
 import { resolveMediaUrl } from '@/lib/mediaUrl';
 import { useToast } from '@/lib/toast/ToastContext';
 import { useWorkspace } from '@/lib/workspace/WorkspaceContext';
-import { useManualUpdateCheck } from '@/components/updater/UpdatePrompt';
+import { useManualUpdateCheck } from '@/components/updater/useManualUpdateCheck';
 
 type Props = {
   open: boolean;
@@ -267,17 +267,16 @@ export function ProfileModal({ open, onClose }: Props) {
                 variant="secondary"
                 className="mt-3"
                 disabled={checkingUpdate}
-                onClick={async () => {
-                  const result = await checkNow();
-                  if ('update' in result && result.update) {
-                    toast.success(`DockX ${result.update.version} is ready to install.`);
-                    return;
-                  }
-                  if (result.ok) toast.success(result.message ?? 'You are up to date.');
-                  else toast.error(result.message);
-                }}
+                onClick={() => checkNow()}
               >
-                {checkingUpdate ? 'Checking…' : 'Check for updates'}
+                {checkingUpdate ? (
+                  <>
+                    <span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                    Checking…
+                  </>
+                ) : (
+                  'Check for updates'
+                )}
               </Button>
             </div>
           </div>

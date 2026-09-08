@@ -1,125 +1,307 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Button } from '@/components/ui/Button';
-import { isTauriRuntime } from '@/lib/activity/native';
+import { useCallback, useEffect, useRef } from 'react';
+import { useAuth } from '@/lib/auth/AuthContext';
+import { useToast, type ToastAction } from '@/lib/toast/ToastContext';
 import {
   checkForAppUpdate,
+  clearUpdateReminder,
+  currentAppVersion,
   installAppUpdate,
-  publishAppUpdate,
+  msUntilUpdateReminder,
   relaunchApp,
-  subscribeToAppUpdate,
+  snoozeUpdateReminder,
+  updateReminderDue,
   updaterEnabled,
   type AppUpdateInfo,
 } from '@/lib/updater';
+import { bindManualUpdateCheck, setUpdateCheckBusy } from '@/components/updater/useManualUpdateCheck';
 
-export function UpdatePrompt() {
-  const [info, setInfo] = useState<AppUpdateInfo | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [progress, setProgress] = useState<number | null>(null);
-  const [error, setError] = useState<string | null>(null);
+type CheckOpts = {
+  manual?: boolean;
+  onLogin?: boolean;
+  fromReminder?: boolean;
+};
 
-  const runCheck = useCallback(async () => {
-    if (!updaterEnabled()) return;
-    try {
-      const next = await checkForAppUpdate();
-      setInfo(next);
-      setError(null);
-    } catch {
-      /* offline or no release manifest yet */
-    }
-  }, []);
-
-  useEffect(() => subscribeToAppUpdate(setInfo), []);
-
-  useEffect(() => {
-    if (!updaterEnabled()) return;
-    const timer = window.setTimeout(() => void runCheck(), 5000);
-    const interval = window.setInterval(() => void runCheck(), 6 * 60 * 60 * 1000);
-    return () => {
-      window.clearTimeout(timer);
-      window.clearInterval(interval);
-    };
-  }, [runCheck]);
-
-  if (!info) return null;
-
-  async function install() {
-    const current = info;
-    if (!current) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await installAppUpdate(current.raw, setProgress);
-      await relaunchApp();
-      await relaunchApp();
-    } catch (err) {
-      setBusy(false);
-      setProgress(null);
-      setError(err instanceof Error ? err.message : 'Could not install the update.');
-    }
-  }
-
-  return (
-    <div className="fixed right-4 bottom-4 z-[9000] w-[min(100%-2rem,360px)] border border-ink-600 bg-ink-800 p-4 shadow-lg">
-      <p className="text-[10px] font-bold tracking-wide text-ink-400 uppercase">Update available</p>
-      <p className="mt-1 text-sm font-semibold text-ink-50">
-        DockX {info.version}
-        <span className="ml-1.5 font-normal text-ink-400">from {info.currentVersion}</span>
-      </p>
-      {info.body ? (
-        <p className="mt-1.5 line-clamp-3 text-[12px] leading-relaxed text-ink-300">{info.body}</p>
-      ) : (
-        <p className="mt-1.5 text-[12px] text-ink-300">A new desktop build is ready to install.</p>
-      )}
-      {progress != null ? (
-        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-ink-700">
-          <div
-            className="h-full bg-brand-500 transition-[width]"
-            style={{ width: `${progress}%` }}
-          />
-        </div>
-      ) : null}
-      {error ? <p className="mt-2 text-[11px] text-[#ed4245]">{error}</p> : null}
-      <div className="mt-3 flex justify-end gap-2">
-        <Button
-          type="button"
-          size="xs"
-          variant="secondary"
-          disabled={busy}
-          onClick={() => setInfo(null)}
-        >
-          Later
-        </Button>
-        <Button type="button" size="xs" disabled={busy} onClick={() => void install()}>
-          {busy ? (progress != null ? `Installing ${progress}%` : 'Installing…') : 'Install & restart'}
-        </Button>
-      </div>
-    </div>
-  );
+function upToDateMessage(version: string | null) {
+  if (version) return `Updated now — DockX ${version} is the latest version.`;
+  return "Updated now — you're on the latest version.";
 }
 
-export function useManualUpdateCheck() {
-  const [busy, setBusy] = useState(false);
-  const checkNow = useCallback(async () => {
-    if (!isTauriRuntime()) {
-      return { ok: false as const, message: 'Updates are only available in the desktop app.' };
-    }
-    if (!updaterEnabled()) {
-      return { ok: true as const, message: 'Update checks run in installed builds, not in dev.' };
-    }
-    setBusy(true);
-    try {
-      const next = await checkForAppUpdate();
-      if (!next) return { ok: true as const, message: 'You are on the latest version.' };
-      publishAppUpdate(next);
-      return { ok: true as const, update: next };
-    } catch (err) {
-      return {
-        ok: false as const,
-        message: err instanceof Error ? err.message : 'Could not check for updates.',
-      };
-    } finally {
-      setBusy(false);
-    }
+export function UpdatePrompt() {
+  const toast = useToast();
+  const { isAuthenticated, isBootstrapping } = useAuth();
+  const infoRef = useRef<AppUpdateInfo | null>(null);
+  const toastIdRef = useRef('');
+  const installingRef = useRef(false);
+  const remindTimerRef = useRef(0);
+  const loginCheckedRef = useRef(false);
+  const toastApiRef = useRef(toast);
+  toastApiRef.current = toast;
+
+  const ensureToast = useCallback(
+    (message: string, opts: NonNullable<Parameters<typeof toast.push>[1]>) => {
+      const id = toastIdRef.current;
+      const patch = typeof opts === 'string' ? { tone: opts } : opts;
+      if (id) {
+        toast.update(id, { message, ...patch });
+        return id;
+      }
+      const next = toast.push(message, opts);
+      toastIdRef.current = next;
+      return next;
+    },
+    [toast],
+  );
+
+  const finishToast = useCallback(
+    (id: string, message: string, tone: 'success' | 'error' | 'info' = 'success') => {
+      if (toastIdRef.current === id) toastIdRef.current = '';
+      toast.update(id, {
+        message,
+        tone,
+        loading: false,
+        progress: null,
+        actions: [],
+        sticky: false,
+        durationMs: tone === 'error' ? 5500 : 4200,
+      });
+    },
+    [toast],
+  );
+
+  const runCheckRef = useRef<(opts?: CheckOpts) => Promise<void>>(async () => {});
+
+  const armReminder = useCallback(() => {
+    window.clearTimeout(remindTimerRef.current);
+    const wait = msUntilUpdateReminder();
+    if (wait <= 0) return;
+    remindTimerRef.current = window.setTimeout(() => {
+      void runCheckRef.current({ fromReminder: true });
+    }, wait);
   }, []);
-  return { busy, checkNow };
+
+  const remindLater = useCallback(() => {
+    snoozeUpdateReminder();
+    const id = toastIdRef.current;
+    toastIdRef.current = '';
+    if (id) {
+      toast.update(id, {
+        message: "We'll remind you in 1 hour.",
+        tone: 'info',
+        loading: false,
+        progress: null,
+        actions: [],
+        sticky: false,
+        durationMs: 3500,
+      });
+    }
+    armReminder();
+  }, [armReminder, toast]);
+
+  const installNow = useCallback(async () => {
+    const current = infoRef.current;
+    if (!current || installingRef.current) return;
+    installingRef.current = true;
+    setUpdateCheckBusy(true);
+    clearUpdateReminder();
+
+    const id = ensureToast(`Downloading DockX ${current.version}…`, {
+      tone: 'info',
+      sticky: true,
+      loading: true,
+      progress: 2,
+      actions: [],
+    });
+
+    let displayed = 2;
+    let target = 2;
+    let raf = 0;
+    let running = true;
+    const tick = () => {
+      if (!running) return;
+      if (displayed < target) {
+        displayed = Math.min(target, displayed + Math.max(0.16, (target - displayed) * 0.035));
+        toastApiRef.current.update(id, {
+          progress: Math.round(displayed),
+          loading: true,
+          sticky: true,
+          message:
+            displayed >= 99
+              ? 'Installing update…'
+              : `Downloading DockX ${current.version}… ${Math.round(displayed)}%`,
+        });
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+
+    try {
+      await installAppUpdate(current.raw, (percent) => {
+        if (percent > 0) target = Math.max(target, Math.min(99, percent));
+        else target = Math.min(90, target + 0.9);
+      });
+      target = 100;
+      await new Promise<void>((resolve) => {
+        const wait = () => {
+          if (displayed >= 99.2) {
+            resolve();
+            return;
+          }
+          requestAnimationFrame(wait);
+        };
+        wait();
+      });
+      running = false;
+      cancelAnimationFrame(raf);
+      toast.update(id, {
+        message: 'Update installed. Restarting…',
+        tone: 'success',
+        loading: true,
+        progress: 100,
+        actions: [],
+        sticky: true,
+      });
+      await relaunchApp();
+    } catch (err) {
+      running = false;
+      cancelAnimationFrame(raf);
+      installingRef.current = false;
+      setUpdateCheckBusy(false);
+      finishToast(
+        id,
+        err instanceof Error ? err.message : 'Could not install the update.',
+        'error',
+      );
+    }
+  }, [ensureToast, finishToast, toast]);
+
+  const showAvailable = useCallback(
+    (info: AppUpdateInfo) => {
+      infoRef.current = info;
+      const actions: ToastAction[] = [
+        { label: 'Remind me later', variant: 'secondary', onClick: remindLater },
+        { label: 'Install now', variant: 'primary', onClick: () => void installNow() },
+      ];
+      ensureToast(`DockX ${info.version} is ready to install.`, {
+        tone: 'info',
+        sticky: true,
+        loading: false,
+        progress: null,
+        actions,
+      });
+    },
+    [ensureToast, installNow, remindLater],
+  );
+
+  const runCheck = useCallback(
+    async (opts: CheckOpts = {}) => {
+      if (installingRef.current) return;
+
+      const showLoading = Boolean(opts.manual);
+      const startedAt = Date.now();
+      let id = toastIdRef.current;
+      if (showLoading) {
+        setUpdateCheckBusy(true);
+        id = ensureToast('Checking for updates…', {
+          tone: 'info',
+          sticky: true,
+          loading: true,
+          progress: null,
+          actions: [],
+        });
+      }
+
+      const waitForLoading = async () => {
+        if (!showLoading) return;
+        const elapsed = Date.now() - startedAt;
+        if (elapsed < 750) {
+          await new Promise((resolve) => window.setTimeout(resolve, 750 - elapsed));
+        }
+      };
+
+      try {
+        if (!updaterEnabled()) {
+          await waitForLoading();
+
+          if (opts.manual || opts.onLogin) {
+            const version = await currentAppVersion();
+            const message = upToDateMessage(version);
+            if (id) finishToast(id, message);
+            else toast.success(message);
+          }
+          return;
+        }
+
+        const next = await checkForAppUpdate();
+        await waitForLoading();
+        infoRef.current = next;
+
+        if (!next) {
+          if (opts.manual || opts.onLogin) {
+            const version = await currentAppVersion();
+            const message = upToDateMessage(version);
+            if (id) finishToast(id, message);
+            else toast.success(message);
+          } else if (id) {
+            toast.dismiss(id);
+            toastIdRef.current = '';
+          }
+          return;
+        }
+
+        if (!opts.manual && !opts.fromReminder && !updateReminderDue()) {
+          if (id && showLoading) {
+            toast.dismiss(id);
+            toastIdRef.current = '';
+          }
+          armReminder();
+          return;
+        }
+
+        showAvailable(next);
+      } catch (err) {
+        await waitForLoading();
+        const message = err instanceof Error ? err.message : 'Could not check for updates.';
+        if (opts.manual) {
+          if (id) finishToast(id, message, 'error');
+          else toast.error(message);
+        } else if (id) {
+          toast.dismiss(id);
+          toastIdRef.current = '';
+        }
+      } finally {
+        if (!installingRef.current) setUpdateCheckBusy(false);
+      }
+    },
+    [armReminder, ensureToast, finishToast, showAvailable, toast],
+  );
+
+  runCheckRef.current = runCheck;
+
+  useEffect(() => {
+    bindManualUpdateCheck(() => void runCheckRef.current({ manual: true }));
+    return () => bindManualUpdateCheck(null);
+  }, []);
+
+  useEffect(() => {
+    if (!isAuthenticated || isBootstrapping) {
+      loginCheckedRef.current = false;
+      return;
+    }
+    if (loginCheckedRef.current) return;
+    loginCheckedRef.current = true;
+    const timer = window.setTimeout(() => void runCheckRef.current({ onLogin: true }), 1600);
+    return () => window.clearTimeout(timer);
+  }, [isAuthenticated, isBootstrapping]);
+
+  useEffect(() => {
+    if (!isAuthenticated || isBootstrapping) return;
+    armReminder();
+    const interval = window.setInterval(() => void runCheckRef.current({}), 6 * 60 * 60 * 1000);
+    return () => {
+      window.clearTimeout(remindTimerRef.current);
+      window.clearInterval(interval);
+    };
+  }, [armReminder, isAuthenticated, isBootstrapping]);
+
+  return null;
 }

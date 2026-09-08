@@ -23,22 +23,82 @@ export function publishAppUpdate(info: AppUpdateInfo | null) {
   updateListener?.(info);
 }
 
+const REMIND_KEY = 'dockx.update.remindAt';
+export const UPDATE_REMIND_MS = 60 * 60 * 1000;
+
 export function updaterEnabled() {
-  return isTauriRuntime() && import.meta.env.PROD;
+  return isTauriRuntime();
+}
+
+export async function currentAppVersion(): Promise<string | null> {
+  if (!isTauriRuntime()) return null;
+  try {
+    return await getVersion();
+  } catch {
+    return null;
+  }
+}
+
+export function snoozeUpdateReminder(ms = UPDATE_REMIND_MS) {
+  try {
+    localStorage.setItem(REMIND_KEY, String(Date.now() + ms));
+  } catch {
+    /* ignore quota */
+  }
+}
+
+export function clearUpdateReminder() {
+  try {
+    localStorage.removeItem(REMIND_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+export function msUntilUpdateReminder(): number {
+  try {
+    const raw = localStorage.getItem(REMIND_KEY);
+    if (!raw) return 0;
+    const at = Number(raw);
+    if (!Number.isFinite(at)) return 0;
+    return Math.max(0, at - Date.now());
+  } catch {
+    return 0;
+  }
+}
+
+export function updateReminderDue() {
+  return msUntilUpdateReminder() === 0;
 }
 
 export async function checkForAppUpdate(): Promise<AppUpdateInfo | null> {
   if (!updaterEnabled()) return null;
   const currentVersion = await getVersion();
-  const update = await check();
-  if (!update) return null;
-  return {
-    currentVersion,
-    version: update.version,
-    body: update.body ?? '',
-    date: update.date ?? null,
-    raw: update,
-  };
+  try {
+    const update = await check();
+    if (!update) return null;
+    return {
+      currentVersion,
+      version: update.version,
+      body: update.body ?? '',
+      date: update.date ?? null,
+      raw: update,
+    };
+  } catch (err) {
+    if (isMissingUpdateManifest(err)) return null;
+    throw err;
+  }
+}
+
+function isMissingUpdateManifest(err: unknown) {
+  const message = (err instanceof Error ? err.message : String(err)).toLowerCase();
+  return (
+    message.includes('successful status') ||
+    message.includes('404') ||
+    message.includes('not found') ||
+    message.includes('could not fetch') ||
+    message.includes('latest.json')
+  );
 }
 
 export async function installAppUpdate(
