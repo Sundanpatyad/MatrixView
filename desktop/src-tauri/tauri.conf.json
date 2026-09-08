@@ -2,7 +2,7 @@
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "DockX",
   "mainBinaryName": "DockX",
-  "version": "0.1.0",
+  "version": "1.0.17",
   "identifier": "com.dockx.desktop",
   "build": {
     "frontendDist": "../dist",
@@ -33,11 +33,21 @@
       "desktop": {
         "schemes": ["dockx"]
       }
+    },
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDZDQjc1MTk0QkMwOUYwMUYKUldRZjhBbThsRkczYkxjamJlRnloU05qSExYWFVHd0VRakd5cVMyQjZ0ZUpSamJRZll4NWJMNnUK",
+      "endpoints": [
+        "https://github.com/Sundanpatyad/MatrixView/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
     }
   },
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": true,
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

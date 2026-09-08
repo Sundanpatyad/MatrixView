@@ -16,6 +16,7 @@ import { cn } from '@/lib/cn';
 import { resolveMediaUrl } from '@/lib/mediaUrl';
 import { useToast } from '@/lib/toast/ToastContext';
 import { useWorkspace } from '@/lib/workspace/WorkspaceContext';
+import { useManualUpdateCheck } from '@/components/updater/UpdatePrompt';
 
 type Props = {
   open: boolean;
@@ -28,6 +29,7 @@ export function ProfileModal({ open, onClose }: Props) {
   const { checkedIn, onBreak, elapsedLabel } = useAttendance();
   const toast = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
+  const { busy: checkingUpdate, checkNow } = useManualUpdateCheck();
 
   const [name, setName] = useState(user?.name ?? '');
   const [phone, setPhone] = useState(user?.phone ?? '');
@@ -259,6 +261,24 @@ export function ProfileModal({ open, onClose }: Props) {
                 Role: {user.role} · {projects.length} project
                 {projects.length === 1 ? '' : 's'}
               </p>
+              <Button
+                type="button"
+                size="xs"
+                variant="secondary"
+                className="mt-3"
+                disabled={checkingUpdate}
+                onClick={async () => {
+                  const result = await checkNow();
+                  if ('update' in result && result.update) {
+                    toast.success(`DockX ${result.update.version} is ready to install.`);
+                    return;
+                  }
+                  if (result.ok) toast.success(result.message ?? 'You are up to date.');
+                  else toast.error(result.message);
+                }}
+              >
+                {checkingUpdate ? 'Checking…' : 'Check for updates'}
+              </Button>
             </div>
           </div>
 

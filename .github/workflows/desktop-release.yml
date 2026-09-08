@@ -14,6 +14,11 @@
 #   APPLE_CERTIFICATE_PASSWORD  password used when exporting the .p12
 #   KEYCHAIN_PASSWORD           any random password for the CI keychain
 #   APPLE_SIGNING_IDENTITY      optional; e.g. "Developer ID Application: Name (TEAMID)"
+#   TAURI_SIGNING_PRIVATE_KEY   updater private key (minisign). Required for in-app OTA.
+#   TAURI_SIGNING_PRIVATE_KEY_PASSWORD  optional; only if the private key has a password
+#
+# App version in desktop/src-tauri/tauri.conf.json AND desktop/package.json
+# must match the git tag (v1.0.17 → 1.0.17) or this workflow fails.
 #
 # Repo tip: Settings → Actions → General → Workflow permissions
 # → “Read and write permissions”.
@@ -106,6 +111,28 @@ jobs:
         working-directory: desktop
         run: npm ci
 
+      - name: Verify tag matches app version
+        shell: bash
+        working-directory: desktop
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          CONF=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          PKG=$(node -p "require('./package.json').version")
+          if [ "$TAG" != "$CONF" ] || [ "$TAG" != "$PKG" ]; then
+            echo "Tag v$TAG must match desktop versions (tauri.conf.json=$CONF package.json=$PKG)"
+            exit 1
+          fi
+
+      - name: Require updater signing key
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if [ -z "${TAURI_SIGNING_PRIVATE_KEY:-}" ]; then
+            echo "Add repo secret TAURI_SIGNING_PRIVATE_KEY so release artifacts can be signed for OTA updates."
+            exit 1
+          fi
+
       # Vite only embeds VITE_* at build time. Write production env so the
       # packaged app always points at Cloud Run (desktop/.env is gitignored).
       - name: Bake production API URL
@@ -155,6 +182,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VITE_API_URL: ${{ env.VITE_API_URL }}
           NO_STRIP: true
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           # macOS signing + notarization (from GitHub Secrets — never commit these)
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -177,9 +206,11 @@ jobs:
 
             macOS builds are signed and notarized when Apple secrets are configured.
             Desktop login talks to: `${{ env.VITE_API_URL }}`
+
+            Installed apps can update in-place from this release (`latest.json`).
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
-          includeUpdaterJson: false
+          includeUpdaterJson: true
           # Include arch label so Silicon + Intel DMGs don't overwrite each other
           releaseAssetNamePattern: 'docx_${{ matrix.arch_label }}[ext]'

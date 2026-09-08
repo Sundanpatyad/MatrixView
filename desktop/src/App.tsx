@@ -12,6 +12,7 @@ import { BoardWorkspacePage } from '@/pages/board/BoardWorkspacePage';
 import { ChatPage } from '@/pages/chat/ChatPage';
 import { NotificationsPage } from '@/pages/notifications/NotificationsPage';
 import { MyWorkPage } from '@/pages/work/MyWorkPage';
+import { UpdatePrompt } from '@/components/updater/UpdatePrompt';
 
 /** Call signaling + global Accept/Decline overlay for authenticated routes only. */
 function AuthenticatedTree() {
@@ -26,6 +27,7 @@ export default function App() {
   return (
     <>
       <GoogleDeepLinkBridge />
+      <UpdatePrompt />
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
