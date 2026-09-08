@@ -1,11 +1,7 @@
 import type { Metadata } from "next";
 import { LandingExperience } from "@/components/landing/LandingExperience";
 import { JsonLd } from "@/components/seo/JsonLd";
-import { DESKTOP_DOWNLOAD_URL, DESKTOP_DOWNLOADS } from "@/lib/site";
-
-const SITE_URL =
-  process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ||
-  "https://matrix-view.vercel.app";
+import { DESKTOP_DOWNLOAD_URL, DESKTOP_DOWNLOADS, SITE_URL } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "DockX — Desktop Agent for Enterprise Work OS",

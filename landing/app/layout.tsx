@@ -1,10 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { ThemeScript } from "@/components/ThemeScript";
+import { SiteProviders } from "@/components/site/SiteProviders";
+import { SITE_URL } from "@/lib/site";
 import "./globals.css";
-
-const SITE_URL =
-  process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ||
-  "https://matrix-view.vercel.app";
 
 const TITLE = "DockX — Desktop Agent for Enterprise Work OS";
 const DESCRIPTION =
@@ -100,7 +98,7 @@ export default function RootLayout({
         suppressHydrationWarning
       >
         <ThemeScript />
-        {children}
+        <SiteProviders>{children}</SiteProviders>
       </body>
     </html>
   );

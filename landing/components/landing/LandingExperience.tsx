@@ -19,6 +19,8 @@ import {
   LiveBoardPlayground,
   ModuleExplorer,
 } from "./Playgrounds";
+import { InquiryButton } from "@/components/inquiry/InquiryForm";
+import { SiteFooter } from "@/components/site/LegalShell";
 import { APP_LOGIN_URL } from "@/lib/site";
 
 gsap.registerPlugin(ScrollTrigger);
@@ -267,6 +269,10 @@ export function LandingExperience() {
           </nav>
           <div className="flex items-center gap-2">
             <ThemeToggle />
+            <InquiryButton
+              variant="nav"
+              className="hidden px-3 py-1.5 text-[12px] sm:inline-flex"
+            />
             <DownloadDesktopNavLink />
             <MagneticLink
               href={APP_LOGIN_URL}
@@ -498,6 +504,7 @@ export function LandingExperience() {
               </p>
               <div className="mt-8 flex flex-wrap items-center gap-3">
                 <DownloadDesktopButton className="px-6 py-3" />
+                <InquiryButton variant="ghost" className="px-5 py-3 text-sm" />
                 <a
                   href={DESKTOP_DOWNLOAD_URL}
                   data-cursor="grow"
@@ -722,6 +729,7 @@ export function LandingExperience() {
           </p>
           <div data-reveal className="mt-10 flex flex-wrap items-center justify-center gap-3">
             <DownloadDesktopButton className="px-7 py-3.5" />
+            <InquiryButton variant="ghost" className="px-7 py-3.5 text-sm" />
             <MagneticLink
               href={APP_LOGIN_URL}
               className="items-center gap-2 rounded-full border border-ink-600 bg-ink-800/70 px-7 py-3.5 text-sm font-semibold text-ink-100 hover:border-brand-400/40"
@@ -733,28 +741,7 @@ export function LandingExperience() {
         </div>
       </section>
 
-      <footer className="border-t border-ink-600 py-8">
-        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-5 text-xs text-ink-400 sm:flex-row sm:px-8">
-          <span>© {new Date().getFullYear()} DockX</span>
-          <div className="flex items-center gap-6">
-            <a href="#download" className="transition hover:text-brand-300">
-              Download
-            </a>
-            <a href="#product" className="transition hover:text-brand-300">
-              Product
-            </a>
-            <a href="#dashboard" className="transition hover:text-brand-300">
-              Dashboard
-            </a>
-            <a
-              href={APP_LOGIN_URL}
-              className="font-medium text-ink-300 transition hover:text-brand-300"
-            >
-              matrix-view.vercel.app
-            </a>
-          </div>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }

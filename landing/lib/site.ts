@@ -1,6 +1,16 @@
 export const APP_LOGIN_URL =
   process.env.NEXT_PUBLIC_APP_LOGIN_URL || "https://matrix-view.vercel.app/";
 
+/** Public marketing site. */
+export const SITE_URL =
+  process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ||
+  "https://dockx.vercel.app";
+
+export const INQUIRY_TO_EMAIL =
+  process.env.INQUIRY_TO_EMAIL || "sundansharma600@gmail.com";
+
+export const LEGAL_EFFECTIVE = "8 September 2026";
+
 /** Releases index (fallback / “all releases”). */
 export const DESKTOP_DOWNLOAD_URL =
   process.env.NEXT_PUBLIC_DESKTOP_DOWNLOAD_URL ||
@@ -41,7 +51,3 @@ export const DESKTOP_DOWNLOADS = {
 } as const;
 
 export type DesktopDownloadKey = keyof typeof DESKTOP_DOWNLOADS;
-
-export const SITE_URL =
-  process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ||
-  "https://matrix-view.vercel.app";
