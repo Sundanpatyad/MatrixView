@@ -12,8 +12,48 @@ import {
 } from '@/lib/api/activity';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { useWorkspace } from '@/lib/workspace/WorkspaceContext';
+import type { ProjectMember } from '@/lib/workspace/types';
 import { cn } from '@/lib/cn';
 import { useToast } from '@/lib/toast/ToastContext';
+
+function mergeWorkspaceMembers(
+  api: MemberActivity[],
+  projectMembers: ProjectMember[],
+): MemberActivity[] {
+  const byId = new Map(api.map((m) => [m.userId, m]));
+  const byEmail = new Map(api.map((m) => [m.email.toLowerCase(), m]));
+  const extra: MemberActivity[] = [];
+  for (const pm of projectMembers) {
+    const email = pm.email.toLowerCase().trim();
+    if (!email) continue;
+    if ((pm.userId && byId.has(pm.userId)) || byEmail.has(email)) continue;
+    const row: MemberActivity = {
+      userId: pm.userId || `email:${email}`,
+      name: pm.name || email,
+      email,
+      role: pm.role,
+      memberStatus: pm.status === 'pending' ? 'pending' : 'active',
+      avatarUrl: pm.avatarUrl ?? null,
+      tracking: false,
+      totalTrackedMs: 0,
+      totalWebsiteMs: 0,
+      apps: [],
+      sites: [],
+      sessions: [],
+    };
+    extra.push(row);
+    byId.set(row.userId, row);
+    byEmail.set(email, row);
+  }
+  return extra.length === 0 ? api : [...api, ...extra];
+}
+
+function memberStatusLabel(m: MemberActivity) {
+  if (m.memberStatus === 'pending') return 'Pending invite';
+  if (m.sessions.length === 0) return "Didn't check in";
+  if (m.tracking) return `${formatDuration(m.totalTrackedMs)} · live`;
+  return `${formatDuration(m.totalTrackedMs)} · ${m.sessions.length} in`;
+}
 
 function sitesFromMember(m: MemberActivity): SiteUsage[] {
   if (m.sites && m.sites.length > 0) return m.sites;
@@ -241,7 +281,7 @@ export function AdminActivityPanel({ projectId }: { projectId?: string } = {}) {
   const [filterProjectId, setFilterProjectId] = useState<string | 'all'>(
     projectId ?? 'all',
   );
-  const [members, setMembers] = useState<MemberActivity[]>([]);
+  const [apiMembers, setApiMembers] = useState<MemberActivity[]>([]);
   const [allApps, setAllApps] = useState<AppUsage[]>([]);
   const [allSites, setAllSites] = useState<SiteUsage[]>([]);
   const [orgTotal, setOrgTotal] = useState(0);
@@ -256,7 +296,7 @@ export function AdminActivityPanel({ projectId }: { projectId?: string } = {}) {
       p.members.some(
         (m) =>
           m.role === 'admin' &&
-          m.email.toLowerCase() === user.email.toLowerCase(),
+          (m.userId === user.id || m.email.toLowerCase() === user.email.toLowerCase()),
       ),
     );
   }, [projects, user]);
@@ -264,18 +304,24 @@ export function AdminActivityPanel({ projectId }: { projectId?: string } = {}) {
   /** Locked to dashboard project when a specific admin project is selected */
   const scopedProjectId = projectId ?? filterProjectId;
 
+  const members = useMemo(() => {
+    const source =
+      scopedProjectId === 'all'
+        ? adminProjects
+        : adminProjects.filter((p) => p.id === scopedProjectId);
+    return mergeWorkspaceMembers(
+      apiMembers,
+      source.flatMap((p) => p.members),
+    );
+  }, [apiMembers, adminProjects, scopedProjectId]);
+
   const load = useCallback(async (date: string, pid: string | 'all') => {
     try {
       const data = await getOrgActivityByDate(date, pid === 'all' ? undefined : pid);
-      setMembers(data.members);
+      setApiMembers(data.members);
       setAllApps(data.allApps);
       setAllSites(data.allSites ?? []);
       setOrgTotal(data.totalTrackedMs);
-      setSelectedId((prev) => {
-        if (prev === 'all') return 'all';
-        if (prev && data.members.some((m) => m.userId === prev)) return prev;
-        return 'all';
-      });
     } catch (err) {
       toast.fromError(err, 'Failed to load activity');
     } finally {
@@ -307,6 +353,11 @@ export function AdminActivityPanel({ projectId }: { projectId?: string } = {}) {
       setFilterProjectId('all');
     }
   }, [adminProjects, filterProjectId, projectId]);
+
+  useEffect(() => {
+    if (selectedId === 'all') return;
+    if (!members.some((m) => m.userId === selectedId)) setSelectedId('all');
+  }, [members, selectedId]);
 
   const selected = useMemo(
     () => (selectedId === 'all' ? null : members.find((m) => m.userId === selectedId) ?? null),
@@ -404,11 +455,13 @@ export function AdminActivityPanel({ projectId }: { projectId?: string } = {}) {
       ...members.map((m) => ({
         value: m.userId,
         label:
-          m.sessions.length === 0
-            ? `${m.name} (not in)`
-            : m.tracking
-              ? `${m.name} (live)`
-              : m.name,
+          m.memberStatus === 'pending'
+            ? `${m.name} (pending)`
+            : m.sessions.length === 0
+              ? `${m.name} (not in)`
+              : m.tracking
+                ? `${m.name} (live)`
+                : m.name,
       })),
     ],
     [members],
@@ -575,7 +628,8 @@ export function AdminActivityPanel({ projectId }: { projectId?: string } = {}) {
 
             {members.map((m) => {
               const active = m.userId === selectedId;
-              const absent = m.sessions.length === 0;
+              const pending = m.memberStatus === 'pending';
+              const absent = !pending && m.sessions.length === 0;
               return (
                 <button
                   key={m.userId}
@@ -593,21 +647,25 @@ export function AdminActivityPanel({ projectId }: { projectId?: string } = {}) {
                       seed={m.email || m.name}
                       size="sm"
                       userId={m.userId}
+                      online={m.tracking}
                     />
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-xs font-semibold text-ink-50">
-                      {m.name}
+                    <span className="flex items-center gap-1">
+                      <span className="block truncate text-xs font-semibold text-ink-50">
+                        {m.name}
+                      </span>
+                      <span className="shrink-0 text-[9px] font-semibold uppercase text-ink-400">
+                        {m.role === 'admin' ? 'Admin' : 'Member'}
+                      </span>
                     </span>
                     <span
                       className={cn(
                         'block truncate text-[10px]',
-                        absent ? 'text-[#f0b232]' : 'text-ink-400',
+                        pending || absent ? 'text-[#f0b232]' : m.tracking ? 'text-[#4BDE80]' : 'text-ink-400',
                       )}
                     >
-                      {absent
-                        ? "Didn't check in"
-                        : `${formatDuration(m.totalTrackedMs)} · ${m.sessions.length} in`}
+                      {memberStatusLabel(m)}
                     </span>
                   </span>
                 </button>
@@ -861,11 +919,14 @@ export function AdminActivityPanel({ projectId }: { projectId?: string } = {}) {
                               seed={m.email || m.name}
                               size="sm"
                               userId={m.userId}
+                              online={m.tracking}
                             />
                             <span className="min-w-0 flex-1 truncate text-xs text-ink-200">
                               {m.name}
                             </span>
-                            <span className="text-[10px] font-semibold text-[#f0b232]">Out</span>
+                            <span className="text-[10px] font-semibold text-[#f0b232]">
+                              {m.memberStatus === 'pending' ? 'Pending' : 'Out'}
+                            </span>
                           </button>
                         </li>
                       ))}

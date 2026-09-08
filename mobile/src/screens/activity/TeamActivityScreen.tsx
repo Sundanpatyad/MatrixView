@@ -29,11 +29,40 @@ import {
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { useWorkspace } from '@/context/WorkspaceContext';
-import { activityApi, type ActivitySession, type MemberActivity } from '@/lib/api';
+import { activityApi, type ActivitySession, type MemberActivity, type ProjectMember } from '@/lib/api';
 import type { RootStackParamList } from '@/navigation/types';
 import { radius, useColors, useTheme } from '@/theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'TeamActivity'>;
+
+function mergeWorkspaceMembers(api: MemberActivity[], projectMembers: ProjectMember[]): MemberActivity[] {
+  const byId = new Map(api.map((m) => [m.userId, m]));
+  const byEmail = new Map(api.map((m) => [m.email.toLowerCase(), m]));
+  const extra: MemberActivity[] = [];
+  for (const pm of projectMembers) {
+    const email = pm.email.toLowerCase().trim();
+    if (!email) continue;
+    if ((pm.userId && byId.has(pm.userId)) || byEmail.has(email)) continue;
+    const row: MemberActivity = {
+      userId: pm.userId || `email:${email}`,
+      name: pm.name || email,
+      email,
+      role: pm.role,
+      memberStatus: pm.status === 'pending' ? 'pending' : 'active',
+      avatarUrl: pm.avatarUrl ?? null,
+      tracking: false,
+      totalTrackedMs: 0,
+      totalWebsiteMs: 0,
+      apps: [],
+      sites: [],
+      sessions: [],
+    };
+    extra.push(row);
+    byId.set(row.userId, row);
+    byEmail.set(email, row);
+  }
+  return extra.length === 0 ? api : [...api, ...extra];
+}
 
 function todayIso() {
   const d = new Date();
@@ -121,7 +150,8 @@ function UsageRows({
 
 function MemberRow({ member, onPress }: { member: MemberActivity; onPress: () => void }) {
   const colors = useColors();
-  const absent = member.sessions.length === 0;
+  const pending = member.memberStatus === 'pending';
+  const absent = !pending && member.sessions.length === 0;
   return (
     <Pressable
       onPress={onPress}
@@ -138,17 +168,25 @@ function MemberRow({ member, onPress }: { member: MemberActivity; onPress: () =>
       <View style={styles.flex}>
         <Text style={[styles.memberName, { color: colors.text }]} numberOfLines={1}>
           {member.name}
+          <Text style={[styles.memberRole, { color: colors.textSubtle }]}>
+            {'  '}
+            {member.role === 'admin' ? 'Admin' : 'Member'}
+          </Text>
         </Text>
         <Text
-          style={[styles.memberMeta, { color: absent ? colors.warning : colors.textSubtle }]}
+          style={[styles.memberMeta, { color: pending || absent ? colors.warning : colors.textSubtle }]}
           numberOfLines={1}
         >
-          {absent
-            ? "Didn't check in"
-            : `${formatDuration(member.totalTrackedMs)} tracked · ${member.sessions.length} check-in${member.sessions.length === 1 ? '' : 's'}`}
+          {pending
+            ? 'Pending invite'
+            : absent
+              ? "Didn't check in"
+              : `${formatDuration(member.totalTrackedMs)} tracked · ${member.sessions.length} check-in${member.sessions.length === 1 ? '' : 's'}`}
         </Text>
       </View>
-      {absent ? (
+      {pending ? (
+        <Badge label="Pending" color={colors.warning} />
+      ) : absent ? (
         <Badge label="Out" color={colors.warning} />
       ) : member.tracking ? (
         <Badge label="Live" color={colors.success} dot />
@@ -174,7 +212,7 @@ export function TeamActivityScreen({ route, navigation }: Props) {
 
   const [filterDate, setFilterDate] = useState(todayIso);
   const [filterProjectId, setFilterProjectId] = useState<string>(requestedProjectId ?? 'all');
-  const [members, setMembers] = useState<MemberActivity[]>([]);
+  const [apiMembers, setApiMembers] = useState<MemberActivity[]>([]);
   const [orgTotal, setOrgTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -193,13 +231,23 @@ export function TeamActivityScreen({ route, navigation }: Props) {
 
   const scopedProjectId = lockedProjectId ?? filterProjectId;
 
+  const members = useMemo(() => {
+    const source =
+      scopedProjectId === 'all'
+        ? adminProjects
+        : adminProjects.filter((project) => project.id === scopedProjectId);
+    return mergeWorkspaceMembers(
+      apiMembers,
+      source.flatMap((project) => project.members),
+    );
+  }, [apiMembers, adminProjects, scopedProjectId]);
+
   const load = useCallback(
     async (date: string, pid: string) => {
       try {
         const data = await activityApi.getOrgActivityByDate(date, pid === 'all' ? undefined : pid);
-        setMembers(data.members);
+        setApiMembers(data.members);
         setOrgTotal(data.totalTrackedMs);
-        setSelectedId((prev) => (prev && data.members.some((m) => m.userId === prev) ? prev : null));
       } catch (error) {
         toast.fromError(error, 'Could not load team activity.');
       } finally {
@@ -209,6 +257,12 @@ export function TeamActivityScreen({ route, navigation }: Props) {
     },
     [toast],
   );
+
+  useEffect(() => {
+    if (selectedId && !members.some((member) => member.userId === selectedId)) {
+      setSelectedId(null);
+    }
+  }, [members, selectedId]);
 
   useEffect(() => {
     if (adminProjects.length === 0) {
@@ -618,6 +672,10 @@ const styles = StyleSheet.create({
   memberName: {
     fontSize: 15,
     fontWeight: '700',
+  },
+  memberRole: {
+    fontSize: 11,
+    fontWeight: '600',
   },
   memberMeta: {
     fontSize: 12.5,

@@ -317,10 +317,16 @@ export async function getTodaySummary(actor: Actor, tzOffsetMinutes?: number) {
 /** Projects where the actor is a project admin (not org-level Admin). */
 async function findAdminProjects(actor: Actor) {
   const email = actor.email.toLowerCase().trim();
+  const uid = Types.ObjectId.isValid(actor.sub) ? new Types.ObjectId(actor.sub) : null;
   return Project.find({
-    members: { $elemMatch: { email, role: 'admin' } },
+    members: {
+      $elemMatch: {
+        role: 'admin',
+        $or: uid ? [{ email }, { userId: uid }] : [{ email }],
+      },
+    },
   })
-    .select('_id name members')
+    .select('_id name orgId members')
     .lean();
 }
 
@@ -459,65 +465,143 @@ export async function getOrgActivityByDate(
     }
   }
 
-  const memberEmails = new Set<string>();
-  const memberUserIds = new Set<string>();
+  type RosterEntry = {
+    key: string;
+    userId: string | null;
+    name: string;
+    email: string;
+    projectRole: 'admin' | 'member';
+    memberStatus: 'active' | 'pending';
+  };
+
+  const byUserId = new Map<string, RosterEntry>();
+  const byEmail = new Map<string, RosterEntry>();
+  const projectOrgIds = new Set<string>();
+
   for (const p of adminProjects) {
+    if (p.orgId) projectOrgIds.add(String(p.orgId));
     for (const m of p.members ?? []) {
-      const em = String(m.email ?? '')
+      const email = String(m.email ?? '')
         .toLowerCase()
         .trim();
-      if (em) memberEmails.add(em);
-      if (m.userId) memberUserIds.add(String(m.userId));
+      if (!email) continue;
+      const uid =
+        m.userId && Types.ObjectId.isValid(String(m.userId)) ? String(m.userId) : null;
+      const projectRole = m.role === 'admin' ? 'admin' : 'member';
+      const memberStatus = m.status === 'pending' ? 'pending' : 'active';
+      const existing = (uid ? byUserId.get(uid) : undefined) ?? byEmail.get(email);
+      if (!existing) {
+        const entry: RosterEntry = {
+          key: uid || `email:${email}`,
+          userId: uid,
+          name: String(m.name || email),
+          email,
+          projectRole,
+          memberStatus,
+        };
+        if (uid) byUserId.set(uid, entry);
+        byEmail.set(email, entry);
+        continue;
+      }
+      if (uid && !existing.userId) {
+        existing.userId = uid;
+        existing.key = uid;
+        byUserId.set(uid, existing);
+      }
+      if (projectRole === 'admin') existing.projectRole = 'admin';
+      if (memberStatus === 'active') existing.memberStatus = 'active';
+      if (m.name) existing.name = String(m.name);
     }
   }
+
+  const roster = [...new Set([...byUserId.values(), ...byEmail.values()])];
+  const linkedIds = roster
+    .map((r) => r.userId)
+    .filter((id): id is string => Boolean(id))
+    .map((id) => new Types.ObjectId(id));
+  const emails = [...new Set(roster.map((r) => r.email))];
+
+  const userQuery: Record<string, unknown>[] = [];
+  if (linkedIds.length) userQuery.push({ _id: { $in: linkedIds } });
+  if (emails.length) userQuery.push({ email: { $in: emails } });
+
+  const users =
+    userQuery.length === 0
+      ? []
+      : await User.find({ $or: userQuery })
+          .select('_id name email avatarUrl orgId')
+          .lean();
+
+  const userById = new Map(users.map((u) => [String(u._id), u]));
+  const usersByEmail = new Map<string, typeof users>();
+  for (const u of users) {
+    const em = String(u.email).toLowerCase();
+    const list = usersByEmail.get(em) ?? [];
+    list.push(u);
+    usersByEmail.set(em, list);
+  }
+
+  const pickUser = (entry: RosterEntry) => {
+    if (entry.userId && userById.has(entry.userId)) return userById.get(entry.userId);
+    const list = usersByEmail.get(entry.email) ?? [];
+    if (list.length === 0) return undefined;
+    return (
+      list.find((u) => projectOrgIds.has(String(u.orgId))) ??
+      list.find((u) => String(u.orgId) === actor.orgId) ??
+      list[0]
+    );
+  };
+
+  const resolved = new Map<string, RosterEntry>();
+  for (const entry of roster) {
+    const u = pickUser(entry);
+    if (u) {
+      entry.userId = String(u._id);
+      entry.key = entry.userId;
+      if (u.name) entry.name = u.name;
+    }
+    const dest = entry.userId ?? entry.key;
+    const prev = resolved.get(dest);
+    if (!prev) {
+      resolved.set(dest, entry);
+      continue;
+    }
+    if (entry.projectRole === 'admin') prev.projectRole = 'admin';
+    if (entry.memberStatus === 'active') prev.memberStatus = 'active';
+  }
+
+  const resolvedUserIds = [...resolved.values()]
+    .map((r) => r.userId)
+    .filter((id): id is string => Boolean(id))
+    .map((id) => new Types.ObjectId(id));
 
   const { start, end, date } = dayBounds(dateStr, tzOffsetMinutes);
   const isToday = date === dayBounds(undefined, tzOffsetMinutes).date;
 
-  const orFilters: Record<string, unknown>[] = [];
-  if (memberUserIds.size) {
-    orFilters.push({
-      _id: { $in: [...memberUserIds].map((id) => new Types.ObjectId(id)) },
-    });
-  }
-  if (memberEmails.size) {
-    orFilters.push({ email: { $in: [...memberEmails] } });
-  }
-
-  const users =
-    orFilters.length === 0
-      ? []
-      : await User.find({
-          orgId: actor.orgId,
-          status: { $in: ['active', 'invited', 'locked'] },
-          $or: orFilters,
-        })
-          .select('_id name email role avatarUrl')
-          .lean();
-
-  const userIds = users.map((u) => u._id);
   const sessions =
-    userIds.length === 0
+    resolvedUserIds.length === 0
       ? []
       : await ActivitySession.find({
-          orgId: actor.orgId,
-          userId: { $in: userIds },
+          userId: { $in: resolvedUserIds },
           ...sessionsForDayFilter(start, end),
         }).sort({ startedAt: -1 });
 
-  const members = users.map((u) => {
-    const userSessions = sessions.filter((s) => String(s.userId) === String(u._id));
+  const members = [...resolved.values()].map((entry) => {
+    const u = pickUser(entry);
+    const userSessions = entry.userId
+      ? sessions.filter((s) => String(s.userId) === entry.userId)
+      : [];
     const apps = aggregateApps(userSessions);
     const sites = aggregateSites(userSessions);
-    const activeSession =
-      isToday && userSessions.some((s) => s.status === 'active');
+    const activeSession = isToday && userSessions.some((s) => s.status === 'active');
 
     return {
-      userId: String(u._id),
-      name: u.name,
-      email: u.email,
-      role: u.role,
-      avatarUrl: u.avatarUrl ?? null,
+      userId: entry.userId ?? entry.key,
+      name: entry.name,
+      email: entry.email,
+      role: entry.projectRole,
+      memberStatus: entry.memberStatus,
+      avatarUrl: u?.avatarUrl ?? null,
       tracking: Boolean(activeSession),
       totalTrackedMs: apps.reduce((sum, a) => sum + a.durationMs, 0),
       totalWebsiteMs: sites.reduce((sum, a) => sum + a.durationMs, 0),
@@ -527,7 +611,15 @@ export async function getOrgActivityByDate(
     };
   });
 
-  members.sort((a, b) => b.totalTrackedMs - a.totalTrackedMs);
+  members.sort((a, b) => {
+    if (a.tracking !== b.tracking) return a.tracking ? -1 : 1;
+    const aIn = a.sessions.length > 0;
+    const bIn = b.sessions.length > 0;
+    if (aIn !== bIn) return aIn ? -1 : 1;
+    if (a.memberStatus !== b.memberStatus) return a.memberStatus === 'pending' ? 1 : -1;
+    if (b.totalTrackedMs !== a.totalTrackedMs) return b.totalTrackedMs - a.totalTrackedMs;
+    return a.name.localeCompare(b.name);
+  });
 
   const allApps = aggregateApps(sessions);
   const allSites = aggregateSites(sessions);

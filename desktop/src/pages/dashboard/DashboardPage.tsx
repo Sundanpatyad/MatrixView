@@ -262,7 +262,7 @@ export function DashboardPage() {
             p.members.some(
               (m) =>
                 m.role === 'admin' &&
-                m.email.toLowerCase() === user.email.toLowerCase(),
+                (m.userId === user.id || m.email.toLowerCase() === user.email.toLowerCase()),
             ),
           ),
       ),
@@ -281,7 +281,11 @@ export function DashboardPage() {
       ...projects.map((p) => {
         const role =
           user &&
-          p.members.find((m) => m.email.toLowerCase() === user.email.toLowerCase())?.role;
+          p.members.find(
+            (m) =>
+              (user.id && m.userId === user.id) ||
+              m.email.toLowerCase() === user.email.toLowerCase(),
+          )?.role;
         return {
           value: p.id,
           label: `${p.name} · ${role === 'admin' ? 'Admin' : 'Member'}`,

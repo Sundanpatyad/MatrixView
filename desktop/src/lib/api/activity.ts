@@ -126,6 +126,7 @@ export type MemberActivity = {
   name: string;
   email: string;
   role: string;
+  memberStatus?: 'active' | 'pending';
   avatarUrl?: string | null;
   tracking: boolean;
   totalTrackedMs: number;
