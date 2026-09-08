@@ -57,6 +57,7 @@ interface WorkspaceContextValue {
 
   createTask: (projectId: string, input: CreateTaskInput) => Promise<BoardTask>;
   updateTask: (taskId: string, input: UpdateTaskInput) => Promise<BoardTask>;
+  deleteTask: (taskId: string) => Promise<void>;
   moveTask: (taskId: string, status: string) => Promise<void>;
   addComment: (taskId: string, body: string, files?: PickedFile[]) => Promise<BoardTask>;
   addTaskAttachments: (taskId: string, files: PickedFile[]) => Promise<BoardTask>;
@@ -273,6 +274,11 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         if (!projectIdsRef.current.has(task.projectId)) return;
         setTasks((prev) => upsertById(prev, task));
       },
+      onTaskDeleted: ({ taskId }) => {
+        if (!taskId) return;
+        setTasks((prev) => prev.filter((task) => task.id !== taskId));
+        setTimeline((prev) => prev.filter((item) => item.taskId !== taskId));
+      },
       onProjectColumns: ({ project, tasks: updatedTasks, sprint, phases: nextPhases, sprints: nextSprints }) => {
         applyProject(project, updatedTasks, { sprint, phases: nextPhases, sprints: nextSprints });
       },
@@ -381,6 +387,12 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     const { task } = await workspaceApi.updateTaskRequest(taskId, input);
     setTasks((prev) => upsertById(prev, task));
     return task;
+  }, []);
+
+  const deleteTask = useCallback(async (taskId: string) => {
+    await workspaceApi.deleteTaskRequest(taskId);
+    setTasks((prev) => prev.filter((task) => task.id !== taskId));
+    setTimeline((prev) => prev.filter((item) => item.taskId !== taskId));
   }, []);
 
   /** Optimistic so column drops feel instant; the socket echo confirms it. */
@@ -627,6 +639,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       uploadProjectAvatar,
       createTask,
       updateTask,
+      deleteTask,
       moveTask,
       addComment,
       addTaskAttachments,
@@ -679,6 +692,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       uploadProjectAvatar,
       createTask,
       updateTask,
+      deleteTask,
       moveTask,
       addComment,
       addTaskAttachments,

@@ -20,6 +20,7 @@ import {
 import { Conversation } from './models/Conversation.js';
 import { ConversationMemberState } from './models/ConversationMemberState.js';
 import { Message } from './models/Message.js';
+import { fetchLinkPreview, firstHttpUrl } from './linkPreview.js';
 import {
   chatHref,
   createAndEmitMany,
@@ -366,10 +367,60 @@ export async function serializeMessage(doc: InstanceType<typeof Message>) {
     receipts,
     forwarded: Boolean(doc.forwarded),
     forwardedFrom: doc.forwardedFrom ?? null,
+    linkPreview:
+      doc.deletedAt || !doc.linkPreview
+        ? null
+        : {
+            url: doc.linkPreview.url,
+            host: doc.linkPreview.host ?? '',
+            title: doc.linkPreview.title ?? '',
+            description: doc.linkPreview.description ?? '',
+            imageUrl: doc.linkPreview.imageUrl ?? null,
+            siteName: doc.linkPreview.siteName ?? '',
+          },
     editedAt: doc.editedAt ? doc.editedAt.toISOString() : null,
     deletedAt: doc.deletedAt ? doc.deletedAt.toISOString() : null,
     createdAt: doc.createdAt.toISOString(),
   };
+}
+
+async function broadcastMessageEdited(message: InstanceType<typeof Message>) {
+  const serialized = await serializeMessage(message);
+  emitToConversation(serialized.conversationId, 'message:edited', { message: serialized });
+  for (const memberId of await memberIdsForMessage(message)) {
+    emitToUser(memberId, 'message:edited', { message: serialized });
+  }
+  return serialized;
+}
+
+export async function getLinkPreviewForUrl(url: string) {
+  const preview = await fetchLinkPreview(url);
+  return { preview };
+}
+
+export function scheduleLinkPreview(messageId: string) {
+  void attachLinkPreview(messageId).catch((err) => {
+    console.error('[chat] link preview', err);
+  });
+}
+
+async function attachLinkPreview(messageId: string) {
+  const message = await Message.findById(messageId);
+  if (!message || message.deletedAt) return;
+  const url = firstHttpUrl(message.body ?? '');
+  if (!url) {
+    if (message.linkPreview) {
+      message.linkPreview = null;
+      await message.save();
+      await broadcastMessageEdited(message);
+    }
+    return;
+  }
+  const preview = await fetchLinkPreview(url);
+  if (!preview) return;
+  message.linkPreview = preview;
+  await message.save();
+  await broadcastMessageEdited(message);
 }
 
 function broadcastMessageStatus(serialized: Awaited<ReturnType<typeof serializeMessage>>) {
@@ -803,6 +854,7 @@ export async function sendMessage(
   await conversation.save();
 
   const serialized = await serializeMessage(message);
+  scheduleLinkPreview(String(message._id));
 
   // New activity un-hides the chat for every member who had deleted/hidden it.
   await ConversationMemberState.updateMany(
@@ -922,6 +974,7 @@ export async function forwardMessage(
   await target.save();
 
   const serialized = await serializeMessage(message);
+  scheduleLinkPreview(String(message._id));
   const convSerialized = await serializeConversation(target, actor.sub);
 
   emitToConversation(targetConversationId, 'message:new', { message: serialized });
@@ -1097,6 +1150,7 @@ export async function editMessage(actor: Actor, messageId: string, body: string)
   message.editedAt = new Date();
   await message.save();
   const serialized = await serializeMessage(message);
+  scheduleLinkPreview(String(message._id));
   emitToConversation(serialized.conversationId, 'message:edited', { message: serialized });
   for (const memberId of await memberIdsForMessage(message)) {
     emitToUser(memberId, 'message:edited', { message: serialized });

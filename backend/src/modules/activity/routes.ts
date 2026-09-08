@@ -23,7 +23,13 @@ function param(value: string | string[]): string {
 
 router.post('/activity/sessions/start', requireDesktop, async (req, res, next) => {
   try {
-    const session = await activity.startSession(actorFrom(req as AuthedRequest));
+    const body = z
+      .object({ tzOffset: z.number().optional() })
+      .parse(req.body ?? {});
+    const session = await activity.startSession(
+      actorFrom(req as AuthedRequest),
+      body.tzOffset,
+    );
     res.status(201).json({ session });
   } catch (err) {
     next(err);
@@ -91,11 +97,12 @@ router.post('/activity/sessions/:sessionId/samples', requireDesktop, async (req,
 router.post('/activity/sessions/stop', requireDesktop, async (req, res, next) => {
   try {
     const body = z
-      .object({ sessionId: z.string().optional() })
+      .object({ sessionId: z.string().optional(), tzOffset: z.number().optional() })
       .parse(req.body ?? {});
     const result = await activity.stopSession(
       actorFrom(req as AuthedRequest),
       body.sessionId,
+      body.tzOffset,
     );
     res.json(result);
   } catch (err) {

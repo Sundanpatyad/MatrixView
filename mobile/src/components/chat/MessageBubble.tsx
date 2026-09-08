@@ -12,6 +12,8 @@ import { resolveMediaUrl } from '@/lib/mediaUrl';
 import { useColors, useTheme } from '@/theme';
 
 import { MediaCarousel, mediaItemsOf, type MediaCarouselItem } from './MediaCarousel';
+import { LinkifiedText } from './LinkifiedText';
+import { LinkPreviewCard } from './LinkPreviewCard';
 
 const DOCUMENT_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
   audio: 'musical-notes-outline',
@@ -333,9 +335,23 @@ export function MessageBubble({
           {metaRow}
         </View>
       ) : textOnly ? (
-        <View style={styles.contentRow}>
-          <Text style={[styles.body, { color: textColor }]}>{message.body}</Text>
-          {metaRow}
+        <View>
+          <LinkPreviewCard
+            preview={message.linkPreview}
+            body={message.body}
+            mine={mine}
+            onBeforeOpen={() => {
+              suppressMessagePress.current = true;
+            }}
+          />
+          <View style={styles.contentRow}>
+            <LinkifiedText
+              text={message.body}
+              style={[styles.body, { color: textColor }]}
+              linkStyle={{ color: mine ? '#dbeafe' : colors.brand }}
+            />
+            {metaRow}
+          </View>
         </View>
       ) : (
         <>
@@ -351,7 +367,23 @@ export function MessageBubble({
             />
           ))}
 
-          {message.body ? <Text style={[styles.body, { color: textColor }]}>{message.body}</Text> : null}
+          {message.body ? (
+            <>
+              <LinkPreviewCard
+                preview={message.linkPreview}
+                body={message.body}
+                mine={mine}
+                onBeforeOpen={() => {
+                  suppressMessagePress.current = true;
+                }}
+              />
+              <LinkifiedText
+                text={message.body}
+                style={[styles.body, { color: textColor }]}
+                linkStyle={{ color: mine ? '#dbeafe' : colors.brand }}
+              />
+            </>
+          ) : null}
           {!mediaOnly ? metaRow : null}
         </>
       )}

@@ -35,6 +35,8 @@ import {
   IconX,
 } from '@/components/ui/Icons';
 import { TypingIndicator } from '@/components/chat/TypingIndicator';
+import { LinkifiedText } from '@/components/chat/LinkifiedText';
+import { LinkPreviewCard } from '@/components/chat/LinkPreviewCard';
 import { Button } from '@/components/ui/Button';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { UserAvatar } from '@/components/ui/UserAvatar';
@@ -3098,21 +3100,36 @@ export function ChatPage() {
                               ) : null}
 
                               {textOnly ? (
-                                <div className="flex items-end gap-1">
-                                  <p className="selectable min-w-0 whitespace-pre-wrap break-words text-[13px] leading-relaxed sm:text-[13.5px]">
-                                    {msg.body}
-                                  </p>
-                                  {meta}
+                                <div className="min-w-0">
+                                  {msg.body ? (
+                                    <LinkPreviewCard
+                                      preview={msg.linkPreview}
+                                      body={msg.body}
+                                      mine={mine}
+                                    />
+                                  ) : null}
+                                  <div className="flex items-end gap-1">
+                                    <LinkifiedText
+                                      text={msg.body}
+                                      mine={mine}
+                                      className="selectable min-w-0 text-[13px] leading-relaxed sm:text-[13.5px]"
+                                    />
+                                    {meta}
+                                  </div>
                                 </div>
                               ) : hasCaption ? (
-                                <p
-                                  className={cn(
-                                    'selectable whitespace-pre-wrap break-words text-[13px] leading-relaxed sm:text-[13.5px]',
-                                    hasVisualMedia && 'mt-1.5 px-1',
-                                  )}
-                                >
-                                  {msg.body}
-                                </p>
+                                <div className={cn(hasVisualMedia && 'mt-1.5 px-1')}>
+                                  <LinkPreviewCard
+                                    preview={msg.linkPreview}
+                                    body={msg.body}
+                                    mine={mine}
+                                  />
+                                  <LinkifiedText
+                                    text={msg.body}
+                                    mine={mine}
+                                    className="selectable text-[13px] leading-relaxed sm:text-[13.5px]"
+                                  />
+                                </div>
                               ) : null}
                             </>
                           )}

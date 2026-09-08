@@ -35,6 +35,10 @@ function mergeWorkspaceMembers(
       memberStatus: pm.status === 'pending' ? 'pending' : 'active',
       avatarUrl: pm.avatarUrl ?? null,
       tracking: false,
+      attendanceStatus: 'not_in',
+      firstCheckInAt: null,
+      lastCheckOutAt: null,
+      totalClockedMs: 0,
       totalTrackedMs: 0,
       totalWebsiteMs: 0,
       apps: [],
@@ -48,11 +52,45 @@ function mergeWorkspaceMembers(
   return extra.length === 0 ? api : [...api, ...extra];
 }
 
+function withDayAttendance(m: MemberActivity): MemberActivity {
+  if (m.sessions.length === 0) {
+    return {
+      ...m,
+      attendanceStatus: m.attendanceStatus ?? 'not_in',
+      firstCheckInAt: m.firstCheckInAt ?? null,
+      lastCheckOutAt: m.lastCheckOutAt ?? null,
+      totalClockedMs: 0,
+    };
+  }
+  const sorted = [...m.sessions].sort(
+    (a, b) => new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime(),
+  );
+  const first = sorted[0];
+  const last = sorted[sorted.length - 1];
+  const fromSessions = sorted.reduce((sum, session) => sum + sessionSpanMs(session), 0);
+  return {
+    ...m,
+    attendanceStatus:
+      m.attendanceStatus ?? (m.tracking ? 'checked_in' : 'checked_out'),
+    firstCheckInAt: m.firstCheckInAt ?? first?.startedAt ?? null,
+    lastCheckOutAt: m.tracking ? null : (m.lastCheckOutAt ?? last?.endedAt ?? null),
+    totalClockedMs: Math.max(m.totalClockedMs ?? 0, fromSessions),
+  };
+}
+
+function attendanceLabel(m: MemberActivity) {
+  if (m.memberStatus === 'pending') return 'Pending invite';
+  if (m.attendanceStatus === 'checked_in' || m.tracking) return 'Checked in';
+  if (m.attendanceStatus === 'not_in' || m.sessions.length === 0) return "Didn't check in";
+  return 'Checked out';
+}
+
 function memberStatusLabel(m: MemberActivity) {
   if (m.memberStatus === 'pending') return 'Pending invite';
-  if (m.sessions.length === 0) return "Didn't check in";
-  if (m.tracking) return `${formatDuration(m.totalTrackedMs)} · live`;
-  return `${formatDuration(m.totalTrackedMs)} · ${m.sessions.length} in`;
+  if (m.attendanceStatus === 'not_in' || m.sessions.length === 0) return "Didn't check in";
+  const clocked = formatDuration(m.totalClockedMs ?? 0);
+  if (m.attendanceStatus === 'checked_in' || m.tracking) return `${clocked} · in`;
+  return `${clocked} · out`;
 }
 
 function sitesFromMember(m: MemberActivity): SiteUsage[] {
@@ -105,9 +143,13 @@ function formatDuration(ms: number) {
   const h = Math.floor(totalSec / 3600);
   const m = Math.floor((totalSec % 3600) / 60);
   const s = totalSec % 60;
-  if (h > 0) return `${h}h ${m}m`;
+  if (h > 0) return `${h}h ${m}m ${s}s`;
   if (m > 0) return `${m}m ${s}s`;
   return `${s}s`;
+}
+
+function memberDayClockedMs(member: MemberActivity) {
+  return member.sessions.reduce((sum, session) => sum + sessionSpanMs(session), 0);
 }
 
 function formatClock(iso: string | null | undefined) {
@@ -312,7 +354,7 @@ export function AdminActivityPanel({ projectId }: { projectId?: string } = {}) {
     return mergeWorkspaceMembers(
       apiMembers,
       source.flatMap((p) => p.members),
-    );
+    ).map(withDayAttendance);
   }, [apiMembers, adminProjects, scopedProjectId]);
 
   const load = useCallback(async (date: string, pid: string | 'all') => {
@@ -457,11 +499,11 @@ export function AdminActivityPanel({ projectId }: { projectId?: string } = {}) {
         label:
           m.memberStatus === 'pending'
             ? `${m.name} (pending)`
-            : m.sessions.length === 0
+            : m.attendanceStatus === 'not_in' || m.sessions.length === 0
               ? `${m.name} (not in)`
-              : m.tracking
-                ? `${m.name} (live)`
-                : m.name,
+              : m.tracking || m.attendanceStatus === 'checked_in'
+                ? `${m.name} (in)`
+                : `${m.name} (out)`,
       })),
     ],
     [members],
@@ -487,7 +529,16 @@ export function AdminActivityPanel({ projectId }: { projectId?: string } = {}) {
   const checkInCount = selected
     ? selected.sessions.length
     : members.reduce((n, m) => n + m.sessions.length, 0);
+  const selectedClockedMs = selected
+    ? Math.max(selected.totalClockedMs ?? 0, memberDayClockedMs(selected))
+    : 0;
   const teamOverview = selectedId === 'all' && !selectedSession;
+  const personDay = Boolean(selected && !selectedSession);
+  const personStatus = selected ? attendanceLabel(selected) : '';
+  const clockedHint =
+    selected && selected.sessions.length > 0
+      ? `${selected.sessions.length} check-in${selected.sessions.length === 1 ? '' : 's'} · ${formatDateLabel(filterDate)}`
+      : 'no check-in';
   const kpis = teamOverview
     ? [
         {
@@ -509,30 +560,76 @@ export function AdminActivityPanel({ projectId }: { projectId?: string } = {}) {
           accent: '#f0b232',
         },
       ]
-    : [
-        {
-          label: 'Tracked',
-          value: formatDuration(scopedTracked),
-          hint: scopeName,
-          accent: '#00a8fc',
-        },
-        {
-          label: 'Check-ins',
-          value: String(checkInCount),
-          hint: selectedSession
-            ? '1 selected'
-            : selected && selected.sessions.length === 0
-              ? "didn't check in"
-              : 'this day',
-          accent: '#4BDE80',
-        },
-        {
-          label: 'Away',
-          value: formatDuration(scopedAway),
-          hint: `${detailAway.length} gaps`,
-          accent: '#f0b232',
-        },
-      ];
+    : personDay && selected
+      ? [
+          {
+            label: 'Total clocked',
+            value: formatDuration(selectedClockedMs),
+            hint: clockedHint,
+            accent: '#f0b232',
+          },
+          {
+            label: 'Status',
+            value: personStatus,
+            hint: formatDateLabel(filterDate),
+            accent:
+              selected.attendanceStatus === 'checked_in' || selected.tracking
+                ? '#4BDE80'
+                : selected.attendanceStatus === 'not_in'
+                  ? '#f0b232'
+                  : '#80848e',
+          },
+          {
+            label: 'Check-in',
+            value: formatClock(selected.firstCheckInAt),
+            hint: 'first of this day',
+            accent: '#4BDE80',
+          },
+          {
+            label: 'Check-out',
+            value:
+              selected.attendanceStatus === 'checked_in' || selected.tracking
+                ? 'Now'
+                : formatClock(selected.lastCheckOutAt),
+            hint:
+              selected.attendanceStatus === 'checked_in' || selected.tracking
+                ? 'still in'
+                : selected.lastCheckOutAt
+                  ? 'last of this day'
+                  : 'no check-out',
+            accent: '#ed4245',
+          },
+          {
+            label: 'Tracked',
+            value: formatDuration(selected.totalTrackedMs),
+            hint: 'app time',
+            accent: '#00a8fc',
+          },
+        ]
+      : [
+          {
+            label: 'Tracked',
+            value: formatDuration(scopedTracked),
+            hint: scopeName,
+            accent: '#00a8fc',
+          },
+          {
+            label: 'Check-ins',
+            value: String(checkInCount),
+            hint: selectedSession
+              ? '1 selected'
+              : selected && selected.sessions.length === 0
+                ? "didn't check in"
+                : 'this day',
+            accent: '#4BDE80',
+          },
+          {
+            label: 'Away',
+            value: formatDuration(scopedAway),
+            hint: `${detailAway.length} gaps`,
+            accent: '#f0b232',
+          },
+        ];
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-ink-800">
@@ -541,7 +638,7 @@ export function AdminActivityPanel({ projectId }: { projectId?: string } = {}) {
         <div>
           <h2 className="text-sm font-semibold text-ink-50">Activity</h2>
           <p className="text-[10px] text-ink-400">
-            {formatDateLabel(filterDate)} · who checked in, software, browsers, and sites
+            {formatDateLabel(filterDate)} · check-in status, clocked hours, software, and sites
           </p>
         </div>
         <div className="flex w-full flex-wrap items-end gap-2 sm:w-auto">
@@ -629,7 +726,7 @@ export function AdminActivityPanel({ projectId }: { projectId?: string } = {}) {
             {members.map((m) => {
               const active = m.userId === selectedId;
               const pending = m.memberStatus === 'pending';
-              const absent = !pending && m.sessions.length === 0;
+              const absent = !pending && (m.attendanceStatus === 'not_in' || m.sessions.length === 0);
               return (
                 <button
                   key={m.userId}
@@ -677,11 +774,19 @@ export function AdminActivityPanel({ projectId }: { projectId?: string } = {}) {
         {/* Main dashboard */}
         <div className="flex min-h-0 flex-col overflow-hidden">
           {/* KPIs — fixed */}
-          <section className="grid shrink-0 grid-cols-3 border-b border-ink-600">
+          <section
+            className={cn(
+              'grid shrink-0 border-b border-ink-600',
+              kpis.length > 3 ? 'grid-cols-2 sm:grid-cols-3 xl:grid-cols-5' : 'grid-cols-3',
+            )}
+          >
             {kpis.map((k, i) => (
               <div
                 key={k.label}
-                className={cn('px-3 py-2', i < 2 && 'border-r border-ink-700')}
+                className={cn(
+                  'px-3 py-2',
+                  i < kpis.length - 1 && 'border-r border-ink-700',
+                )}
               >
                 <div className="flex items-center gap-1.5">
                   <span className="h-1.5 w-1.5 rounded-full" style={{ background: k.accent }} />
@@ -689,13 +794,34 @@ export function AdminActivityPanel({ projectId }: { projectId?: string } = {}) {
                     {k.label}
                   </p>
                 </div>
-                <p className="mt-0.5 text-lg font-semibold tabular-nums text-ink-50">
+                <p className={cn(
+                  'mt-0.5 font-semibold text-ink-50',
+                  k.label === 'Status' ? 'text-sm' : 'text-lg tabular-nums',
+                )}>
                   {k.value}
                 </p>
                 <p className="truncate text-[10px] text-ink-400">{k.hint}</p>
               </div>
             ))}
           </section>
+
+          {selected ? (
+            <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-ink-600 bg-ink-900/50 px-3 py-2">
+              <div>
+                <p className="text-[10px] font-bold tracking-wide text-ink-400 uppercase">
+                  Total clocked · {formatDateLabel(filterDate)}
+                </p>
+                <p className="text-xl font-semibold tabular-nums text-ink-50">
+                  {formatDuration(selectedClockedMs)}
+                </p>
+              </div>
+              <p className="text-[11px] text-ink-400">
+                All {selected.sessions.length} check-in
+                {selected.sessions.length === 1 ? '' : 's'} added together
+                {selectedSession ? ' · viewing one session' : ''}
+              </p>
+            </div>
+          ) : null}
 
           {selectedSession ? (
             <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-brand-500/25 bg-brand-500/10 px-3 py-1.5">
@@ -798,7 +924,11 @@ export function AdminActivityPanel({ projectId }: { projectId?: string } = {}) {
                 {selected ? `${selected.name}'s check-ins` : 'Check-ins'}
               </h3>
               <p className="text-[10px] text-ink-400">
-                Scrolls separately · click a row to filter apps & websites
+                {selected
+                  ? selected.sessions.length === 0
+                    ? 'No check-ins on this date'
+                    : `Total clocked ${formatDuration(selectedClockedMs)} · ${selected.sessions.length} check-in${selected.sessions.length === 1 ? '' : 's'}`
+                  : 'Scrolls separately · click a row to filter apps & websites'}
               </p>
             </div>
 

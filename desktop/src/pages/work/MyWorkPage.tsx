@@ -6,6 +6,7 @@ import { CreateProjectModal } from '@/components/dashboard/CreateProjectModal';
 import { InviteMembersModal } from '@/components/dashboard/InviteMembersModal';
 import { OnboardingChecklist } from '@/components/onboarding/OnboardingChecklist';
 import { Button } from '@/components/ui/Button';
+import { Select } from '@/components/ui/Select';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { UserAvatar, avatarFromMembers, presenceUserIdFromMembers } from '@/components/ui/UserAvatar';
 import { useAttendance } from '@/lib/attendance/AttendanceContext';
@@ -34,7 +35,8 @@ function greeting() {
 export function MyWorkPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { projects, tasks, getProject, isLoading, activeProjectId } = useWorkspace();
+  const { projects, tasks, getProject, isLoading, activeProjectId, setActiveProjectId } =
+    useWorkspace();
   const {
     checkedIn,
     onBreak,
@@ -58,14 +60,37 @@ export function MyWorkPage() {
     (activeProjectId !== 'all' ? projects.find((p) => p.id === activeProjectId) : undefined) ??
     projects[0];
   const canInvite = Boolean(homeProject);
+  const boardHref =
+    activeProjectId !== 'all' ? `/board?project=${activeProjectId}` : '/board';
+
+  const projectSwitchOptions = useMemo(
+    () => [
+      { value: 'all', label: `All projects (${projects.length})` },
+      ...projects.map((p) => {
+        const role =
+          user &&
+          p.members.find(
+            (m) =>
+              (user.id && m.userId === user.id) ||
+              m.email.toLowerCase() === user.email.toLowerCase(),
+          )?.role;
+        return {
+          value: p.id,
+          label: `${p.name} · ${role === 'admin' ? 'Admin' : 'Member'}`,
+        };
+      }),
+    ],
+    [projects, user],
+  );
 
   const mine = useMemo(
     () =>
       tasks.filter((t) => {
+        if (activeProjectId !== 'all' && t.projectId !== activeProjectId) return false;
         const project = getProject(t.projectId);
         return isTaskAssignedToUser(t, user, project);
       }),
-    [tasks, user, getProject],
+    [tasks, user, getProject, activeProjectId],
   );
 
   const openMine = useMemo(
@@ -100,16 +125,29 @@ export function MyWorkPage() {
   return (
     <div className="h-full min-h-0 overflow-y-auto">
       <div className="mx-auto flex max-w-3xl flex-col gap-4 px-4 py-6 sm:px-6">
-        <header className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight text-ink-50">
+        <header className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate text-xl font-semibold tracking-tight text-ink-50">
               {greeting()}, {firstName}
             </h1>
-            <p className="mt-1 text-sm text-ink-400">
-              Your assigned work for today. Planning lives on the board.
+            <p className="mt-1 truncate text-sm text-ink-400">
+              {activeProjectId === 'all'
+                ? 'Your assigned work for today. Planning lives on the board.'
+                : `Your assigned work in ${homeProject?.name ?? 'this project'}. Planning lives on the board.`}
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className="flex shrink-0 items-center gap-1.5">
+            {projects.length > 0 ? (
+              <div className="w-[200px] shrink-0">
+                <Select
+                  value={activeProjectId}
+                  onChange={(value) => setActiveProjectId(value as typeof activeProjectId)}
+                  options={projectSwitchOptions}
+                  aria-label="Switch project"
+                  size="sm"
+                />
+              </div>
+            ) : null}
             {!attendanceReady ? (
               <Button size="sm" variant="secondary" disabled>
                 …
@@ -172,7 +210,7 @@ export function MyWorkPage() {
                 New project
               </Button>
             )}
-            <Button size="sm" variant="secondary" onClick={() => navigate('/board')}>
+            <Button size="sm" variant="secondary" onClick={() => navigate(boardHref)}>
               Board
             </Button>
           </div>
@@ -186,7 +224,9 @@ export function MyWorkPage() {
               {projects.length === 0
                 ? 'No project yet'
                 : filter === 'open'
-                  ? 'Nothing assigned to you'
+                  ? activeProjectId === 'all'
+                    ? 'Nothing assigned to you'
+                    : `Nothing assigned in ${homeProject?.name ?? 'this project'}`
                   : 'No tasks in this view'}
             </p>
             <p className="mx-auto mt-1 max-w-sm text-xs leading-relaxed text-ink-400">
@@ -204,7 +244,7 @@ export function MyWorkPage() {
                   Create a task for me
                 </Button>
               )}
-              <Button size="sm" variant="secondary" onClick={() => navigate('/board')}>
+              <Button size="sm" variant="secondary" onClick={() => navigate(boardHref)}>
                 Open board
               </Button>
             </div>

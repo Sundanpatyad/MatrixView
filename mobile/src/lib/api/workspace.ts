@@ -155,6 +155,13 @@ export function updateTaskRequest(taskId: string, input: UpdateTaskInput) {
   return apiFetch<{ task: BoardTask }>(`/api/tasks/${taskId}`, { method: 'PATCH', body: input, auth: true });
 }
 
+export function deleteTaskRequest(taskId: string) {
+  return apiFetch<{ ok: true; taskId: string; projectId: string }>(`/api/tasks/${taskId}`, {
+    method: 'DELETE',
+    auth: true,
+  });
+}
+
 export function listProjectTasksRequest(projectId: string, teamId?: string) {
   const query = teamId ? `?teamId=${encodeURIComponent(teamId)}` : '';
   return apiFetch<{ tasks: BoardTask[] }>(`/api/projects/${projectId}/tasks${query}`, { auth: true });

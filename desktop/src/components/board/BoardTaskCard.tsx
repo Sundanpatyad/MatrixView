@@ -1,5 +1,7 @@
 import { useRef } from 'react';
 import { UserAvatar, presenceUserIdFromMembers } from '@/components/ui/UserAvatar';
+import { IconTrash } from '@/components/ui/Icons';
+import { Tooltip } from '@/components/ui/Tooltip';
 import { TASK_TYPES, type BoardTask } from '@/lib/workspace/types';
 import { cn } from '@/lib/cn';
 import { useWorkspace } from '@/lib/workspace/WorkspaceContext';
@@ -17,6 +19,7 @@ type Props = {
   avatarUrl?: string | null;
   dragging?: boolean;
   onOpen: () => void;
+  onDelete?: () => void;
   onDragStart: (taskId: string) => void;
   onDragEnd: () => void;
 };
@@ -26,6 +29,7 @@ export function BoardTaskCard({
   avatarUrl,
   dragging,
   onOpen,
+  onDelete,
   onDragStart,
   onDragEnd,
 }: Props) {
@@ -64,7 +68,7 @@ export function BoardTaskCard({
         onOpen();
       }}
       className={cn(
-        'select-none rounded-md border border-ink-600 bg-ink-800 p-2.5 transition-colors',
+        'group select-none rounded-md border border-ink-600 bg-ink-800 p-2.5 transition-colors',
         'cursor-grab hover:border-ink-500 active:cursor-grabbing',
         dragging && 'opacity-40 ring-2 ring-brand-500/35',
       )}
@@ -78,7 +82,27 @@ export function BoardTaskCard({
         >
           {typeMeta?.label ?? task.type}
         </span>
-        <span className="text-[11px] font-medium tabular-nums text-ink-400">{task.key}</span>
+        <div className="flex items-center gap-1">
+          <span className="text-[11px] font-medium tabular-nums text-ink-400">{task.key}</span>
+          {onDelete ? (
+            <Tooltip label="Delete task" side="top">
+              <button
+                type="button"
+                aria-label="Delete task"
+                draggable={false}
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  onDelete();
+                }}
+                className="flex h-5 w-5 items-center justify-center rounded text-ink-400 opacity-70 transition hover:bg-ink-700 hover:text-[#ed4245] group-hover:opacity-100"
+              >
+                <IconTrash className="h-3 w-3" />
+              </button>
+            </Tooltip>
+          ) : null}
+        </div>
       </div>
 
       <p className="mt-2 text-[13px] font-medium text-ink-50">{task.title}</p>

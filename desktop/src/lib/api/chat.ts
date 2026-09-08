@@ -48,6 +48,15 @@ export type ChatReplyPreview = {
   deleted: boolean;
 };
 
+export type ChatLinkPreview = {
+  url: string;
+  host: string;
+  title: string;
+  description: string;
+  imageUrl: string | null;
+  siteName: string;
+};
+
 export type ChatCallOutcome =
   | 'answered'
   | 'missed'
@@ -82,6 +91,9 @@ export type ChatMessage = {
     deliveredAt: string | null;
     readAt: string | null;
   }>;
+  forwarded?: boolean;
+  forwardedFrom?: string | null;
+  linkPreview?: ChatLinkPreview | null;
   editedAt: string | null;
   deletedAt: string | null;
   createdAt: string;
@@ -220,4 +232,24 @@ export function deleteMessage(messageId: string): Promise<{ message: ChatMessage
     method: 'DELETE',
     auth: true,
   });
+}
+
+const linkPreviewCache = new Map<string, ChatLinkPreview | null>();
+
+export async function getChatLinkPreview(url: string): Promise<ChatLinkPreview | null> {
+  const key = url.trim();
+  if (!key) return null;
+  if (linkPreviewCache.has(key)) return linkPreviewCache.get(key) ?? null;
+  try {
+    const data = await apiFetch<{ preview: ChatLinkPreview | null }>(
+      `/api/chat/link-preview?url=${encodeURIComponent(key)}`,
+      { auth: true },
+    );
+    const preview = data.preview ?? null;
+    linkPreviewCache.set(key, preview);
+    return preview;
+  } catch {
+    linkPreviewCache.set(key, null);
+    return null;
+  }
 }

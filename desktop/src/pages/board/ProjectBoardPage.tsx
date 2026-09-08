@@ -12,15 +12,18 @@ import { avatarFromMembers } from '@/components/ui/UserAvatar';
 import type { BoardTask, TaskStatus } from '@/lib/workspace/types';
 import { useWorkspace } from '@/lib/workspace/WorkspaceContext';
 import { cn } from '@/lib/cn';
+import { useToast } from '@/lib/toast/ToastContext';
 
 export function ProjectBoardPage() {
   const { projectId = '' } = useParams();
+  const toast = useToast();
   const {
     getProject,
     getProjectTasks,
     updateTaskStatus,
     addColumn,
     removeColumn,
+    deleteTask,
   } = useWorkspace();
   const project = getProject(projectId);
   const tasks = getProjectTasks(projectId);
@@ -35,6 +38,8 @@ export function ProjectBoardPage() {
     null,
   );
   const [removingColumn, setRemovingColumn] = useState(false);
+  const [taskToDelete, setTaskToDelete] = useState<BoardTask | null>(null);
+  const [deletingTask, setDeletingTask] = useState(false);
 
   const columns = project?.columns ?? [];
 
@@ -179,6 +184,7 @@ export function ProjectBoardPage() {
                     )}
                     dragging={draggingId === task.id}
                     onOpen={() => setSelectedId(task.id)}
+                    onDelete={() => setTaskToDelete(task)}
                     onDragStart={setDraggingId}
                     onDragEnd={() => {
                       setDraggingId(null);
@@ -261,6 +267,34 @@ export function ProjectBoardPage() {
           onClose={() => setSelectedId(null)}
         />
       ) : null}
+
+      <ConfirmModal
+        open={Boolean(taskToDelete)}
+        title="Delete task?"
+        message={
+          taskToDelete
+            ? `Delete “${taskToDelete.title}” (${taskToDelete.key})? This can’t be undone.`
+            : ''
+        }
+        confirmLabel="Delete"
+        danger
+        busy={deletingTask}
+        onCancel={() => setTaskToDelete(null)}
+        onConfirm={async () => {
+          if (!taskToDelete) return;
+          setDeletingTask(true);
+          try {
+            await deleteTask(taskToDelete.id);
+            if (selectedId === taskToDelete.id) setSelectedId(null);
+            toast.success(`Deleted ${taskToDelete.key}`);
+            setTaskToDelete(null);
+          } catch (err) {
+            toast.fromError(err, 'Could not delete task');
+          } finally {
+            setDeletingTask(false);
+          }
+        }}
+      />
 
       <ConfirmModal
         open={Boolean(columnToRemove)}

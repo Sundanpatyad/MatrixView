@@ -1274,6 +1274,65 @@ export async function updateTask(
   return presented;
 }
 
+function collectAttachmentMedia(
+  attachments: Array<{
+    url?: string;
+    mimeType?: string;
+    storageProvider?: string | null;
+    storageKey?: string | null;
+  }> | undefined,
+  into: StoredMediaRef[],
+  seen: Set<string>,
+) {
+  for (const att of attachments ?? []) {
+    const key = String(att.storageKey || att.url || '');
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    into.push({
+      url: att.url ?? '',
+      provider: att.storageProvider,
+      storageKey: att.storageKey,
+      mimeType: att.mimeType,
+    });
+  }
+}
+
+export async function deleteTask(actor: Actor, taskId: string) {
+  if (!Types.ObjectId.isValid(taskId)) {
+    throw new AuthError('Task not found', 404, 'NOT_FOUND');
+  }
+  const task = await Task.findById(taskId);
+  if (!task) throw new AuthError('Task not found', 404, 'NOT_FOUND');
+
+  const project = await getAccessibleProject(String(task.projectId), actor);
+  requireMembership(project, actor.email);
+
+  const linked = await TimelineItem.find({ taskId: task._id });
+  const refs: StoredMediaRef[] = [];
+  const seen = new Set<string>();
+  collectAttachmentMedia(task.attachments, refs, seen);
+  for (const comment of task.comments ?? []) {
+    collectAttachmentMedia(comment.attachments, refs, seen);
+  }
+  for (const item of linked) {
+    collectAttachmentMedia(item.attachments, refs, seen);
+  }
+
+  const id = String(task._id);
+  const projectId = String(project._id);
+  await TimelineItem.deleteMany({ taskId: task._id });
+  await task.deleteOne();
+  if (refs.length) await deleteStoredMediaMany(refs);
+
+  await broadcastProjectEvent(project, 'task:deleted', {
+    taskId: id,
+    projectId,
+    actorId: actor.sub,
+  });
+
+  return { ok: true as const, taskId: id, projectId };
+}
+
 export async function addComment(
   actor: Actor,
   taskId: string,

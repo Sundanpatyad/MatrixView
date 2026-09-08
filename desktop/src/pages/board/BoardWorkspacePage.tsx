@@ -81,6 +81,7 @@ export function BoardWorkspacePage() {
     getProjectPhases,
     getProjectSprints,
     updateTaskStatus,
+    deleteTask,
     addColumn,
     renameColumn,
     removeColumn,
@@ -133,6 +134,8 @@ export function BoardWorkspacePage() {
   const [membersPanelOpen, setMembersPanelOpen] = useState(false);
   const [memberToRemove, setMemberToRemove] = useState<ProjectMember | null>(null);
   const [removingMember, setRemovingMember] = useState(false);
+  const [taskToDelete, setTaskToDelete] = useState<BoardTask | null>(null);
+  const [deletingTask, setDeletingTask] = useState(false);
   const [avatarBusy, setAvatarBusy] = useState(false);
   const renameInputRef = useRef<HTMLInputElement>(null);
   const addColumnInputRef = useRef<HTMLInputElement>(null);
@@ -1088,6 +1091,7 @@ export function BoardWorkspacePage() {
                           )}
                           dragging={draggingId === task.id}
                           onOpen={() => openTask(task.id)}
+                          onDelete={() => setTaskToDelete(task)}
                           onDragStart={beginDrag}
                           onDragEnd={endDrag}
                           onDropOnCard={(e) => void handleDrop(e, col.id)}
@@ -1316,6 +1320,34 @@ export function BoardWorkspacePage() {
           onClose={() => openTask(null)}
         />
       ) : null}
+
+      <ConfirmModal
+        open={Boolean(taskToDelete)}
+        title="Delete task?"
+        message={
+          taskToDelete
+            ? `Delete “${taskToDelete.title}” (${taskToDelete.key})? This can’t be undone.`
+            : ''
+        }
+        confirmLabel="Delete"
+        danger
+        busy={deletingTask}
+        onCancel={() => setTaskToDelete(null)}
+        onConfirm={async () => {
+          if (!taskToDelete) return;
+          setDeletingTask(true);
+          try {
+            await deleteTask(taskToDelete.id);
+            if (selectedId === taskToDelete.id) openTask(null);
+            toast.success(`Deleted ${taskToDelete.key}`);
+            setTaskToDelete(null);
+          } catch (err) {
+            toast.fromError(err, 'Could not delete task');
+          } finally {
+            setDeletingTask(false);
+          }
+        }}
+      />
 
       <ConfirmModal
         open={Boolean(memberToRemove)}

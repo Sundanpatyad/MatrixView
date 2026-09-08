@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/Button';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { FieldError, FieldLabel } from '@/components/ui/FieldLabel';
 import { Input } from '@/components/ui/Input';
@@ -119,7 +120,7 @@ function AttachmentList({
 
 export function TaskDetailModal({ task, projectName, columns, onClose }: Props) {
   const { user } = useAuth();
-  const { getProject, getProjectTeams, getProjectSprints, updateTask, addComment, addTaskAttachments, removeTaskAttachment, getTask } =
+  const { getProject, getProjectTeams, getProjectSprints, updateTask, addComment, addTaskAttachments, removeTaskAttachment, getTask, deleteTask } =
     useWorkspace();
   const liveTask = getTask(task.id) ?? task;
   const [comment, setComment] = useState('');
@@ -127,6 +128,8 @@ export function TaskDetailModal({ task, projectName, columns, onClose }: Props) 
   const [commentFiles, setCommentFiles] = useState<File[]>([]);
   const [titleDraft, setTitleDraft] = useState(liveTask.title);
   const [titleError, setTitleError] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const toast = useToast();
   const taskFileRef = useRef<HTMLInputElement>(null);
   const commentFileRef = useRef<HTMLInputElement>(null);
@@ -286,9 +289,14 @@ export function TaskDetailModal({ task, projectName, columns, onClose }: Props) 
             />
             <FieldError>{titleError}</FieldError>
           </div>
-          <Button variant="secondary" size="xs" onClick={onClose}>
-            Close
-          </Button>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <Button variant="danger" size="xs" onClick={() => setConfirmDelete(true)}>
+              Delete
+            </Button>
+            <Button variant="secondary" size="xs" onClick={onClose}>
+              Close
+            </Button>
+          </div>
         </header>
 
         <div className="grid min-h-0 flex-1 gap-0 overflow-hidden md:grid-cols-[1fr_300px]">
@@ -652,6 +660,28 @@ export function TaskDetailModal({ task, projectName, columns, onClose }: Props) 
           </aside>
         </div>
       </div>
+      <ConfirmModal
+        open={confirmDelete}
+        title="Delete task?"
+        message={`Delete “${liveTask.title}”? This can’t be undone.`}
+        confirmLabel="Delete"
+        danger
+        busy={deleting}
+        onCancel={() => setConfirmDelete(false)}
+        onConfirm={async () => {
+          setDeleting(true);
+          try {
+            await deleteTask(liveTask.id);
+            toast.success(`Deleted ${liveTask.key}`);
+            setConfirmDelete(false);
+            onClose();
+          } catch (err) {
+            toast.fromError(err, 'Could not delete task');
+          } finally {
+            setDeleting(false);
+          }
+        }}
+      />
     </div>,
     document.body,
   );

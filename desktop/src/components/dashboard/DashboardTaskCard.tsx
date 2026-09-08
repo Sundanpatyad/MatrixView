@@ -1,5 +1,7 @@
 import { useRef, type DragEvent } from 'react';
 import { UserAvatar, presenceUserIdFromMembers } from '@/components/ui/UserAvatar';
+import { IconTrash } from '@/components/ui/Icons';
+import { Tooltip } from '@/components/ui/Tooltip';
 import { TASK_TYPES, type BoardTask } from '@/lib/workspace/types';
 import { cn } from '@/lib/cn';
 import { useWorkspace } from '@/lib/workspace/WorkspaceContext';
@@ -32,6 +34,7 @@ type Props = {
   teamName?: string | null;
   dragging?: boolean;
   onOpen: () => void;
+  onDelete?: () => void;
   onDragStart: (taskId: string) => void;
   onDragEnd: () => void;
   onDropOnCard?: (e: DragEvent) => void;
@@ -43,6 +46,7 @@ export function DashboardTaskCard({
   teamName,
   dragging,
   onOpen,
+  onDelete,
   onDragStart,
   onDragEnd,
   onDropOnCard,
@@ -104,7 +108,27 @@ export function DashboardTaskCard({
         >
           {typeMeta?.label ?? task.type}
         </span>
-        <span className="text-[11px] font-medium tabular-nums text-ink-400">{task.key}</span>
+        <div className="flex items-center gap-1">
+          <span className="text-[11px] font-medium tabular-nums text-ink-400">{task.key}</span>
+          {onDelete ? (
+            <Tooltip label="Delete task" side="top">
+              <button
+                type="button"
+                aria-label="Delete task"
+                draggable={false}
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  onDelete();
+                }}
+                className="flex h-5 w-5 items-center justify-center rounded text-ink-400 transition hover:bg-ink-700 hover:text-[#ed4245]"
+              >
+                <IconTrash className="h-3 w-3" />
+              </button>
+            </Tooltip>
+          ) : null}
+        </div>
       </div>
 
       <p className="mt-2 line-clamp-2 text-[13px] leading-snug font-medium text-ink-50">

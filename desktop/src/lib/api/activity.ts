@@ -52,7 +52,11 @@ export type ActivitySample = {
 };
 
 export function startActivitySession(): Promise<{ session: ActivitySession }> {
-  return apiFetch('/api/activity/sessions/start', { method: 'POST', auth: true, body: '{}' });
+  return apiFetch('/api/activity/sessions/start', {
+    method: 'POST',
+    auth: true,
+    body: JSON.stringify({ tzOffset: new Date().getTimezoneOffset() }),
+  });
 }
 
 export function getCurrentActivitySession(): Promise<{ session: ActivitySession | null }> {
@@ -106,7 +110,7 @@ export function stopActivitySession(
   return apiFetch('/api/activity/sessions/stop', {
     method: 'POST',
     auth: true,
-    body: JSON.stringify({ sessionId }),
+    body: JSON.stringify({ sessionId, tzOffset: new Date().getTimezoneOffset() }),
   });
 }
 
@@ -121,6 +125,8 @@ export function getTodayActivity(): Promise<{
   return apiFetch(`/api/activity/today?${tzQuery()}`, { auth: true });
 }
 
+export type AttendanceDayStatus = 'checked_in' | 'checked_out' | 'not_in';
+
 export type MemberActivity = {
   userId: string;
   name: string;
@@ -129,6 +135,10 @@ export type MemberActivity = {
   memberStatus?: 'active' | 'pending';
   avatarUrl?: string | null;
   tracking: boolean;
+  attendanceStatus?: AttendanceDayStatus;
+  firstCheckInAt?: string | null;
+  lastCheckOutAt?: string | null;
+  totalClockedMs?: number;
   totalTrackedMs: number;
   totalWebsiteMs?: number;
   apps: AppUsage[];
@@ -142,6 +152,7 @@ export function getOrgActivityByDate(
 ): Promise<{
   date: string;
   totalTrackedMs: number;
+  totalClockedMs?: number;
   totalWebsiteMs?: number;
   allApps: AppUsage[];
   allSites?: SiteUsage[];

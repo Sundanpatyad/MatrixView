@@ -51,6 +51,10 @@ function mergeWorkspaceMembers(api: MemberActivity[], projectMembers: ProjectMem
       memberStatus: pm.status === 'pending' ? 'pending' : 'active',
       avatarUrl: pm.avatarUrl ?? null,
       tracking: false,
+      attendanceStatus: 'not_in',
+      firstCheckInAt: null,
+      lastCheckOutAt: null,
+      totalClockedMs: 0,
       totalTrackedMs: 0,
       totalWebsiteMs: 0,
       apps: [],
@@ -78,9 +82,10 @@ function formatDuration(ms: number) {
   const totalSec = Math.max(0, Math.floor(ms / 1000));
   const h = Math.floor(totalSec / 3600);
   const m = Math.floor((totalSec % 3600) / 60);
-  if (h > 0) return `${h}h ${m}m`;
-  if (m > 0) return `${m}m`;
-  return `${totalSec}s`;
+  const s = totalSec % 60;
+  if (h > 0) return `${h}h ${m}m ${s}s`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
 }
 
 function formatClock(iso: string | null | undefined) {
@@ -108,6 +113,39 @@ function sessionSpanMs(session: ActivitySession) {
   const start = new Date(session.startedAt).getTime();
   const end = session.endedAt ? new Date(session.endedAt).getTime() : Date.now();
   return Math.max(0, end - start);
+}
+
+function withDayAttendance(member: MemberActivity): MemberActivity {
+  if (member.sessions.length === 0) {
+    return {
+      ...member,
+      attendanceStatus: member.attendanceStatus ?? 'not_in',
+      firstCheckInAt: member.firstCheckInAt ?? null,
+      lastCheckOutAt: member.lastCheckOutAt ?? null,
+      totalClockedMs: 0,
+    };
+  }
+  const sorted = [...member.sessions].sort(
+    (a, b) => new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime(),
+  );
+  const first = sorted[0];
+  const last = sorted[sorted.length - 1];
+  const fromSessions = sorted.reduce((sum, session) => sum + sessionSpanMs(session), 0);
+  return {
+    ...member,
+    attendanceStatus:
+      member.attendanceStatus ?? (member.tracking ? 'checked_in' : 'checked_out'),
+    firstCheckInAt: member.firstCheckInAt ?? first?.startedAt ?? null,
+    lastCheckOutAt: member.tracking ? null : (member.lastCheckOutAt ?? last?.endedAt ?? null),
+    totalClockedMs: Math.max(member.totalClockedMs ?? 0, fromSessions),
+  };
+}
+
+function attendanceLabel(member: MemberActivity) {
+  if (member.memberStatus === 'pending') return 'Pending invite';
+  if (member.attendanceStatus === 'checked_in' || member.tracking) return 'Checked in';
+  if (member.attendanceStatus === 'not_in' || member.sessions.length === 0) return "Didn't check in";
+  return 'Checked out';
 }
 
 function UsageRows({
@@ -151,7 +189,8 @@ function UsageRows({
 function MemberRow({ member, onPress }: { member: MemberActivity; onPress: () => void }) {
   const colors = useColors();
   const pending = member.memberStatus === 'pending';
-  const absent = !pending && member.sessions.length === 0;
+  const absent = !pending && (member.attendanceStatus === 'not_in' || member.sessions.length === 0);
+  const checkedIn = member.attendanceStatus === 'checked_in' || member.tracking;
   return (
     <Pressable
       onPress={onPress}
@@ -163,7 +202,7 @@ function MemberRow({ member, onPress }: { member: MemberActivity; onPress: () =>
     >
       <View>
         <Avatar name={member.name} uri={member.avatarUrl} size={42} userId={member.userId} />
-        {member.tracking ? <View style={[styles.liveDot, { borderColor: colors.surface }]} /> : null}
+        {checkedIn ? <View style={[styles.liveDot, { borderColor: colors.surface }]} /> : null}
       </View>
       <View style={styles.flex}>
         <Text style={[styles.memberName, { color: colors.text }]} numberOfLines={1}>
@@ -181,17 +220,17 @@ function MemberRow({ member, onPress }: { member: MemberActivity; onPress: () =>
             ? 'Pending invite'
             : absent
               ? "Didn't check in"
-              : `${formatDuration(member.totalTrackedMs)} tracked · ${member.sessions.length} check-in${member.sessions.length === 1 ? '' : 's'}`}
+              : `${formatDuration(member.totalClockedMs ?? 0)} clocked · ${formatDuration(member.totalTrackedMs)} tracked`}
         </Text>
       </View>
       {pending ? (
         <Badge label="Pending" color={colors.warning} />
       ) : absent ? (
         <Badge label="Out" color={colors.warning} />
-      ) : member.tracking ? (
-        <Badge label="Live" color={colors.success} dot />
+      ) : checkedIn ? (
+        <Badge label="In" color={colors.success} dot />
       ) : (
-        <Badge label="In" color={colors.brand} />
+        <Badge label="Out" color={colors.brand} />
       )}
     </Pressable>
   );
@@ -239,7 +278,7 @@ export function TeamActivityScreen({ route, navigation }: Props) {
     return mergeWorkspaceMembers(
       apiMembers,
       source.flatMap((project) => project.members),
-    );
+    ).map(withDayAttendance);
   }, [apiMembers, adminProjects, scopedProjectId]);
 
   const load = useCallback(
@@ -382,11 +421,12 @@ export function TeamActivityScreen({ route, navigation }: Props) {
           </Pressable>
         </View>
 
+        {!selected ? (
         <View style={styles.kpis}>
           {[
-            { label: 'Tracked', value: formatDuration(selected?.totalTrackedMs ?? orgTotal), hint: liveCount ? `${liveCount} live` : 'this day' },
+            { label: 'Tracked', value: formatDuration(orgTotal), hint: liveCount ? `${liveCount} live` : 'this day' },
+            { label: 'Clocked', value: formatDuration(members.reduce((sum, member) => sum + (member.totalClockedMs ?? 0), 0)), hint: 'this day' },
             { label: 'Checked in', value: String(checkedIn.length), hint: `${members.length} members` },
-            { label: 'Not in', value: String(notIn.length), hint: 'no check-in' },
           ].map((kpi) => (
             <View key={kpi.label} style={[styles.kpi, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <Text style={[styles.kpiLabel, { color: colors.textSubtle }]}>{kpi.label}</Text>
@@ -395,6 +435,7 @@ export function TeamActivityScreen({ route, navigation }: Props) {
             </View>
           ))}
         </View>
+        ) : null}
 
         {selected ? (
           <MemberDetail member={selected} onClose={() => setSelectedId(null)} />
@@ -483,6 +524,12 @@ function MemberDetail({ member, onClose }: { member: MemberActivity; onClose: ()
   const apps = member.apps ?? [];
   const sites = member.sites ?? [];
   const away = member.sessions.flatMap((session) => session.awayPeriods ?? []);
+  const status = attendanceLabel(member);
+  const checkedIn = member.attendanceStatus === 'checked_in' || member.tracking;
+  const totalClocked = Math.max(
+    member.totalClockedMs ?? 0,
+    member.sessions.reduce((sum, session) => sum + sessionSpanMs(session), 0),
+  );
 
   return (
     <View style={styles.detail}>
@@ -497,11 +544,51 @@ function MemberDetail({ member, onClose }: { member: MemberActivity; onClose: ()
           <Text style={[styles.memberName, { color: colors.text }]}>{member.name}</Text>
           <Text style={[styles.memberMeta, { color: colors.textSubtle }]}>{member.email}</Text>
         </View>
-        {member.tracking ? <Badge label="Live" color={colors.success} dot /> : null}
+        {checkedIn ? (
+          <Badge label="Checked in" color={colors.success} dot />
+        ) : member.sessions.length === 0 ? (
+          <Badge label="Out" color={colors.warning} />
+        ) : (
+          <Badge label="Checked out" color={colors.brand} />
+        )}
+      </View>
+
+      <Card>
+        <Text style={[styles.kpiLabel, { color: colors.textSubtle }]}>Total clocked today</Text>
+        <Text style={[styles.clockedHero, { color: colors.text }]}>{formatDuration(totalClocked)}</Text>
+        <Text style={[styles.cardHint, { color: colors.textSubtle, marginBottom: 0 }]}>
+          {member.sessions.length === 0
+            ? 'No check-ins on this date'
+            : `All ${member.sessions.length} check-in${member.sessions.length === 1 ? '' : 's'} added together`}
+        </Text>
+      </Card>
+
+      <View style={styles.attendanceGrid}>
+        {[
+          { label: 'Status', value: status },
+          { label: 'Check-in', value: formatClock(member.firstCheckInAt) },
+          { label: 'Check-out', value: checkedIn ? 'Now' : formatClock(member.lastCheckOutAt) },
+          { label: 'Tracked', value: formatDuration(member.totalTrackedMs) },
+        ].map((item) => (
+          <View
+            key={item.label}
+            style={[styles.attendanceCell, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          >
+            <Text style={[styles.kpiLabel, { color: colors.textSubtle }]}>{item.label}</Text>
+            <Text style={[styles.attendanceValue, { color: colors.text }]} numberOfLines={1}>
+              {item.value}
+            </Text>
+          </View>
+        ))}
       </View>
 
       <Card>
         <Text style={[styles.cardTitle, { color: colors.text }]}>Check-ins</Text>
+        {member.sessions.length > 0 ? (
+          <Text style={[styles.cardHint, { color: colors.textSubtle }]}>
+            Total clocked {formatDuration(totalClocked)}
+          </Text>
+        ) : null}
         {member.sessions.length === 0 ? (
           <Text style={[styles.muted, { color: colors.textSubtle }]}>
             {member.name} did not check in on this date.
@@ -701,6 +788,31 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+  },
+  attendanceGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  attendanceCell: {
+    width: '31%',
+    flexGrow: 1,
+    minWidth: 96,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+  },
+  attendanceValue: {
+    marginTop: 4,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  clockedHero: {
+    marginTop: 4,
+    fontSize: 28,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
   },
   cardTitle: {
     fontSize: 15,

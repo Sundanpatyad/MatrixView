@@ -22,6 +22,16 @@ function param(value: string | string[]): string {
   return Array.isArray(value) ? value[0] : value;
 }
 
+router.get('/chat/link-preview', async (req, res, next) => {
+  try {
+    const url = typeof req.query.url === 'string' ? req.query.url : '';
+    const data = await chat.getLinkPreviewForUrl(url);
+    res.json(data);
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.get('/chat/conversations', async (req, res, next) => {
   try {
     const data = await chat.listConversations(actorFrom(req as AuthedRequest));

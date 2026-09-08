@@ -4,6 +4,7 @@ import { AuthError } from '../auth/errors.js';
 import { User } from '../auth/models/User.js';
 import { Project } from '../workspace/models/Project.js';
 import { isExcludedApp } from './exclude.js';
+import { ActivityDaySummary } from './models/ActivityDaySummary.js';
 import { ActivitySession } from './models/ActivitySession.js';
 import { serializeSession } from './serialize.js';
 
@@ -56,22 +57,192 @@ function hostFromUrl(url: string): string {
   }
 }
 
-/** Sessions that belong in a calendar day (incl. still-active overnight). */
-function sessionsForDayFilter(start: Date, end: Date) {
+type AttendanceStatusKind = 'checked_in' | 'checked_out' | 'not_in';
+
+type SessionLike = {
+  status?: string | null;
+  startedAt: Date | string;
+  endedAt?: Date | string | null;
+  apps?: { durationMs?: number | null }[];
+  sites?: { durationMs?: number | null }[];
+};
+
+function asTime(value: Date | string | null | undefined): number | null {
+  if (!value) return null;
+  const t = value instanceof Date ? value.getTime() : new Date(value).getTime();
+  return Number.isFinite(t) ? t : null;
+}
+
+function sessionEndTime(session: SessionLike, now: number): number {
+  const ended = asTime(session.endedAt ?? null);
+  if (ended != null) return ended;
+  if (session.status === 'active') return now;
+  return asTime(session.startedAt) ?? now;
+}
+
+function sessionOverlapsDay(session: SessionLike, start: Date, end: Date, now = Date.now()) {
+  const started = asTime(session.startedAt);
+  if (started == null) return false;
+  return started < end.getTime() && sessionEndTime(session, now) > start.getTime();
+}
+
+function clockedMsOnDay(session: SessionLike, start: Date, end: Date, now = Date.now()) {
+  const started = asTime(session.startedAt);
+  if (started == null) return 0;
+  const from = Math.max(started, start.getTime());
+  const to = Math.min(sessionEndTime(session, now), end.getTime());
+  return Math.max(0, to - from);
+}
+
+function trackedMsOnDay(session: SessionLike, start: Date, end: Date, now = Date.now()) {
+  const tracked = (session.apps ?? []).reduce((sum, app) => sum + (app.durationMs ?? 0), 0);
+  const started = asTime(session.startedAt);
+  if (started == null || tracked <= 0) return 0;
+  const wall = Math.max(0, sessionEndTime(session, now) - started);
+  if (wall <= 0) return 0;
+  const overlap = clockedMsOnDay(session, start, end, now);
+  if (overlap >= wall) return tracked;
+  return Math.round(tracked * (overlap / wall));
+}
+
+function isoOrNull(value: Date | string | null | undefined): string | null {
+  if (!value) return null;
+  if (typeof value === 'string') return value;
+  return value.toISOString();
+}
+
+function addCalendarDays(dateStr: string, days: number): string {
+  const [y, m, d] = dateStr.split('-').map(Number) as [number, number, number];
+  const next = new Date(Date.UTC(y, m - 1, d + days));
+  return `${next.getUTCFullYear()}-${String(next.getUTCMonth() + 1).padStart(2, '0')}-${String(next.getUTCDate()).padStart(2, '0')}`;
+}
+
+function summarizeMemberDay<T extends SessionLike>(
+  sessions: T[],
+  start: Date,
+  end: Date,
+  isToday: boolean,
+  now = Date.now(),
+) {
+  const overlapping = sessions.filter((session) => sessionOverlapsDay(session, start, end, now));
+  if (overlapping.length === 0) {
+    return {
+      attendanceStatus: 'not_in' as AttendanceStatusKind,
+      firstCheckInAt: null as Date | null,
+      lastCheckOutAt: null as Date | null,
+      totalClockedMs: 0,
+      totalTrackedMs: 0,
+      sessionCount: 0,
+      overlapping,
+    };
+  }
+
+  const chronological = [...overlapping].sort(
+    (a, b) => (asTime(a.startedAt) ?? 0) - (asTime(b.startedAt) ?? 0),
+  );
+  const first = chronological[0];
+  const last = chronological[chronological.length - 1];
+  const lastIsActive = last?.status === 'active';
+  const checkedIn = isToday && overlapping.some((session) => session.status === 'active');
+
+  let lastCheckOutAt: Date | null = null;
+  if (!checkedIn && last && !lastIsActive) {
+    const ended = asTime(last.endedAt ?? null);
+    lastCheckOutAt = ended != null ? new Date(ended) : null;
+  }
+
+  const firstStarted = first ? asTime(first.startedAt) : null;
+
   return {
-    $or: [
-      { startedAt: { $gte: start, $lt: end } },
-      { status: 'active' as const, startedAt: { $lt: end } },
-      {
-        status: 'closed' as const,
-        startedAt: { $lt: start },
-        endedAt: { $gte: start, $lt: end },
-      },
-    ],
+    attendanceStatus: (checkedIn ? 'checked_in' : 'checked_out') as AttendanceStatusKind,
+    firstCheckInAt: firstStarted != null ? new Date(firstStarted) : null,
+    lastCheckOutAt,
+    totalClockedMs: overlapping.reduce((sum, session) => sum + clockedMsOnDay(session, start, end, now), 0),
+    totalTrackedMs: overlapping.reduce((sum, session) => sum + trackedMsOnDay(session, start, end, now), 0),
+    sessionCount: overlapping.length,
+    overlapping,
   };
 }
 
-export async function startSession(actor: Actor) {
+function scaleUsage<T extends { durationMs?: number | null }>(items: T[] | undefined, ratio: number): T[] {
+  if (!items?.length) return [];
+  if (ratio >= 1) return items;
+  return items.map((item) => ({ ...item, durationMs: Math.round((item.durationMs ?? 0) * ratio) }));
+}
+
+/** Sessions that belong in a calendar day (incl. still-active overnight). */
+function sessionsForDayFilter(start: Date, end: Date, now = new Date()) {
+  const clauses: Record<string, unknown>[] = [
+    { startedAt: { $gte: start, $lt: end } },
+    {
+      status: 'closed' as const,
+      startedAt: { $lt: end },
+      endedAt: { $gt: start },
+    },
+  ];
+  // Live sessions overlap a day only if that day has already begun.
+  if (now.getTime() > start.getTime()) {
+    clauses.push({ status: 'active' as const, startedAt: { $lt: end } });
+  }
+  return { $or: clauses };
+}
+
+async function persistUserDaySummaries(
+  userId: string,
+  orgId: string,
+  tzOffsetMinutes?: number,
+) {
+  if (!Types.ObjectId.isValid(userId) || !Types.ObjectId.isValid(orgId)) return;
+  const { date: today } = dayBounds(undefined, tzOffsetMinutes);
+  const dates = [addCalendarDays(today, -1), today];
+  const uid = new Types.ObjectId(userId);
+  const oid = new Types.ObjectId(orgId);
+
+  const rangeStart = dayBounds(dates[0], tzOffsetMinutes).start;
+  const rangeEnd = dayBounds(dates[dates.length - 1], tzOffsetMinutes).end;
+  const sessions = await ActivitySession.find({
+    userId: uid,
+    orgId: oid,
+    ...sessionsForDayFilter(rangeStart, rangeEnd),
+  });
+
+  const ops = dates.map((date) => {
+    const { start, end } = dayBounds(date, tzOffsetMinutes);
+    const isToday = date === today;
+    const summary = summarizeMemberDay(sessions, start, end, isToday);
+    return {
+      updateOne: {
+        filter: { userId: uid, date },
+        update: {
+          $set: {
+            orgId: oid,
+            tzOffsetMinutes:
+              typeof tzOffsetMinutes === 'number' && Number.isFinite(tzOffsetMinutes)
+                ? tzOffsetMinutes
+                : 0,
+            attendanceStatus: summary.attendanceStatus,
+            firstCheckInAt: summary.firstCheckInAt,
+            lastCheckOutAt: summary.lastCheckOutAt,
+            totalClockedMs: summary.totalClockedMs,
+            totalTrackedMs: summary.totalTrackedMs,
+            sessionCount: summary.sessionCount,
+          },
+        },
+        upsert: true,
+      },
+    };
+  });
+
+  if (ops.length) await ActivityDaySummary.bulkWrite(ops, { ordered: false });
+}
+
+function persistUserDaySummariesSafe(userId: string, orgId: string, tzOffsetMinutes?: number) {
+  void persistUserDaySummaries(userId, orgId, tzOffsetMinutes).catch(() => {
+    /* rollup is best-effort; sessions remain source of truth */
+  });
+}
+
+export async function startSession(actor: Actor, tzOffsetMinutes?: number) {
   await ActivitySession.updateMany(
     { userId: actor.sub, orgId: actor.orgId, status: 'active' },
     { $set: { status: 'closed', endedAt: new Date() } },
@@ -88,6 +259,7 @@ export async function startSession(actor: Actor) {
   });
 
   emitPresenceUpdate(actor.orgId, { userId: actor.sub, checkedIn: true });
+  persistUserDaySummariesSafe(actor.sub, actor.orgId, tzOffsetMinutes);
   return serializeSession(session);
 }
 
@@ -271,7 +443,11 @@ async function ingestSamplesOnce(
   return serializeSession(session);
 }
 
-export async function stopSession(actor: Actor, sessionId?: string) {
+export async function stopSession(
+  actor: Actor,
+  sessionId?: string,
+  tzOffsetMinutes?: number,
+) {
   const query: Record<string, unknown> = {
     userId: actor.sub,
     orgId: actor.orgId,
@@ -290,6 +466,7 @@ export async function stopSession(actor: Actor, sessionId?: string) {
   session.endedAt = new Date();
   await session.save();
   emitPresenceUpdate(actor.orgId, { userId: actor.sub, checkedIn: false });
+  persistUserDaySummariesSafe(actor.sub, actor.orgId, tzOffsetMinutes);
   return { session: serializeSession(session) };
 }
 
@@ -586,14 +763,26 @@ export async function getOrgActivityByDate(
           ...sessionsForDayFilter(start, end),
         }).sort({ startedAt: -1 });
 
+  const now = Date.now();
   const members = [...resolved.values()].map((entry) => {
     const u = pickUser(entry);
-    const userSessions = entry.userId
+    const rawSessions = entry.userId
       ? sessions.filter((s) => String(s.userId) === entry.userId)
       : [];
-    const apps = aggregateApps(userSessions);
-    const sites = aggregateSites(userSessions);
-    const activeSession = isToday && userSessions.some((s) => s.status === 'active');
+    const summary = summarizeMemberDay(rawSessions, start, end, isToday, now);
+    const userSessions = summary.overlapping;
+    const scaledSessions = userSessions.map((session) => {
+      const started = asTime(session.startedAt) ?? 0;
+      const wall = Math.max(0, sessionEndTime(session, now) - started);
+      const overlap = clockedMsOnDay(session, start, end, now);
+      const ratio = wall > 0 ? Math.min(1, overlap / wall) : 1;
+      return {
+        apps: scaleUsage(session.apps, ratio),
+        sites: scaleUsage(session.sites, ratio),
+      };
+    });
+    const apps = aggregateApps(scaledSessions);
+    const sites = aggregateSites(scaledSessions);
 
     return {
       userId: entry.userId ?? entry.key,
@@ -602,8 +791,12 @@ export async function getOrgActivityByDate(
       role: entry.projectRole,
       memberStatus: entry.memberStatus,
       avatarUrl: u?.avatarUrl ?? null,
-      tracking: Boolean(activeSession),
-      totalTrackedMs: apps.reduce((sum, a) => sum + a.durationMs, 0),
+      tracking: summary.attendanceStatus === 'checked_in',
+      attendanceStatus: summary.attendanceStatus,
+      firstCheckInAt: isoOrNull(summary.firstCheckInAt),
+      lastCheckOutAt: isoOrNull(summary.lastCheckOutAt),
+      totalClockedMs: summary.totalClockedMs,
+      totalTrackedMs: summary.totalTrackedMs,
       totalWebsiteMs: sites.reduce((sum, a) => sum + a.durationMs, 0),
       apps,
       sites,
@@ -617,17 +810,50 @@ export async function getOrgActivityByDate(
     const bIn = b.sessions.length > 0;
     if (aIn !== bIn) return aIn ? -1 : 1;
     if (a.memberStatus !== b.memberStatus) return a.memberStatus === 'pending' ? 1 : -1;
+    if (b.totalClockedMs !== a.totalClockedMs) return b.totalClockedMs - a.totalClockedMs;
     if (b.totalTrackedMs !== a.totalTrackedMs) return b.totalTrackedMs - a.totalTrackedMs;
     return a.name.localeCompare(b.name);
   });
 
-  const allApps = aggregateApps(sessions);
-  const allSites = aggregateSites(sessions);
+  const allApps = aggregateApps(members.map((m) => ({ apps: m.apps })));
+  const allSites = aggregateSites(members.map((m) => ({ sites: m.sites })));
+  const oid = Types.ObjectId.isValid(actor.orgId) ? new Types.ObjectId(actor.orgId) : null;
+  if (oid) {
+    const ops = members
+      .filter((m) => Types.ObjectId.isValid(m.userId))
+      .map((m) => ({
+        updateOne: {
+          filter: { userId: new Types.ObjectId(m.userId), date },
+          update: {
+            $set: {
+              orgId: oid,
+              tzOffsetMinutes:
+                typeof tzOffsetMinutes === 'number' && Number.isFinite(tzOffsetMinutes)
+                  ? tzOffsetMinutes
+                  : 0,
+              attendanceStatus: m.attendanceStatus,
+              firstCheckInAt: m.firstCheckInAt ? new Date(m.firstCheckInAt) : null,
+              lastCheckOutAt: m.lastCheckOutAt ? new Date(m.lastCheckOutAt) : null,
+              totalClockedMs: m.totalClockedMs,
+              totalTrackedMs: m.totalTrackedMs,
+              sessionCount: m.sessions.length,
+            },
+          },
+          upsert: true,
+        },
+      }));
+    if (ops.length) {
+      void ActivityDaySummary.bulkWrite(ops, { ordered: false }).catch(() => {
+        /* rollup is best-effort; sessions remain source of truth */
+      });
+    }
+  }
 
   return {
     date,
-    totalTrackedMs: allApps.reduce((s, a) => s + a.durationMs, 0),
-    totalWebsiteMs: allSites.reduce((s, a) => s + a.durationMs, 0),
+    totalTrackedMs: members.reduce((sum, m) => sum + m.totalTrackedMs, 0),
+    totalWebsiteMs: members.reduce((sum, m) => sum + (m.totalWebsiteMs ?? 0), 0),
+    totalClockedMs: members.reduce((sum, m) => sum + m.totalClockedMs, 0),
     allApps,
     allSites,
     members,

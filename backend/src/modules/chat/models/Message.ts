@@ -47,6 +47,18 @@ const callSchema = new Schema(
   { _id: false },
 );
 
+const linkPreviewSchema = new Schema(
+  {
+    url: { type: String, required: true },
+    host: { type: String, default: '' },
+    title: { type: String, default: '' },
+    description: { type: String, default: '' },
+    imageUrl: { type: String, default: null },
+    siteName: { type: String, default: '' },
+  },
+  { _id: false },
+);
+
 const messageSchema = new Schema(
   {
     orgId: { type: Schema.Types.ObjectId, ref: 'Organization', required: true, index: true },
@@ -67,6 +79,7 @@ const messageSchema = new Schema(
     forwarded: { type: Boolean, default: false },
     /** Display name of the original sender when forwarded. */
     forwardedFrom: { type: String, default: null },
+    linkPreview: { type: linkPreviewSchema, default: null },
     editedAt: { type: Date, default: null },
     deletedAt: { type: Date, default: null },
   },

@@ -3,6 +3,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import * as Linking from 'expo-linking';
 import React, { useMemo, useState } from 'react';
 import {
+  Alert,
   Platform,
   Pressable,
   ScrollView,
@@ -50,7 +51,7 @@ export function TaskDetailScreen({ route, navigation }: Props) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const toast = useToast();
-  const { getTask, getProject, updateTask, addComment, addTaskAttachments, removeTaskAttachment } = useWorkspace();
+  const { getTask, getProject, updateTask, deleteTask, addComment, addTaskAttachments, removeTaskAttachment } = useWorkspace();
 
   const task = getTask(taskId);
   const project = task ? getProject(task.projectId) : undefined;
@@ -62,6 +63,7 @@ export function TaskDetailScreen({ route, navigation }: Props) {
   const [pendingFiles, setPendingFiles] = useState<PickedFile[]>([]);
   const [posting, setPosting] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const statusOptions = useMemo<SheetOption<string>[]>(
     () =>
@@ -155,9 +157,46 @@ export function TaskDetailScreen({ route, navigation }: Props) {
     Linking.openURL(resolved).catch(() => toast.error('Could not open this attachment.'));
   };
 
+  const confirmDelete = () => {
+    if (deleting) return;
+    Alert.alert('Delete task?', `Delete “${task.title}”? This can’t be undone.`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => {
+          void (async () => {
+            setDeleting(true);
+            try {
+              await deleteTask(task.id);
+              toast.success(`Deleted ${task.key}`);
+              navigation.goBack();
+            } catch (error) {
+              toast.fromError(error, 'Could not delete the task.');
+            } finally {
+              setDeleting(false);
+            }
+          })();
+        },
+      },
+    ]);
+  };
+
   return (
     <Screen>
-      <AppHeader title={task.key} subtitle={project?.name} showBack />
+      <AppHeader
+        title={task.key}
+        subtitle={project?.name}
+        showBack
+        actions={[
+          {
+            icon: 'trash-outline',
+            accessibilityLabel: 'Delete task',
+            tint: colors.danger,
+            onPress: confirmDelete,
+          },
+        ]}
+      />
 
       <KeyboardAware offset={8}>
         <ScrollView

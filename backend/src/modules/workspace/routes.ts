@@ -530,6 +530,18 @@ router.post('/projects/:projectId/tasks', async (req, res, next) => {
   }
 });
 
+router.delete('/tasks/:taskId', async (req, res, next) => {
+  try {
+    const result = await workspace.deleteTask(
+      await actorFrom(req as AuthedRequest),
+      param(req.params.taskId),
+    );
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.patch('/tasks/:taskId', async (req, res, next) => {
   try {
     const body = z

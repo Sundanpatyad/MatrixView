@@ -18,6 +18,7 @@ import {
   assignTimelineRequest,
   createProjectRequest,
   createTaskRequest,
+  deleteTaskRequest,
   createTimelineRequest,
   createTeamRequest,
   deleteProjectRequest,
@@ -161,6 +162,7 @@ type WorkspaceContextValue = {
   createTask: (input: CreateTaskInput) => Promise<BoardTask>;
   updateTaskStatus: (taskId: string, status: TaskStatus) => Promise<void>;
   updateTask: (taskId: string, patch: Partial<BoardTask>) => Promise<void>;
+  deleteTask: (taskId: string) => Promise<void>;
   addComment: (taskId: string, body: string, files?: File[]) => Promise<void>;
   addTaskAttachments: (taskId: string, files: File[]) => Promise<void>;
   removeTaskAttachment: (taskId: string, attachmentId: string) => Promise<void>;
@@ -447,6 +449,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     patchChatSocketHandlers({
       onTaskCreated: applyTask,
       onTaskUpdated: applyTask,
+      onTaskDeleted: (payload) => {
+        if (!payload?.taskId) return;
+        setState((prev) => ({
+          ...prev,
+          tasks: prev.tasks.filter((t) => t.id !== payload.taskId),
+          timeline: prev.timeline.filter((item) => item.taskId !== payload.taskId),
+        }));
+      },
       onProjectColumns: applyColumns,
       onProjectUpdated: applyColumns,
       onProjectRemoved: (payload) => {
@@ -483,6 +493,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       clearChatSocketHandlerKeys([
         'onTaskCreated',
         'onTaskUpdated',
+        'onTaskDeleted',
         'onProjectColumns',
         'onProjectUpdated',
         'onProjectRemoved',
@@ -593,6 +604,15 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     setState((prev) => ({
       ...prev,
       tasks: upsertTask(prev.tasks, ensureTaskFields(task)),
+    }));
+  }, []);
+
+  const deleteTask = useCallback(async (taskId: string) => {
+    await deleteTaskRequest(taskId);
+    setState((prev) => ({
+      ...prev,
+      tasks: prev.tasks.filter((t) => t.id !== taskId),
+      timeline: prev.timeline.filter((item) => item.taskId !== taskId),
     }));
   }, []);
 
@@ -1013,6 +1033,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       createTask,
       updateTaskStatus,
       updateTask,
+      deleteTask,
       addComment,
       addTaskAttachments,
       removeTaskAttachment,
@@ -1068,6 +1089,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       createTask,
       updateTaskStatus,
       updateTask,
+      deleteTask,
       addComment,
       addTaskAttachments,
       removeTaskAttachment,

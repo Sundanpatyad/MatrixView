@@ -260,6 +260,7 @@ function TimelineTable({
   onAssign,
   onEdit,
   onDelete,
+  onDeleteTask,
 }: {
   rows: WorkRow[];
   getProject: (id: string) => Project | undefined;
@@ -267,6 +268,7 @@ function TimelineTable({
   onAssign: (row: WorkRow, memberId: string) => Promise<void>;
   onEdit: (item: TimelineItem) => void;
   onDelete: (item: TimelineItem) => void;
+  onDeleteTask: (task: BoardTask) => void;
 }) {
   return (
     <div className="overflow-x-auto">
@@ -412,11 +414,17 @@ function TimelineTable({
                           onClick={() => onDelete(row.timelineItem!)}
                           className="text-[11px] font-semibold text-ink-400 hover:text-[#ed4245]"
                         >
-                          Remove
+                          Delete
                         </button>
                       </>
-                    ) : row.source === 'board' ? (
-                      <span className="text-[10px] text-ink-400">On board</span>
+                    ) : row.source === 'board' && row.task ? (
+                      <button
+                        type="button"
+                        onClick={() => onDeleteTask(row.task!)}
+                        className="text-[11px] font-semibold text-ink-400 hover:text-[#ed4245]"
+                      >
+                        Delete
+                      </button>
                     ) : null}
                   </div>
                 </td>
@@ -647,6 +655,7 @@ export function TimelinePanel() {
     assignTimelineItem,
     deleteTimelineItem,
     updateTask,
+    deleteTask,
     isProjectAdmin,
     activeProjectId: dashProjectId,
   } = useWorkspace();
@@ -668,6 +677,7 @@ export function TimelinePanel() {
   const [userFilterIds, setUserFilterIds] = useState<string[]>([]);
   const [editingItem, setEditingItem] = useState<TimelineItem | null>(null);
   const [itemToDelete, setItemToDelete] = useState<TimelineItem | null>(null);
+  const [taskToDelete, setTaskToDelete] = useState<BoardTask | null>(null);
   const [deletingItem, setDeletingItem] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -1331,6 +1341,7 @@ export function TimelinePanel() {
                             onAssign={onAssign}
                             onEdit={setEditingItem}
                             onDelete={setItemToDelete}
+                            onDeleteTask={setTaskToDelete}
                           />
                         </div>
                       ))
@@ -1342,6 +1353,7 @@ export function TimelinePanel() {
                           onAssign={onAssign}
                           onEdit={setEditingItem}
                           onDelete={setItemToDelete}
+                          onDeleteTask={setTaskToDelete}
                         />
                       )}
                 </section>
@@ -1363,11 +1375,11 @@ export function TimelinePanel() {
 
       <ConfirmModal
         open={Boolean(itemToDelete)}
-        title="Remove backlog item?"
+        title="Delete backlog item?"
         message={
-          itemToDelete ? `Remove “${itemToDelete.title}”? This can’t be undone.` : ''
+          itemToDelete ? `Delete “${itemToDelete.title}”? This can’t be undone.` : ''
         }
-        confirmLabel="Remove"
+        confirmLabel="Delete"
         danger
         busy={deletingItem}
         onCancel={() => setItemToDelete(null)}
@@ -1377,6 +1389,33 @@ export function TimelinePanel() {
           try {
             await deleteTimelineItem(itemToDelete.id);
             setItemToDelete(null);
+          } finally {
+            setDeletingItem(false);
+          }
+        }}
+      />
+
+      <ConfirmModal
+        open={Boolean(taskToDelete)}
+        title="Delete task?"
+        message={
+          taskToDelete
+            ? `Delete “${taskToDelete.title}” (${taskToDelete.key})? This can’t be undone.`
+            : ''
+        }
+        confirmLabel="Delete"
+        danger
+        busy={deletingItem}
+        onCancel={() => setTaskToDelete(null)}
+        onConfirm={async () => {
+          if (!taskToDelete) return;
+          setDeletingItem(true);
+          try {
+            await deleteTask(taskToDelete.id);
+            toast.success(`Deleted ${taskToDelete.key}`);
+            setTaskToDelete(null);
+          } catch (err) {
+            toast.fromError(err, 'Could not delete task');
           } finally {
             setDeletingItem(false);
           }

@@ -231,6 +231,13 @@ export function updateTaskRequest(
   });
 }
 
+export function deleteTaskRequest(taskId: string): Promise<{ ok: true; taskId: string; projectId: string }> {
+  return apiFetch(`/api/tasks/${taskId}`, {
+    method: 'DELETE',
+    auth: true,
+  });
+}
+
 export function addCommentRequest(
   taskId: string,
   body: string,

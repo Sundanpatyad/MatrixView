@@ -208,6 +208,15 @@ export interface ChatReplyPreview {
   deleted: boolean;
 }
 
+export interface ChatLinkPreview {
+  url: string;
+  host: string;
+  title: string;
+  description: string;
+  imageUrl: string | null;
+  siteName: string;
+}
+
 export interface ChatCallMeta {
   callId: string;
   outcome: 'answered' | 'missed' | 'rejected' | 'cancelled' | 'failed';
@@ -232,6 +241,7 @@ export interface ChatMessage {
   receipts?: Array<{ userId: string; deliveredAt: string | null; readAt: string | null }>;
   forwarded?: boolean;
   forwardedFrom?: string | null;
+  linkPreview?: ChatLinkPreview | null;
   editedAt: string | null;
   deletedAt: string | null;
   createdAt: string;
@@ -312,6 +322,8 @@ export interface ActivitySession {
   awayPeriods?: AwayPeriod[];
 }
 
+export type AttendanceDayStatus = 'checked_in' | 'checked_out' | 'not_in';
+
 export interface MemberActivity {
   userId: string;
   name: string;
@@ -320,6 +332,10 @@ export interface MemberActivity {
   memberStatus?: 'active' | 'pending';
   avatarUrl?: string | null;
   tracking: boolean;
+  attendanceStatus?: AttendanceDayStatus;
+  firstCheckInAt?: string | null;
+  lastCheckOutAt?: string | null;
+  totalClockedMs?: number;
   totalTrackedMs: number;
   totalWebsiteMs?: number;
   apps: AppUsage[];
@@ -330,6 +346,7 @@ export interface MemberActivity {
 export interface OrgActivity {
   date: string;
   totalTrackedMs: number;
+  totalClockedMs?: number;
   totalWebsiteMs?: number;
   allApps: AppUsage[];
   allSites?: SiteUsage[];
