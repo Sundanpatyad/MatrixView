@@ -63,11 +63,16 @@ export function AppShell() {
 
   useEffect(() => {
     if (!mobileNavOpen) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setMobileNavOpen(false);
     };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener('keydown', onKey);
+    };
   }, [mobileNavOpen]);
 
   function go(to: string) {
@@ -169,7 +174,7 @@ export function AppShell() {
               className="absolute inset-0 bg-black/50"
               onClick={() => setMobileNavOpen(false)}
             />
-            <aside className="absolute inset-y-0 left-0 flex w-[min(18rem,85vw)] flex-col border-r border-ink-800 bg-ink-950 px-3 py-4 shadow-xl">
+            <aside className="absolute inset-y-0 left-0 flex w-[min(18rem,85vw)] flex-col border-r border-ink-800 bg-ink-950 px-3 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-xl">
               <div className="flex items-center justify-between gap-2 px-1">
                 <div className="flex min-w-0 items-center gap-2.5">
                   <img
@@ -183,12 +188,12 @@ export function AppShell() {
                   type="button"
                   aria-label="Close menu"
                   onClick={() => setMobileNavOpen(false)}
-                  className="flex h-9 w-9 items-center justify-center rounded-md text-ink-400 hover:bg-ink-900 hover:text-ink-100"
+                  className="flex h-10 w-10 items-center justify-center rounded-md text-ink-400 hover:bg-ink-900 hover:text-ink-100"
                 >
                   <IconX className="h-5 w-5" />
                 </button>
               </div>
-              <nav className="mt-6 flex flex-1 flex-col gap-1.5">
+              <nav className="mt-6 flex flex-1 flex-col gap-1">
                 {nav.map((item) => {
                   const active = item.end
                     ? location.pathname === item.to
@@ -200,7 +205,7 @@ export function AppShell() {
                       type="button"
                       onClick={() => go(item.to)}
                       className={cn(
-                        'flex h-9 items-center gap-2.5 rounded-xl px-2.5 text-sm font-medium transition-colors',
+                        'flex min-h-11 items-center gap-2.5 rounded-xl px-2.5 text-sm font-medium transition-colors',
                         active
                           ? 'bg-brand-500/15 text-brand-300'
                           : 'text-ink-300 hover:bg-ink-800 hover:text-ink-100',
@@ -218,7 +223,7 @@ export function AppShell() {
                     setProfileOpen(true);
                   }}
                   className={cn(
-                    'flex h-9 items-center gap-2.5 rounded-xl px-2.5 text-sm font-medium transition-colors',
+                    'flex min-h-11 items-center gap-2.5 rounded-xl px-2.5 text-sm font-medium transition-colors',
                     profileOpen
                       ? 'bg-brand-500/15 text-brand-300'
                       : 'text-ink-300 hover:bg-ink-800 hover:text-ink-100',
@@ -234,7 +239,7 @@ export function AppShell() {
                   setMobileNavOpen(false);
                   setConfirmLogout(true);
                 }}
-                className="mb-1 flex h-9 items-center gap-2.5 rounded-md px-2.5 text-sm font-medium text-ink-400 transition-colors hover:bg-ink-900 hover:text-ink-100"
+                className="mb-1 flex min-h-11 items-center gap-2.5 rounded-md px-2.5 text-sm font-medium text-ink-400 transition-colors hover:bg-ink-900 hover:text-ink-100"
               >
                 <IconLogout className="shrink-0" />
                 <span>Sign out</span>
@@ -275,20 +280,21 @@ export function AppShell() {
       <ProfileModal open={profileOpen} onClose={() => setProfileOpen(false)} />
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="relative z-20 flex h-12 shrink-0 items-center justify-between gap-3 border-b border-ink-800 bg-ink-900 px-3 sm:px-4 md:px-5">
-          <div className="flex min-w-0 items-center gap-2.5 text-sm">
+        <header className="relative z-20 flex h-12 shrink-0 items-center justify-between gap-2 overflow-hidden border-b border-ink-800 bg-ink-900 px-2 sm:gap-3 sm:px-4 md:px-5">
+          <div className="flex min-w-0 items-center gap-2 text-sm sm:gap-2.5">
             <Tooltip label="Menu" side="bottom" className="md:hidden">
               <button
                 type="button"
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-ink-300 hover:bg-ink-700 hover:text-ink-50"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-ink-300 hover:bg-ink-700 hover:text-ink-50 md:h-8 md:w-8"
                 aria-label="Open menu"
+                aria-expanded={mobileNavOpen}
                 onClick={() => setMobileNavOpen(true)}
               >
                 <IconMenu className="h-5 w-5" />
               </button>
             </Tooltip>
-            <span className="font-semibold tracking-tight text-ink-50">DockX</span>
-            <div className="flex items-center gap-0.5">
+            <span className="shrink-0 font-semibold tracking-tight text-ink-50">DockX</span>
+            <div className="hidden items-center gap-0.5 md:flex">
               {nav.map((item) => {
                 const active = item.end
                   ? location.pathname === item.to
@@ -311,8 +317,8 @@ export function AppShell() {
                 );
               })}
             </div>
-            <span className="hidden h-4 w-px bg-ink-600 sm:block" aria-hidden />
-            <span className="flex items-center gap-1.5 text-xs text-ink-300">
+            <span className="hidden h-4 w-px bg-ink-600 md:block" aria-hidden />
+            <span className="hidden items-center gap-1.5 text-xs text-ink-300 sm:flex">
               <span
                 className={cn(
                   'h-1.5 w-1.5 rounded-full',
@@ -352,7 +358,7 @@ export function AppShell() {
               </>
             ) : null}
           </div>
-          <div className="flex shrink-0 items-center gap-1">
+          <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
             <NotificationBell />
             <ThemeToggle />
             <Tooltip label="Profile" side="bottom">
@@ -360,7 +366,7 @@ export function AppShell() {
               type="button"
               aria-label="Profile"
               onClick={() => setProfileOpen(true)}
-              className="ml-1 flex items-center gap-2 rounded-md px-2 py-1 transition-colors hover:bg-ink-700"
+              className="ml-0 flex items-center gap-2 rounded-md px-1 py-1 transition-colors hover:bg-ink-700 sm:ml-1 sm:px-2"
             >
               <div className="hidden text-right leading-tight sm:block">
                 <p className="text-xs font-semibold text-ink-50">{user?.name}</p>

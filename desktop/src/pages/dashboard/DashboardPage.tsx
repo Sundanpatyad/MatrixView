@@ -59,7 +59,7 @@ function DonutChart({
   let offset = 0;
 
   return (
-    <div className="flex items-center gap-4">
+    <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-center">
       <div className="relative h-28 w-28 shrink-0">
         <svg viewBox="0 0 120 120" className="h-full w-full">
           <circle cx="60" cy="60" r={r} fill="none" stroke="var(--chart-track)" strokeWidth="12" />
@@ -473,7 +473,7 @@ export function DashboardPage() {
   }));
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden">
+    <div className="flex h-full min-h-0 flex-col">
       {projects.length === 0 ? (
         <section className="shrink-0 border-b border-brand-500/25 bg-brand-500/10 px-4 py-3">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -500,18 +500,18 @@ export function DashboardPage() {
 
       {/* Top bar */}
       <section className="shrink-0 border-b border-ink-600 bg-ink-800">
-        <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-          <div className="min-w-0 shrink-0">
+        <div className="flex flex-col gap-3 px-3 py-3 sm:px-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+          <div className="min-w-0">
             <p className="text-[11px] font-medium tracking-wide text-ink-400 uppercase">
               Dashboard
             </p>
-            <h1 className="mt-0.5 truncate text-lg font-semibold tracking-tight text-ink-50">
+            <h1 className="mt-0.5 text-lg font-semibold tracking-tight text-ink-50">
               {greeting()}, {firstName}
             </h1>
           </div>
 
           <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-            <div className="w-[168px] shrink-0 sm:w-[200px]">
+            <div className="w-full min-w-0 sm:w-[200px] sm:shrink-0">
               <Select
                 value={activeProjectId}
                 onChange={(value) => setActiveProjectId(value as typeof activeProjectId)}
@@ -644,14 +644,15 @@ export function DashboardPage() {
         </nav>
       </section>
 
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
       {tab === 'timeline' ? (
-        <div className="min-h-0 flex-1 overflow-hidden">
+        <div className="min-h-min">
           <TimelinePanel />
         </div>
       ) : null}
 
       {tab === 'activity' && canViewActivity ? (
-        <div className="min-h-0 flex-1 overflow-hidden">
+        <div className="min-h-min">
           <AdminActivityPanel
             projectId={activeProjectId === 'all' ? undefined : activeProjectId}
           />
@@ -659,7 +660,7 @@ export function DashboardPage() {
       ) : null}
 
       {tab === 'tasks' ? (
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-ink-800">
+        <div className="bg-ink-800">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-ink-600 px-4 py-3">
             <div>
               <h2 className="text-sm font-semibold text-ink-50">Task list</h2>
@@ -694,7 +695,7 @@ export function DashboardPage() {
               </div>
             </div>
           </div>
-          <div className="min-h-0 flex-1 overflow-auto">
+          <div>
             {/* Mobile cards */}
             <div className="space-y-2 p-3 md:hidden">
               {taskList.length === 0 ? (
@@ -825,7 +826,7 @@ export function DashboardPage() {
       ) : null}
 
       {tab === 'users' ? (
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-ink-800">
+        <div className="bg-ink-800">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-ink-600 px-4 py-2.5">
             <div>
               <h2 className="text-sm font-semibold text-ink-50">Users list</h2>
@@ -841,7 +842,7 @@ export function DashboardPage() {
               </Button>
             ) : null}
           </div>
-          <div className="min-h-0 flex-1 overflow-auto">
+          <div>
             {/* Mobile cards */}
             <div className="space-y-2 p-3 md:hidden">
               {teamUsers.length === 0 ? (
@@ -1063,9 +1064,9 @@ export function DashboardPage() {
         ))}
       </section>
 
-      {/* Main full-screen grid */}
-      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[1fr_260px]">
-        <div className="min-h-0 overflow-y-auto">
+      {/* Main grid — same page scroll; no nested panes */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_260px]">
+        <div>
           {/* Graphs */}
           <section className="grid border-b border-ink-600 bg-ink-800 lg:grid-cols-3">
             <div className="border-b border-ink-600 p-4 lg:border-r lg:border-b-0">
@@ -1103,8 +1104,8 @@ export function DashboardPage() {
           </section>
 
           {/* Task list */}
-          <section className="flex min-h-[280px] flex-col bg-ink-800">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-ink-600 px-4 py-3">
+          <section className="flex flex-col bg-ink-800">
+            <div className="flex flex-col gap-3 border-b border-ink-600 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
               <div>
                 <h2 className="text-sm font-semibold text-ink-50">Task list</h2>
                 <p className="mt-0.5 text-[12px] text-ink-400">
@@ -1112,8 +1113,8 @@ export function DashboardPage() {
                   {selectedUserEmail !== 'all' ? ' · filtered by user' : ''}
                 </p>
               </div>
-              <div className="flex items-center gap-2">
-                <div className="flex items-center gap-0.5 rounded-md border border-ink-600 bg-ink-900/50 p-0.5">
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex flex-1 items-center gap-0.5 rounded-md border border-ink-600 bg-ink-900/50 p-0.5 sm:flex-none">
                   {(['all', 'open', 'done'] as const).map((f) => (
                     <FilterChip
                       key={f}
@@ -1124,7 +1125,7 @@ export function DashboardPage() {
                     </FilterChip>
                   ))}
                 </div>
-                <Link to="/board">
+                <Link to="/board" className="shrink-0">
                   <Button size="sm" variant="secondary">
                     Board
                   </Button>
@@ -1132,7 +1133,72 @@ export function DashboardPage() {
               </div>
             </div>
 
-            <div className="overflow-x-auto">
+            <div className="space-y-2 p-3 md:hidden">
+              {taskList.length === 0 ? (
+                <p className="px-1 py-10 text-center text-sm text-ink-400">
+                  No tasks in this view. Open the board to create one.
+                </p>
+              ) : (
+                taskList.map((t) => {
+                  const proj = getProject(t.projectId);
+                  const statusColor =
+                    STATUS_META.find((s) => s.id === t.status)?.color ?? '#80848e';
+                  const priorityColor =
+                    PRIORITY_META.find((p) => p.id === t.priority)?.color ?? '#80848e';
+                  return (
+                    <div
+                      key={t.id}
+                      className="rounded-lg border border-ink-700 bg-ink-900/60 px-3 py-2.5"
+                    >
+                      <p className="text-sm font-medium text-ink-50">{t.title}</p>
+                      <p className="mt-0.5 text-[11px] text-ink-400">
+                        {t.key}
+                        {proj ? ` · ${proj.name}` : ''}
+                      </p>
+                      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-ink-300">
+                        <span className="inline-flex items-center gap-1.5">
+                          <UserAvatar
+                            name={t.assigneeName || 'Unassigned'}
+                            src={avatarFromMembers(
+                              getProject(t.projectId)?.members ?? [],
+                              t.assigneeId,
+                              t.assigneeName,
+                            )}
+                            seed={t.assigneeName || t.id}
+                            size="xs"
+                            userId={presenceUserIdFromMembers(
+                              getProject(t.projectId)?.members ?? [],
+                              t.assigneeId,
+                            )}
+                          />
+                          {t.assigneeName || 'Unassigned'}
+                        </span>
+                        <span className="inline-flex items-center gap-1.5 capitalize">
+                          <span
+                            className="h-1.5 w-1.5 rounded-full"
+                            style={{ background: statusColor }}
+                          />
+                          {t.status.replace('_', ' ')}
+                        </span>
+                        <span style={{ color: priorityColor }} className="font-medium capitalize">
+                          {t.priority}
+                        </span>
+                        <span>
+                          {t.dueDate
+                            ? new Date(t.dueDate).toLocaleDateString(undefined, {
+                                month: 'short',
+                                day: 'numeric',
+                              })
+                            : 'No due'}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            <div className="hidden overflow-x-auto md:block">
               <table className="w-full min-w-[520px] text-left text-[13px] sm:min-w-[640px]">
                 <thead className="sticky top-0 bg-ink-900 text-[11px] font-semibold tracking-wide text-ink-400 uppercase">
                   <tr>
@@ -1223,7 +1289,7 @@ export function DashboardPage() {
         </div>
 
         {/* Users list */}
-        <aside className="flex min-h-0 flex-col border-t border-ink-600 bg-ink-800 lg:border-t-0 lg:border-l">
+        <aside className="border-t border-ink-600 bg-ink-800 lg:border-t-0 lg:border-l">
           <div className="border-b border-ink-600 px-4 py-3">
             <h2 className="text-sm font-semibold text-ink-50">Users</h2>
             <p className="mt-0.5 text-[12px] text-ink-400">
@@ -1252,7 +1318,7 @@ export function DashboardPage() {
             </div>
           </button>
 
-          <ul className="min-h-0 flex-1 overflow-y-auto">
+          <ul>
             {teamUsers.length === 0 ? (
               <li className="px-4 py-8 text-center text-xs text-ink-400">
                 Invite members from the board.
@@ -1316,6 +1382,7 @@ export function DashboardPage() {
       </div>
         </>
       ) : null}
+      </div>
 
       {showCreateProject ? (
         <CreateProjectModal

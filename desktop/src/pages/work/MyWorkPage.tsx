@@ -124,21 +124,21 @@ export function MyWorkPage() {
 
   return (
     <div className="h-full min-h-0 overflow-y-auto">
-      <div className="mx-auto flex max-w-3xl flex-col gap-4 px-4 py-6 sm:px-6">
-        <header className="flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <h1 className="truncate text-xl font-semibold tracking-tight text-ink-50">
+      <div className="mx-auto flex max-w-3xl flex-col gap-4 px-3 py-5 sm:px-6 sm:py-6">
+        <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <h1 className="text-xl font-semibold tracking-tight text-ink-50">
               {greeting()}, {firstName}
             </h1>
-            <p className="mt-1 truncate text-sm text-ink-400">
+            <p className="mt-1 text-sm leading-relaxed text-ink-400">
               {activeProjectId === 'all'
                 ? 'Your assigned work for today. Planning lives on the board.'
                 : `Your assigned work in ${homeProject?.name ?? 'this project'}. Planning lives on the board.`}
             </p>
           </div>
-          <div className="flex shrink-0 items-center gap-1.5">
+          <div className="flex w-full min-w-0 flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:justify-end">
             {projects.length > 0 ? (
-              <div className="w-[200px] shrink-0">
+              <div className="w-full min-w-0 sm:w-[200px] sm:shrink-0">
                 <Select
                   value={activeProjectId}
                   onChange={(value) => setActiveProjectId(value as typeof activeProjectId)}
@@ -148,12 +148,13 @@ export function MyWorkPage() {
                 />
               </div>
             ) : null}
+            <div className="flex flex-wrap items-center gap-1.5">
             {!attendanceReady ? (
               <Button size="sm" variant="secondary" disabled>
                 …
               </Button>
             ) : !checkedIn ? (
-              <Button size="sm" onClick={() => void checkIn()}>
+              <Button size="sm" className="flex-1 sm:flex-none" onClick={() => void checkIn()}>
                 Check in
               </Button>
             ) : (
@@ -164,11 +165,12 @@ export function MyWorkPage() {
                 <Button size="sm" variant="danger" onClick={() => void checkOut()}>
                   Check out
                 </Button>
-                <span className="ml-1 text-xs font-semibold tabular-nums text-ink-300">
+                <span className="ml-0.5 text-xs font-semibold tabular-nums text-ink-300">
                   {elapsedLabel}
                 </span>
               </>
             )}
+            </div>
           </div>
         </header>
 
@@ -184,15 +186,15 @@ export function MyWorkPage() {
           <Stat label="Due soon" value={dueSoon} />
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex rounded-lg border border-ink-600 bg-ink-800 p-0.5">
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+          <div className="flex w-full rounded-lg border border-ink-600 bg-ink-800 p-0.5 sm:w-auto">
             {(['open', 'done', 'all'] as const).map((id) => (
               <button
                 key={id}
                 type="button"
                 onClick={() => setFilter(id)}
                 className={cn(
-                  'h-7 rounded-md px-3 text-[12px] font-semibold capitalize',
+                  'h-8 min-h-8 flex-1 rounded-md px-3 text-[12px] font-semibold capitalize sm:h-7 sm:flex-none',
                   filter === id ? 'bg-brand-500 text-white' : 'text-ink-300 hover:text-ink-50',
                 )}
               >
@@ -200,17 +202,22 @@ export function MyWorkPage() {
               </button>
             ))}
           </div>
-          <div className="flex items-center gap-1.5">
+          <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center">
             {homeProject ? (
-              <Button size="sm" onClick={() => setShowCreateTask(true)}>
+              <Button size="sm" className="w-full sm:w-auto" onClick={() => setShowCreateTask(true)}>
                 New task
               </Button>
             ) : (
-              <Button size="sm" onClick={() => setShowCreateProject(true)}>
+              <Button size="sm" className="w-full sm:w-auto" onClick={() => setShowCreateProject(true)}>
                 New project
               </Button>
             )}
-            <Button size="sm" variant="secondary" onClick={() => navigate(boardHref)}>
+            <Button
+              size="sm"
+              variant="secondary"
+              className="w-full sm:w-auto"
+              onClick={() => navigate(boardHref)}
+            >
               Board
             </Button>
           </div>
@@ -219,7 +226,7 @@ export function MyWorkPage() {
         {isLoading && mine.length === 0 ? (
           <p className="py-12 text-center text-sm text-ink-400">Loading your tasks…</p>
         ) : visible.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-ink-600 bg-ink-800/60 px-6 py-12 text-center">
+          <div className="rounded-xl border border-dashed border-ink-600 bg-ink-800/60 px-4 py-10 text-center sm:px-6 sm:py-12">
             <p className="text-sm font-semibold text-ink-50">
               {projects.length === 0
                 ? 'No project yet'
@@ -234,17 +241,22 @@ export function MyWorkPage() {
                 ? 'Create a project, invite people, then add a task. It will show up here when it is assigned to you.'
                 : 'Tasks assigned to you appear here. Create one for yourself, or open the board to plan the project.'}
             </p>
-            <div className="mt-4 flex flex-wrap justify-center gap-2">
+            <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-center">
               {projects.length === 0 ? (
-                <Button size="sm" onClick={() => setShowCreateProject(true)}>
+                <Button size="sm" className="w-full sm:w-auto" onClick={() => setShowCreateProject(true)}>
                   Create project
                 </Button>
               ) : (
-                <Button size="sm" onClick={() => setShowCreateTask(true)}>
+                <Button size="sm" className="w-full sm:w-auto" onClick={() => setShowCreateTask(true)}>
                   Create a task for me
                 </Button>
               )}
-              <Button size="sm" variant="secondary" onClick={() => navigate(boardHref)}>
+              <Button
+                size="sm"
+                variant="secondary"
+                className="w-full sm:w-auto"
+                onClick={() => navigate(boardHref)}
+              >
                 Open board
               </Button>
             </div>
@@ -316,6 +328,7 @@ export function MyWorkPage() {
                       >
                       <Button
                         size="xs"
+                        className="shrink-0"
                         variant={active ? 'secondary' : 'primary'}
                         disabled={!checkedIn}
                         onClick={(e) => {
@@ -377,9 +390,11 @@ export function MyWorkPage() {
 
 function Stat({ label, value, warn }: { label: string; value: number; warn?: boolean }) {
   return (
-    <div className="rounded-xl border border-ink-600 bg-ink-800 px-3 py-2.5">
-      <p className="text-[10px] font-bold tracking-wide text-ink-400 uppercase">{label}</p>
-      <p className={cn('mt-0.5 text-lg font-semibold tabular-nums', warn ? 'text-[#ed4245]' : 'text-ink-50')}>
+    <div className="min-w-0 rounded-xl border border-ink-600 bg-ink-800 px-2.5 py-3 sm:px-3">
+      <p className="text-[10px] leading-tight font-bold tracking-wide text-ink-400 uppercase">
+        {label}
+      </p>
+      <p className={cn('mt-1 text-lg font-semibold tabular-nums', warn ? 'text-[#ed4245]' : 'text-ink-50')}>
         {value}
       </p>
     </div>

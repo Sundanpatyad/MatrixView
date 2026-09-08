@@ -156,13 +156,13 @@ export function CreateTaskModal({
     show ? 'border-[#ed4245]/70 focus:border-[#ed4245]' : undefined;
 
   return createPortal(
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/55 p-4">
+    <div className="fixed inset-0 z-[9999] flex items-end justify-center bg-black/55 p-0 sm:items-center sm:p-4">
       <button type="button" className="absolute inset-0" onClick={onClose} aria-label="Close" />
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="create-task-title"
-        className="relative z-10 flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-ink-600 bg-ink-800 shadow-2xl"
+        className="relative z-10 flex max-h-[100dvh] w-full max-w-2xl flex-col overflow-hidden rounded-t-2xl border border-ink-600 bg-ink-800 shadow-2xl sm:max-h-[92vh] sm:rounded-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <header className="shrink-0 border-b border-ink-600 px-5 py-4">

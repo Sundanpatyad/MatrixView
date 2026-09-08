@@ -1027,8 +1027,8 @@ export function TimelinePanel() {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-ink-900 lg:flex-row">
-      <section className="max-h-[42vh] w-full shrink-0 overflow-y-auto border-b border-ink-600 bg-ink-800 lg:max-h-none lg:w-[340px] lg:border-r lg:border-b-0">
+    <div className="flex flex-col bg-ink-900 lg:min-h-0 lg:flex-row">
+      <section className="w-full shrink-0 border-b border-ink-600 bg-ink-800 lg:w-[340px] lg:border-r lg:border-b-0">
         <div className="border-b border-ink-700 px-5 py-4">
           <p className="text-[10px] font-bold tracking-wide text-ink-300 uppercase">Backlog</p>
           <h2 className="mt-0.5 text-base font-semibold text-ink-50">Create backlog task</h2>
@@ -1182,7 +1182,7 @@ export function TimelinePanel() {
         </form>
       </section>
 
-      <section className="flex min-h-0 min-w-0 flex-1 flex-col bg-ink-800">
+      <section className="min-w-0 bg-ink-800">
         <div className="space-y-2.5 border-b border-ink-600 px-4 py-2.5 md:px-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -1287,7 +1287,7 @@ export function TimelinePanel() {
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-auto">
+        <div>
           {items.length === 0 ? (
             <div className="flex h-full min-h-[240px] flex-col items-center justify-center px-6 py-16 text-center">
               <p className="text-sm font-semibold text-ink-100">No items in this view</p>

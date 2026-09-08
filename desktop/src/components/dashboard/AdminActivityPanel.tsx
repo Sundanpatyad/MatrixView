@@ -222,7 +222,7 @@ function Donut({
   const c = 2 * Math.PI * r;
   let offset = 0;
   return (
-    <div className="flex items-center gap-4">
+    <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-center">
       <div className="relative h-28 w-28 shrink-0">
         <svg viewBox="0 0 120 120" className="h-full w-full">
           <circle cx="60" cy="60" r={r} fill="none" stroke="var(--chart-track)" strokeWidth="12" />
@@ -632,18 +632,17 @@ export function AdminActivityPanel({ projectId }: { projectId?: string } = {}) {
         ];
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-ink-800">
-      {/* Sticky toolbar */}
-      <div className="flex shrink-0 flex-wrap items-end justify-between gap-2 border-b border-ink-600 px-3 py-2 md:px-4">
+    <div className="bg-ink-800">
+      <div className="border-b border-ink-600 px-3 py-2 md:px-4">
         <div>
           <h2 className="text-sm font-semibold text-ink-50">Activity</h2>
           <p className="text-[10px] text-ink-400">
             {formatDateLabel(filterDate)} · check-in status, clocked hours, software, and sites
           </p>
         </div>
-        <div className="flex w-full flex-wrap items-end gap-2 sm:w-auto">
+        <div className="mt-2 flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
           {!lockProjectFilter ? (
-            <div className="min-w-0 w-full flex-1 basis-full sm:basis-auto sm:w-[200px] sm:flex-none">
+            <div className="min-w-0 w-full sm:w-[200px] sm:flex-none">
               <p className="mb-0.5 text-[10px] font-bold tracking-wide text-ink-400 uppercase">
                 Project
               </p>
@@ -660,7 +659,7 @@ export function AdminActivityPanel({ projectId }: { projectId?: string } = {}) {
               />
             </div>
           ) : null}
-          <div className="min-w-0 w-full flex-1 basis-full sm:basis-auto sm:w-[180px] sm:flex-none">
+          <div className="min-w-0 w-full sm:w-[180px] sm:flex-none">
             <p className="mb-0.5 text-[10px] font-bold tracking-wide text-ink-400 uppercase">
               Person
             </p>
@@ -681,19 +680,17 @@ export function AdminActivityPanel({ projectId }: { projectId?: string } = {}) {
         </div>
       </div>
 
-      {/* Dashboard grid — no page scroll; panes scroll independently */}
-      <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden lg:grid-cols-[180px_1fr]">
-        {/* Team pane */}
-        <aside className="flex min-h-0 flex-col overflow-hidden border-b border-ink-600 lg:border-r lg:border-b-0">
-          <div className="shrink-0 border-b border-ink-700 px-3 py-1.5">
+      <div className="lg:grid lg:grid-cols-[200px_minmax(0,1fr)]">
+        <aside className="border-b border-ink-600 lg:border-r lg:border-b-0">
+          <div className="border-b border-ink-700 px-3 py-1.5">
             <p className="text-[10px] font-bold tracking-wide text-ink-400 uppercase">Team</p>
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto">
+          <div>
             <button
               type="button"
               onClick={() => selectMember('all')}
               className={cn(
-                'flex w-full items-center gap-2 px-3 py-2 text-left text-xs',
+                'flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs',
                 selectedId === 'all'
                   ? 'bg-brand-500 text-[#062816]'
                   : 'text-ink-200 hover:bg-ink-700',
@@ -733,7 +730,7 @@ export function AdminActivityPanel({ projectId }: { projectId?: string } = {}) {
                   type="button"
                   onClick={() => selectMember(m.userId)}
                   className={cn(
-                    'flex w-full items-center gap-2 border-t border-ink-700 px-3 py-2 text-left',
+                    'flex w-full items-center gap-2 border-t border-ink-700 px-3 py-2.5 text-left',
                     active ? 'bg-brand-500/10' : 'hover:bg-ink-700',
                   )}
                 >
@@ -771,12 +768,10 @@ export function AdminActivityPanel({ projectId }: { projectId?: string } = {}) {
           </div>
         </aside>
 
-        {/* Main dashboard */}
-        <div className="flex min-h-0 flex-col overflow-hidden">
-          {/* KPIs — fixed */}
+        <div>
           <section
             className={cn(
-              'grid shrink-0 border-b border-ink-600',
+              'grid border-b border-ink-600',
               kpis.length > 3 ? 'grid-cols-2 sm:grid-cols-3 xl:grid-cols-5' : 'grid-cols-3',
             )}
           >
@@ -806,7 +801,7 @@ export function AdminActivityPanel({ projectId }: { projectId?: string } = {}) {
           </section>
 
           {selected ? (
-            <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-ink-600 bg-ink-900/50 px-3 py-2">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-ink-600 bg-ink-900/50 px-3 py-2">
               <div>
                 <p className="text-[10px] font-bold tracking-wide text-ink-400 uppercase">
                   Total clocked · {formatDateLabel(filterDate)}
@@ -824,7 +819,7 @@ export function AdminActivityPanel({ projectId }: { projectId?: string } = {}) {
           ) : null}
 
           {selectedSession ? (
-            <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-brand-500/25 bg-brand-500/10 px-3 py-1.5">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-brand-500/25 bg-brand-500/10 px-3 py-1.5">
               <p className="text-[11px] text-brand-200">
                 Session{' '}
                 <span className="font-semibold">
@@ -844,19 +839,18 @@ export function AdminActivityPanel({ projectId }: { projectId?: string } = {}) {
             </div>
           ) : null}
 
-          {/* Top: Apps | Websites — each scrolls alone */}
           <div
             key={`${selectedId}:${selectedSessionId ?? 'day'}`}
-            className="grid min-h-0 flex-[1.1] grid-cols-1 overflow-hidden border-b border-ink-600 lg:grid-cols-2"
+            className="grid grid-cols-1 border-b border-ink-600 lg:grid-cols-2"
           >
-            <section className="flex min-h-0 flex-col overflow-hidden border-b border-ink-600 lg:border-r lg:border-b-0">
-              <div className="shrink-0 border-b border-ink-700 px-3 py-1.5">
+            <section className="border-b border-ink-600 lg:border-r lg:border-b-0">
+              <div className="border-b border-ink-700 px-3 py-1.5">
                 <h3 className="text-xs font-semibold text-ink-50">Software used</h3>
                 <p className="text-[10px] text-ink-400">
                   App time (includes browsers). Primary tracked total.
                 </p>
               </div>
-              <div className="min-h-0 flex-1 overflow-y-auto p-3">
+              <div className="p-3">
                 {appSlices.length === 0 ? (
                   <p className="py-8 text-center text-xs text-ink-400">No apps yet</p>
                 ) : (
@@ -868,14 +862,14 @@ export function AdminActivityPanel({ projectId }: { projectId?: string } = {}) {
               </div>
             </section>
 
-            <section className="flex min-h-0 flex-col overflow-hidden">
-              <div className="shrink-0 border-b border-ink-700 px-3 py-1.5">
+            <section>
+              <div className="border-b border-ink-700 px-3 py-1.5">
                 <h3 className="text-xs font-semibold text-ink-50">Websites used</h3>
                 <p className="text-[10px] text-ink-400">
                   Site breakdown while browsing — subset of browser app time
                 </p>
               </div>
-              <div className="min-h-0 flex-1 overflow-y-auto p-3">
+              <div className="p-3">
                 <UsageList
                   barColor="#00a8fc"
                   empty="No websites recorded"
@@ -917,9 +911,8 @@ export function AdminActivityPanel({ projectId }: { projectId?: string } = {}) {
             </section>
           </div>
 
-          {/* Bottom: Check-ins — own scroll, separate from rest */}
-          <section className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            <div className="shrink-0 border-b border-ink-600 px-3 py-1.5">
+          <section>
+            <div className="border-b border-ink-600 px-3 py-1.5">
               <h3 className="text-sm font-semibold text-ink-50">
                 {selected ? `${selected.name}'s check-ins` : 'Check-ins'}
               </h3>
@@ -928,11 +921,11 @@ export function AdminActivityPanel({ projectId }: { projectId?: string } = {}) {
                   ? selected.sessions.length === 0
                     ? 'No check-ins on this date'
                     : `Total clocked ${formatDuration(selectedClockedMs)} · ${selected.sessions.length} check-in${selected.sessions.length === 1 ? '' : 's'}`
-                  : 'Scrolls separately · click a row to filter apps & websites'}
+                  : 'Tap a row to filter apps and websites'}
               </p>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto">
+            <div>
               {sessions.length === 0 && !(teamOverview && notInMembers > 0) ? (
                 <p className="px-3 py-8 text-center text-xs text-ink-400">
                   {selected
