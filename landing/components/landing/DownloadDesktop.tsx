@@ -95,38 +95,44 @@ const PLATFORM_LINKS = [
   {
     key: "macSilicon",
     title: "macOS · Apple Silicon",
-    detail: ".dmg",
+    detail: "docx_silicon.dmg",
     href: DESKTOP_DOWNLOADS.macSilicon,
   },
   {
     key: "macIntel",
     title: "macOS · Intel",
-    detail: ".dmg",
+    detail: "docx_intel.dmg",
     href: DESKTOP_DOWNLOADS.macIntel,
   },
   {
     key: "windows",
     title: "Windows",
-    detail: ".exe installer",
+    detail: "docx_windows.exe",
     href: DESKTOP_DOWNLOADS.windows,
   },
   {
     key: "windowsMsi",
     title: "Windows · MSI",
-    detail: ".msi",
+    detail: "docx_windows.msi",
     href: DESKTOP_DOWNLOADS.windowsMsi,
   },
   {
     key: "linuxAppImage",
     title: "Linux · AppImage",
-    detail: ".AppImage",
+    detail: "docx_linux.AppImage",
     href: DESKTOP_DOWNLOADS.linuxAppImage,
   },
   {
     key: "linuxDeb",
     title: "Linux · Debian",
-    detail: ".deb",
+    detail: "docx_linux.deb",
     href: DESKTOP_DOWNLOADS.linuxDeb,
+  },
+  {
+    key: "linuxRpm",
+    title: "Linux · RPM",
+    detail: "docx_linux.rpm",
+    href: DESKTOP_DOWNLOADS.linuxRpm,
   },
 ] as const;
 

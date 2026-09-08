@@ -12,28 +12,32 @@ const RELEASE_DOWNLOAD_BASE =
 
 /**
  * Direct installer links for the latest GitHub Release.
- * Filenames must match assets uploaded by the Desktop Release workflow.
+ * Filenames must match `assetNamePattern` in .github/workflows/desktop-release.yml
+ * (`docx_${arch}[ext]` → docx_silicon.dmg, docx_windows.exe, …).
  * Override any URL with NEXT_PUBLIC_DESKTOP_DOWNLOAD_* env vars if needed.
  */
 export const DESKTOP_DOWNLOADS = {
   macSilicon:
     process.env.NEXT_PUBLIC_DESKTOP_DOWNLOAD_MAC_SILICON ||
-    `${RELEASE_DOWNLOAD_BASE}/DockX_0.1.0_aarch64.dmg`,
+    `${RELEASE_DOWNLOAD_BASE}/docx_silicon.dmg`,
   macIntel:
     process.env.NEXT_PUBLIC_DESKTOP_DOWNLOAD_MAC_INTEL ||
-    `${RELEASE_DOWNLOAD_BASE}/DockX_0.1.0_x64.dmg`,
+    `${RELEASE_DOWNLOAD_BASE}/docx_intel.dmg`,
   windows:
     process.env.NEXT_PUBLIC_DESKTOP_DOWNLOAD_WINDOWS ||
-    `${RELEASE_DOWNLOAD_BASE}/DockX_0.1.0_x64-setup.exe`,
+    `${RELEASE_DOWNLOAD_BASE}/docx_windows.exe`,
   windowsMsi:
     process.env.NEXT_PUBLIC_DESKTOP_DOWNLOAD_WINDOWS_MSI ||
-    `${RELEASE_DOWNLOAD_BASE}/DockX_0.1.0_x64_en-US.msi`,
+    `${RELEASE_DOWNLOAD_BASE}/docx_windows.msi`,
   linuxAppImage:
     process.env.NEXT_PUBLIC_DESKTOP_DOWNLOAD_LINUX_APPIMAGE ||
-    `${RELEASE_DOWNLOAD_BASE}/DockX_0.1.0_amd64.AppImage`,
+    `${RELEASE_DOWNLOAD_BASE}/docx_linux.AppImage`,
   linuxDeb:
     process.env.NEXT_PUBLIC_DESKTOP_DOWNLOAD_LINUX_DEB ||
-    `${RELEASE_DOWNLOAD_BASE}/DockX_0.1.0_amd64.deb`,
+    `${RELEASE_DOWNLOAD_BASE}/docx_linux.deb`,
+  linuxRpm:
+    process.env.NEXT_PUBLIC_DESKTOP_DOWNLOAD_LINUX_RPM ||
+    `${RELEASE_DOWNLOAD_BASE}/docx_linux.rpm`,
 } as const;
 
 export type DesktopDownloadKey = keyof typeof DESKTOP_DOWNLOADS;

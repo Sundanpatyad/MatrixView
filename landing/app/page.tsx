@@ -30,12 +30,15 @@ const softwareAppLd = {
     price: "0",
     priceCurrency: "USD",
   },
-  softwareVersion: "0.1.0",
+  softwareVersion: "1.0.19",
   installUrl: [
     DESKTOP_DOWNLOADS.macSilicon,
     DESKTOP_DOWNLOADS.macIntel,
     DESKTOP_DOWNLOADS.windows,
+    DESKTOP_DOWNLOADS.windowsMsi,
     DESKTOP_DOWNLOADS.linuxAppImage,
+    DESKTOP_DOWNLOADS.linuxDeb,
+    DESKTOP_DOWNLOADS.linuxRpm,
   ],
 };
 
