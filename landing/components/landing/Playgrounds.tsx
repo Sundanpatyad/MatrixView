@@ -241,8 +241,8 @@ const FAQS = [
     a: "Attendance and local work capture queue offline, then sync when the connection returns.",
   },
   {
-    q: "Who is it for?",
-    a: "Teams that want one place for time, tasks, and talk — ICs at the desk, managers on the dashboard.",
+    q: "Windows blocked DockX. Where is More info?",
+    a: "Keep using both docx_windows.exe and docx_windows.msi. The old More info then Run anyway screen is Windows SmartScreen. Smart App Control is different and only shows Okay. To get More info back: Windows Security, App and browser control, Smart App Control, set it to Off. Then run the installer again, open More info, and choose Run anyway. The file is blocked because Windows cannot verify a publisher yet, not because the MSI is missing.",
   },
 ] as const;
 

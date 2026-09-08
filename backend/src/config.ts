@@ -56,7 +56,7 @@ export const config = {
    */
   webAppOrigins: (
     process.env.WEB_APP_ORIGINS ??
-    'https://matrix-view.vercel.app,http://localhost:5175,http://localhost:5173'
+    'https://admin-dockx.vercel.app,https://matrix-view.vercel.app,http://localhost:5175,http://localhost:5173'
   )
     .split(',')
     .map((s) => s.trim().replace(/\/$/, ''))

@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import { OAuth2Client } from 'google-auth-library';
 import { config } from '../../config.js';
+import { isAllowedCorsOrigin } from '../../corsOrigin.js';
 import { AuthError } from './errors.js';
 import type { AuthResult } from './service.js';
 
@@ -80,21 +81,6 @@ export function decodeOAuthState(raw: string): OAuthState {
   }
 }
 
-function isVercelAppOrigin(origin: string): boolean {
-  try {
-    const url = new URL(origin);
-    if (url.protocol !== 'https:') return false;
-    const host = url.hostname.toLowerCase();
-    return (
-      host === 'matrix-view.vercel.app' ||
-      (host.endsWith('.vercel.app') &&
-        (host.includes('matrix-view') || host.includes('matrixview')))
-    );
-  } catch {
-    return false;
-  }
-}
-
 export function assertAllowedReturnTo(returnTo: string) {
   let url: URL;
   try {
@@ -115,14 +101,7 @@ export function assertAllowedReturnTo(returnTo: string) {
     throw new AuthError('Invalid return path', 400, 'INVALID_RETURN_TO');
   }
 
-  const allowed = new Set([
-    ...config.corsOrigin,
-    ...config.desktopCorsOrigins,
-    ...config.webAppOrigins,
-    config.appUrl,
-  ]);
-  const origin = url.origin;
-  if (!allowed.has(origin) && !isVercelAppOrigin(origin)) {
+  if (!isAllowedCorsOrigin(url.origin)) {
     throw new AuthError('Return URL origin is not allowed', 400, 'INVALID_RETURN_TO');
   }
   if (!url.pathname.startsWith('/auth/google')) {

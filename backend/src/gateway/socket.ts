@@ -1,7 +1,7 @@
 import type { Server as HttpServer } from 'node:http';
 import { Server, type Socket } from 'socket.io';
 import { Types } from 'mongoose';
-import { config } from '../config.js';
+import { isAllowedCorsOrigin } from '../corsOrigin.js';
 import { Session } from '../modules/auth/models/Session.js';
 import { User } from '../modules/auth/models/User.js';
 import { ActivitySession } from '../modules/activity/models/ActivitySession.js';
@@ -416,7 +416,9 @@ async function isConversationMember(conversationId: string, userId: string, orgI
 export function initSocket(httpServer: HttpServer) {
   const io = new Server(httpServer, {
     cors: {
-      origin: [...config.corsOrigin, ...config.desktopCorsOrigins, ...config.webAppOrigins],
+      origin: (origin, callback) => {
+        callback(null, isAllowedCorsOrigin(origin));
+      },
       credentials: true,
     },
     path: '/socket.io',

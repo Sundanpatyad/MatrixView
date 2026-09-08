@@ -1,5 +1,5 @@
 export const APP_LOGIN_URL =
-  process.env.NEXT_PUBLIC_APP_LOGIN_URL || "https://matrix-view.vercel.app/";
+  process.env.NEXT_PUBLIC_APP_LOGIN_URL || "https://admin-dockx.vercel.app/";
 
 /** Public marketing site. */
 export const SITE_URL =

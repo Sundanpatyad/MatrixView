@@ -1,6 +1,6 @@
 import express from 'express';
 import cors from 'cors';
-import { config } from './config.js';
+import { isAllowedCorsOrigin } from './corsOrigin.js';
 import authRoutes from './modules/auth/routes.js';
 import workspaceRoutes from './modules/workspace/routes.js';
 import activityRoutes from './modules/activity/routes.js';
@@ -10,36 +10,13 @@ import notificationRoutes from './modules/notifications/routes.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { uploadsDir } from './storage/paths.js';
 
-const allowedOrigins = new Set([
-  ...config.corsOrigin,
-  ...config.desktopCorsOrigins,
-  ...config.webAppOrigins,
-]);
-
-function isAllowedOrigin(origin: string | undefined): boolean {
-  if (!origin) return true;
-  if (allowedOrigins.has(origin)) return true;
-  try {
-    const url = new URL(origin);
-    if (url.protocol !== 'https:') return false;
-    const host = url.hostname.toLowerCase();
-    return (
-      host === 'matrix-view.vercel.app' ||
-      (host.endsWith('.vercel.app') &&
-        (host.includes('matrix-view') || host.includes('matrixview')))
-    );
-  } catch {
-    return false;
-  }
-}
-
 export function createApp() {
   const app = express();
 
   app.use(
     cors({
       origin(origin, callback) {
-        if (isAllowedOrigin(origin)) {
+        if (isAllowedCorsOrigin(origin)) {
           callback(null, true);
           return;
         }

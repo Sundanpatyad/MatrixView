@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { APP_LOGIN_URL } from "@/lib/site";
 
 const KPIS = [
   { label: "Checked in", value: "18", hint: "of 24", color: "bg-status-in" },
@@ -217,7 +218,7 @@ export function DashboardMock() {
             type="button"
             data-cursor="grow"
             onClick={() => {
-              window.location.href = "https://matrix-view.vercel.app/";
+              window.location.href = APP_LOGIN_URL;
             }}
             className="mt-4 w-full rounded-lg bg-brand-500 py-2 text-[12px] font-semibold text-on-brand transition hover:bg-brand-600"
           >

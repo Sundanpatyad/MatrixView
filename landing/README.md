@@ -20,7 +20,7 @@ Opens on [http://localhost:8080](http://localhost:8080).
 
 ```
 NEXT_PUBLIC_SITE_URL=https://your-domain.com
-NEXT_PUBLIC_APP_LOGIN_URL=https://matrix-view.vercel.app/
+NEXT_PUBLIC_APP_LOGIN_URL=https://admin-dockx.vercel.app/
 NEXT_PUBLIC_DESKTOP_DOWNLOAD_URL=https://github.com/Sundanpatyad/MatrixView/releases/latest
 # Optional per-OS overrides if release asset names change:
 # NEXT_PUBLIC_DESKTOP_DOWNLOAD_MAC_SILICON=...
