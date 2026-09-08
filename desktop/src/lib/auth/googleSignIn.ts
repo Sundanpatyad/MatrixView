@@ -55,14 +55,14 @@ export function dockxGoogleDeepLink(code: string): string {
  * Desktop (Tauri): loopback OAuth with the installed Google client.
  * Opens the system browser, listens on 127.0.0.1, exchanges code via API.
  */
-export async function signInWithGoogleDesktop(): Promise<AuthResponse> {
+export async function signInWithGoogleDesktop(rememberMe = true): Promise<AuthResponse> {
   const started = await invoke<LoopbackStart>('google_oauth_loopback_start');
   try {
     const wait = invoke<LoopbackResult>('google_oauth_loopback_wait', {
       timeoutMs: 180_000,
     });
 
-    const { url } = await googleDesktopUrlRequest(started.redirectUri);
+    const { url } = await googleDesktopUrlRequest(started.redirectUri, rememberMe);
     const { openUrl } = await import('@tauri-apps/plugin-opener');
     await openUrl(url);
 
@@ -82,6 +82,7 @@ export async function signInWithGoogleDesktop(): Promise<AuthResponse> {
     return googleDesktopLoginRequest({
       code: result.code,
       redirectUri: started.redirectUri,
+      rememberMe,
     });
   } catch (err) {
     try {
@@ -93,8 +94,11 @@ export async function signInWithGoogleDesktop(): Promise<AuthResponse> {
   }
 }
 
-export async function loginWithGoogleIdToken(idToken: string): Promise<AuthResponse> {
-  return googleIdTokenLoginRequest(idToken);
+export async function loginWithGoogleIdToken(
+  idToken: string,
+  rememberMe = true,
+): Promise<AuthResponse> {
+  return googleIdTokenLoginRequest(idToken, rememberMe);
 }
 
 /**
@@ -102,12 +106,17 @@ export async function loginWithGoogleIdToken(idToken: string): Promise<AuthRespo
  * - Tauri: loopback in the system browser.
  * - Web: Google returns to this site with an ID token (never localhost).
  */
-export async function openGoogleSignIn(): Promise<
+export async function openGoogleSignIn(rememberMe = true): Promise<
   { mode: 'desktop'; auth: AuthResponse } | { mode: 'browser' } | { mode: 'redirect' }
 > {
   if (isTauriApp()) {
-    const auth = await signInWithGoogleDesktop();
+    const auth = await signInWithGoogleDesktop(rememberMe);
     return { mode: 'desktop', auth };
+  }
+  try {
+    sessionStorage.setItem('dockx.rememberMe', rememberMe ? '1' : '0');
+  } catch {
+    /* private mode */
   }
   window.location.assign(googleOAuthStartUrl());
   return { mode: 'redirect' };

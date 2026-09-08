@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
 import { authApi, configureApiAuth, type AuthResponse, type AuthUser, type PickedFile } from '@/lib/api';
+import { isApiError, isOfflineError, isSessionDead, isTransientServerError } from '@/lib/api/errors';
 import { GoogleSignInCancelledError, signInWithGoogleNative, signOutGoogleNative } from '@/lib/auth/googleSignIn';
 import { clearSession, loadSession, saveSession, saveUser } from '@/lib/storage/authStorage';
 
@@ -9,8 +10,8 @@ interface AuthContextValue {
   isAuthenticated: boolean;
   isBootstrapping: boolean;
   isAdmin: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  loginWithGoogle: () => Promise<void>;
+  login: (email: string, password: string, rememberMe?: boolean) => Promise<void>;
+  loginWithGoogle: (rememberMe?: boolean) => Promise<void>;
   register: (input: {
     name: string;
     email: string;
@@ -75,8 +76,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           user: payload.user,
         });
         return payload.accessToken;
-      } catch {
-        await teardown();
+      } catch (err) {
+        if (isOfflineError(err) || isTransientServerError(err)) throw err;
+        if (isSessionDead(err) || (isApiError(err) && (err.status === 401 || err.status === 403))) {
+          await teardown();
+        }
         return null;
       } finally {
         refreshInFlight.current = null;
@@ -111,11 +115,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (cancelled) return;
         setUser(fresh);
         await saveUser(fresh);
-      } catch {
-        const token = await refreshAccessToken();
+      } catch (err) {
         if (cancelled) return;
-        if (!token) {
-          await teardown();
+        if (isOfflineError(err) || isTransientServerError(err)) {
+          return;
+        }
+        try {
+          const token = await refreshAccessToken();
+          if (!token && isSessionDead(err)) await teardown();
+        } catch (refreshErr) {
+          if (
+            !isOfflineError(refreshErr) &&
+            !isTransientServerError(refreshErr) &&
+            isSessionDead(refreshErr)
+          ) {
+            await teardown();
+          }
         }
       } finally {
         if (!cancelled) setIsBootstrapping(false);
@@ -128,17 +143,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [refreshAccessToken, teardown]);
 
   const login = useCallback(
-    async (email: string, password: string) => {
-      const payload = await authApi.loginRequest(email.trim(), password);
+    async (email: string, password: string, rememberMe = true) => {
+      const payload = await authApi.loginRequest(email.trim(), password, rememberMe);
       await applySession(payload);
     },
     [applySession],
   );
 
-  const loginWithGoogle = useCallback(async () => {
+  const loginWithGoogle = useCallback(async (rememberMe = true) => {
     try {
       const idToken = await signInWithGoogleNative();
-      const payload = await authApi.googleLoginRequest(idToken);
+      const payload = await authApi.googleLoginRequest(idToken, rememberMe);
       await applySession(payload);
     } catch (error) {
       if (error instanceof GoogleSignInCancelledError) return;

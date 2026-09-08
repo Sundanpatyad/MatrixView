@@ -21,12 +21,14 @@ export type AuthResponse = {
 export function loginRequest(input: {
   email: string;
   password: string;
+  rememberMe?: boolean;
 }): Promise<AuthResponse> {
   return apiFetch<AuthResponse>('/api/auth/login', {
     method: 'POST',
     body: JSON.stringify({
       email: input.email,
       password: input.password,
+      rememberMe: input.rememberMe !== false,
       deviceType: 'desktop',
       deviceId: 'dockx-desktop',
     }),
@@ -34,12 +36,16 @@ export function loginRequest(input: {
 }
 
 /** Browser Google Sign-In: verify an ID token (no client secret). */
-export function googleIdTokenLoginRequest(idToken: string): Promise<AuthResponse> {
+export function googleIdTokenLoginRequest(
+  idToken: string,
+  rememberMe = true,
+): Promise<AuthResponse> {
   const web = typeof window !== 'undefined' && !('__TAURI_INTERNALS__' in window);
   return apiFetch<AuthResponse>('/api/auth/google', {
     method: 'POST',
     body: JSON.stringify({
       idToken,
+      rememberMe,
       deviceType: web ? 'web' : 'desktop',
       deviceId: web ? 'dockx-web' : 'dockx-desktop',
     }),
@@ -56,10 +62,14 @@ export function googleExchangeRequest(code: string): Promise<AuthResponse> {
 }
 
 /** Desktop loopback: ask backend for a Google authorize URL. */
-export function googleDesktopUrlRequest(redirectUri: string): Promise<{ url: string }> {
+export function googleDesktopUrlRequest(
+  redirectUri: string,
+  rememberMe = true,
+): Promise<{ url: string }> {
   const qs = new URLSearchParams({
     redirectUri,
     deviceId: 'dockx-desktop',
+    rememberMe: rememberMe ? 'true' : 'false',
   });
   return apiFetch<{ url: string; redirectUri: string }>(
     `/api/auth/google/desktop-url?${qs.toString()}`,
@@ -71,12 +81,14 @@ export function googleDesktopUrlRequest(redirectUri: string): Promise<{ url: str
 export function googleDesktopLoginRequest(input: {
   code: string;
   redirectUri: string;
+  rememberMe?: boolean;
 }): Promise<AuthResponse> {
   return apiFetch<AuthResponse>('/api/auth/google/desktop', {
     method: 'POST',
     body: JSON.stringify({
       code: input.code,
       redirectUri: input.redirectUri,
+      rememberMe: input.rememberMe !== false,
       deviceType: 'desktop',
       deviceId: 'dockx-desktop',
     }),
@@ -85,13 +97,14 @@ export function googleDesktopLoginRequest(input: {
 }
 
 /** Start Google OAuth via the API (legacy web redirect through the backend). */
-export function googleStartUrl(returnTo: string): string {
+export function googleStartUrl(returnTo: string, rememberMe = true): string {
   const base = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') || '';
   const url = new URL(`${base}/api/auth/google/start`);
   url.searchParams.set('returnTo', returnTo);
   const web = typeof window !== 'undefined' && !('__TAURI_INTERNALS__' in window);
   url.searchParams.set('deviceType', web ? 'web' : 'desktop');
   url.searchParams.set('deviceId', web ? 'dockx-web' : 'dockx-desktop');
+  url.searchParams.set('rememberMe', rememberMe ? 'true' : 'false');
   return url.toString();
 }
 
@@ -101,6 +114,7 @@ export function registerRequest(input: {
   password: string;
   orgName?: string;
   inviteToken?: string;
+  rememberMe?: boolean;
 }): Promise<AuthResponse> {
   return apiFetch<AuthResponse>('/api/auth/register', {
     method: 'POST',
@@ -108,6 +122,7 @@ export function registerRequest(input: {
       name: input.name,
       email: input.email,
       password: input.password,
+      rememberMe: input.rememberMe !== false,
       ...(input.inviteToken ? { inviteToken: input.inviteToken } : {}),
       deviceType: 'desktop',
       deviceId: 'dockx-desktop',

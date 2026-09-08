@@ -41,7 +41,11 @@ export const config = {
   jwtAccessSecret: required('JWT_ACCESS_SECRET', 'dev-access-secret-change-me-32chars'),
   jwtRefreshSecret: required('JWT_REFRESH_SECRET', 'dev-refresh-secret-change-me-32chars'),
   accessTokenTtl: process.env.ACCESS_TOKEN_TTL ?? '15m',
-  refreshTokenTtlDesktop: process.env.REFRESH_TOKEN_TTL_DESKTOP ?? '30d',
+  /** Sliding session when the user checks Remember me (WhatsApp-style). */
+  refreshTokenTtlRemember: process.env.REFRESH_TOKEN_TTL_REMEMBER ?? '90d',
+  /** Short session when Remember me is off. */
+  refreshTokenTtlSession: process.env.REFRESH_TOKEN_TTL_SESSION ?? '1d',
+  refreshTokenTtlDesktop: process.env.REFRESH_TOKEN_TTL_DESKTOP ?? '90d',
   corsOrigin: (process.env.CORS_ORIGIN ?? 'http://localhost:5175')
     .split(',')
     .map((s) => s.trim())

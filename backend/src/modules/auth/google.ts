@@ -16,6 +16,7 @@ type OAuthState = {
   returnTo: string;
   deviceType: 'web' | 'desktop' | 'mobile';
   deviceId?: string;
+  rememberMe?: boolean;
 };
 
 type PendingExchange = {
@@ -173,12 +174,17 @@ export function buildGoogleAuthUrl(
 }
 
 /** Auth URL for desktop loopback (no browser returnTo — app listens on localhost). */
-export function buildDesktopLoopbackAuthUrl(redirectUri: string, deviceId?: string): string {
+export function buildDesktopLoopbackAuthUrl(
+  redirectUri: string,
+  deviceId?: string,
+  rememberMe = true,
+): string {
   const normalized = assertLoopbackRedirectUri(redirectUri);
   const state: OAuthState = {
     returnTo: 'dockx:///auth/google/callback',
     deviceType: 'desktop',
     deviceId,
+    rememberMe,
   };
   return buildGoogleAuthUrl(state, normalized);
 }

@@ -1,4 +1,5 @@
 export * from './client';
+export * from './errors';
 export * from './types';
 export * as authApi from './auth';
 export * as chatApi from './chat';

@@ -11,6 +11,10 @@ const sessionSchema = new Schema(
     },
     deviceId: { type: String, default: null },
     refreshTokenHash: { type: String, required: true, index: true },
+    /** Previous hash kept briefly so a lost refresh response can be retried. */
+    previousRefreshTokenHash: { type: String, default: null, index: true },
+    rotatedAt: { type: Date, default: null },
+    rememberMe: { type: Boolean, default: true },
     familyId: { type: String, required: true, index: true },
     ip: { type: String, default: null },
     userAgent: { type: String, default: null },

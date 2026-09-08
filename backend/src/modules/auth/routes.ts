@@ -12,6 +12,7 @@ const credentialsSchema = z.object({
   password: z.string().min(8).max(128),
   deviceType: z.enum(['web', 'desktop', 'mobile']).optional(),
   deviceId: z.string().max(128).optional(),
+  rememberMe: z.boolean().optional(),
 });
 
 const optionalTrimmed = z.preprocess((v) => {
@@ -90,7 +91,12 @@ router.get('/google/start', async (req, res, next) => {
       .optional()
       .parse(req.query.deviceType) ?? 'desktop';
     const deviceId = z.string().max(128).optional().parse(req.query.deviceId);
-    const url = buildGoogleAuthUrl({ returnTo, deviceType, deviceId });
+    const rememberMe = z
+      .enum(['true', 'false'])
+      .optional()
+      .transform((v) => v !== 'false')
+      .parse(req.query.rememberMe);
+    const url = buildGoogleAuthUrl({ returnTo, deviceType, deviceId, rememberMe });
     res.redirect(url);
   } catch (err) {
     next(err);
@@ -106,7 +112,12 @@ router.get('/google/desktop-url', async (req, res, next) => {
     }
     const redirectUri = z.string().url().parse(req.query.redirectUri);
     const deviceId = z.string().max(128).optional().parse(req.query.deviceId);
-    const url = buildDesktopLoopbackAuthUrl(redirectUri, deviceId);
+    const rememberMe = z
+      .enum(['true', 'false'])
+      .optional()
+      .transform((v) => v !== 'false')
+      .parse(req.query.rememberMe);
+    const url = buildDesktopLoopbackAuthUrl(redirectUri, deviceId, rememberMe);
     res.json({ url, redirectUri });
   } catch (err) {
     next(err);
@@ -127,6 +138,7 @@ router.post('/google/desktop', async (req, res, next) => {
         redirectUri: z.string().url(),
         deviceType: z.enum(['web', 'desktop', 'mobile']).optional(),
         deviceId: z.string().max(128).optional(),
+        rememberMe: z.boolean().optional(),
       })
       .parse(req.body);
     const redirectUri = assertLoopbackRedirectUri(body.redirectUri);
@@ -138,6 +150,7 @@ router.post('/google/desktop', async (req, res, next) => {
       avatarUrl: profile.avatarUrl,
       deviceType: body.deviceType ?? 'desktop',
       deviceId: body.deviceId,
+      rememberMe: body.rememberMe,
       ...clientMeta(req),
     });
     res.json(result);
@@ -178,6 +191,7 @@ router.get('/google/callback', async (req, res, next) => {
       avatarUrl: profile.avatarUrl,
       deviceType: state.deviceType,
       deviceId: state.deviceId,
+      rememberMe: state.rememberMe,
       ...clientMeta(req),
     });
     const exchangeCode = storeOAuthExchange(result);
@@ -221,6 +235,7 @@ router.post('/google', async (req, res, next) => {
         idToken: z.string().min(20),
         deviceType: z.enum(['web', 'desktop', 'mobile']).optional(),
         deviceId: z.string().max(128).optional(),
+        rememberMe: z.boolean().optional(),
       })
       .parse(req.body);
     const profile = await verifyGoogleIdToken(body.idToken);
@@ -231,6 +246,7 @@ router.post('/google', async (req, res, next) => {
       avatarUrl: profile.avatarUrl,
       deviceType: body.deviceType,
       deviceId: body.deviceId,
+      rememberMe: body.rememberMe,
       ...clientMeta(req),
     });
     res.json(result);

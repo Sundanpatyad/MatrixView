@@ -7,7 +7,7 @@ import {
   AuthLayout,
 } from '@/components/auth/AuthLayout';
 import { Button } from '@/components/ui/Button';
-import { useAuth } from '@/lib/auth/AuthContext';
+import { useAuth, setRememberPref } from '@/lib/auth/AuthContext';
 import { peekInviteToken, postAuthPath, rememberInviteToken } from '@/lib/auth/inviteToken';
 import { openGoogleSignIn } from '@/lib/auth/googleSignIn';
 import { isTauriApp } from '@/lib/webrtc/screenShare';
@@ -50,6 +50,7 @@ export function LoginPage() {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [browserHint, setBrowserHint] = useState(false);
@@ -68,7 +69,7 @@ export function LoginPage() {
     e.preventDefault();
     setLoading(true);
     try {
-      await login(email, password);
+      await login(email, password, rememberMe);
       navigate(afterAuth);
     } catch (err) {
       toast.fromError(err, 'Unable to sign in');
@@ -83,9 +84,10 @@ export function LoginPage() {
         setBrowserHint(true);
         toast.info('Finish signing in with Google in your browser, then return to DockX.');
       }
-      const result = await openGoogleSignIn();
+      setRememberPref(rememberMe);
+      const result = await openGoogleSignIn(rememberMe);
       if (result.mode === 'desktop') {
-        applySession(result.auth);
+        applySession(result.auth, rememberMe);
         navigate(afterAuth);
       }
     } catch (err) {
@@ -171,6 +173,17 @@ export function LoginPage() {
               </button>
             </div>
           </AuthField>
+
+          <label className="flex cursor-pointer items-center gap-2.5 select-none">
+            <input
+              type="checkbox"
+              checked={rememberMe}
+              onChange={(e) => setRememberMe(e.target.checked)}
+              disabled={busy}
+              className="h-3.5 w-3.5 rounded border-ink-500 bg-ink-800 text-brand-500 focus:ring-brand-400/40"
+            />
+            <span className="text-[13px] text-ink-200">Remember me on this device</span>
+          </label>
 
           <Button
             type="submit"

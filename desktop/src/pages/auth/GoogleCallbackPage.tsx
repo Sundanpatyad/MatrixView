@@ -3,7 +3,7 @@ import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { AuthLayout } from '@/components/auth/AuthLayout';
 import { Button } from '@/components/ui/Button';
 import { postAuthPath } from '@/lib/auth/inviteToken';
-import { useAuth } from '@/lib/auth/AuthContext';
+import { useAuth, getRememberPref } from '@/lib/auth/AuthContext';
 import { loginWithGoogleIdToken } from '@/lib/auth/googleSignIn';
 
 function readCallback() {
@@ -45,8 +45,8 @@ export function GoogleCallbackPage() {
       setExchanging(true);
       void (async () => {
         try {
-          const auth = await loginWithGoogleIdToken(idToken);
-          applySession(auth);
+          const auth = await loginWithGoogleIdToken(idToken, getRememberPref());
+          applySession(auth, getRememberPref());
           window.history.replaceState(null, '', '/auth/google/callback');
           navigate(postAuthPath(), { replace: true });
         } catch (err) {

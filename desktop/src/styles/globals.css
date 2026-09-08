@@ -146,6 +146,13 @@
     font-family: var(--font-display);
   }
 
+  /* App chrome stays unselectable for a native feel; content opts back in. */
+  .selectable {
+    -webkit-user-select: text;
+    user-select: text;
+    cursor: text;
+  }
+
   .atmosphere {
     background:
       radial-gradient(ellipse 70% 50% at 20% 10%, var(--atmosphere-glow), transparent 55%),

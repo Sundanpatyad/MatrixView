@@ -91,21 +91,26 @@ async function issueSession(
     ip?: string;
     userAgent?: string;
     familyId?: string;
+    rememberMe?: boolean;
   },
 ): Promise<AuthResult> {
   const refreshToken = createRefreshToken();
   const familyId = opts.familyId ?? crypto.randomUUID();
+  const rememberMe = opts.rememberMe !== false;
   const session = await Session.create({
     userId: user._id,
     orgId: user.orgId,
     deviceType: opts.deviceType,
     deviceId: opts.deviceId ?? null,
     refreshTokenHash: hashToken(refreshToken),
+    previousRefreshTokenHash: null,
+    rotatedAt: null,
+    rememberMe,
     familyId,
     ip: opts.ip ?? null,
     userAgent: opts.userAgent ?? null,
     lastActiveAt: new Date(),
-    expiresAt: refreshExpiresAt(opts.deviceType),
+    expiresAt: refreshExpiresAt(opts.deviceType, rememberMe),
   });
 
   const accessToken = signAccessToken({
@@ -134,6 +139,7 @@ export async function register(input: {
   deviceId?: string;
   ip?: string;
   userAgent?: string;
+  rememberMe?: boolean;
 }): Promise<AuthResult> {
   // Invite signup → join existing org + project seat
   if (input.inviteToken?.trim()) {
@@ -148,6 +154,7 @@ export async function register(input: {
       deviceId: input.deviceId,
       ip: input.ip,
       userAgent: input.userAgent,
+      rememberMe: input.rememberMe,
     });
   }
 
@@ -180,6 +187,7 @@ export async function register(input: {
     deviceId: input.deviceId,
     ip: input.ip,
     userAgent: input.userAgent,
+    rememberMe: input.rememberMe,
   });
 }
 
@@ -190,6 +198,7 @@ export async function login(input: {
   deviceId?: string;
   ip?: string;
   userAgent?: string;
+  rememberMe?: boolean;
 }): Promise<AuthResult> {
   const email = input.email.toLowerCase().trim();
   const user = await User.findOne({ email });
@@ -239,6 +248,7 @@ export async function login(input: {
     deviceId: input.deviceId,
     ip: input.ip,
     userAgent: input.userAgent,
+    rememberMe: input.rememberMe,
   });
 }
 
@@ -252,6 +262,7 @@ export async function loginWithGoogle(input: {
   deviceId?: string;
   ip?: string;
   userAgent?: string;
+  rememberMe?: boolean;
 }): Promise<AuthResult> {
   const email = input.email.toLowerCase().trim();
   let user =
@@ -297,8 +308,12 @@ export async function loginWithGoogle(input: {
     deviceId: input.deviceId,
     ip: input.ip,
     userAgent: input.userAgent,
+    rememberMe: input.rememberMe,
   });
 }
+
+/** How long a lost refresh response may be retried with the previous token. */
+const REFRESH_REUSE_GRACE_MS = 60_000;
 
 export async function refresh(input: {
   refreshToken: string;
@@ -306,18 +321,26 @@ export async function refresh(input: {
   userAgent?: string;
 }): Promise<AuthResult> {
   const tokenHash = hashToken(input.refreshToken);
-  const session = await Session.findOne({ refreshTokenHash: tokenHash });
+  let session = await Session.findOne({ refreshTokenHash: tokenHash, revokedAt: null });
+  let usedPrevious = false;
+
+  if (!session) {
+    session = await Session.findOne({ previousRefreshTokenHash: tokenHash, revokedAt: null });
+    usedPrevious = Boolean(session);
+    if (session) {
+      const rotatedAt = session.rotatedAt?.getTime() ?? 0;
+      if (Date.now() - rotatedAt > REFRESH_REUSE_GRACE_MS) {
+        await Session.updateMany(
+          { familyId: session.familyId, revokedAt: null },
+          { $set: { revokedAt: new Date() } },
+        );
+        throw new AuthError('Session revoked. Please sign in again.', 401, 'SESSION_REVOKED');
+      }
+    }
+  }
 
   if (!session) {
     throw new AuthError('Invalid refresh token', 401, 'INVALID_REFRESH');
-  }
-
-  if (session.revokedAt) {
-    await Session.updateMany(
-      { familyId: session.familyId, revokedAt: null },
-      { $set: { revokedAt: new Date() } },
-    );
-    throw new AuthError('Session revoked. Please sign in again.', 401, 'SESSION_REVOKED');
   }
 
   if (session.expiresAt.getTime() < Date.now()) {
@@ -331,17 +354,35 @@ export async function refresh(input: {
     throw new AuthError('Account unavailable', 401, 'ACCOUNT_UNAVAILABLE');
   }
 
-  // Rotate refresh token
-  session.revokedAt = new Date();
+  const rememberMe = session.rememberMe !== false;
+  const nextRefresh = createRefreshToken();
+  session.previousRefreshTokenHash = usedPrevious
+    ? session.previousRefreshTokenHash
+    : session.refreshTokenHash;
+  session.refreshTokenHash = hashToken(nextRefresh);
+  session.rotatedAt = new Date();
+  session.lastActiveAt = new Date();
+  if (input.ip) session.ip = input.ip;
+  if (input.userAgent) session.userAgent = input.userAgent;
+  if (rememberMe) {
+    session.expiresAt = refreshExpiresAt(session.deviceType as DeviceType, true);
+  }
   await session.save();
 
-  return issueSession(user, {
-    deviceType: session.deviceType as DeviceType,
-    deviceId: session.deviceId ?? undefined,
-    ip: input.ip ?? session.ip ?? undefined,
-    userAgent: input.userAgent ?? session.userAgent ?? undefined,
-    familyId: session.familyId,
+  const accessToken = signAccessToken({
+    sub: String(user._id),
+    orgId: String(user.orgId),
+    email: user.email,
+    role: user.role,
+    sessionId: String(session._id),
   });
+
+  return {
+    accessToken,
+    refreshToken: nextRefresh,
+    expiresIn: '15m',
+    user: await toPublicUser(user),
+  };
 }
 
 export async function logout(refreshToken?: string, accessSessionId?: string): Promise<void> {

@@ -6,11 +6,15 @@ import {
   useRef,
   useState,
   type FormEvent,
+  type ReactNode,
 } from 'react';
 import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
 import {
+  IconCheck,
   IconChevronLeft,
+  IconCopy,
+  IconDots,
   IconEdit,
   IconFile,
   IconForward,
@@ -980,6 +984,90 @@ function NewDmModal({
   );
 }
 
+function HoverIconButton({
+  label,
+  onClick,
+  children,
+}: {
+  label: string;
+  onClick: (el: HTMLButtonElement) => void;
+  children: ReactNode;
+}) {
+  return (
+    <Tooltip label={label} side="top" delay={80}>
+      <button
+        type="button"
+        aria-label={label}
+        className="flex h-7 w-7 items-center justify-center rounded-full text-ink-200 transition hover:bg-white/[0.08] hover:text-ink-50 active:scale-95"
+        onClick={(e) => {
+          e.stopPropagation();
+          onClick(e.currentTarget);
+        }}
+        onMouseDown={(e) => e.preventDefault()}
+      >
+        {children}
+      </button>
+    </Tooltip>
+  );
+}
+
+function MessageHoverActions({
+  mine,
+  pinned,
+  copied,
+  canCopy,
+  onReply,
+  onForward,
+  onCopy,
+  onMore,
+}: {
+  mine: boolean;
+  pinned: boolean;
+  copied: boolean;
+  canCopy: boolean;
+  onReply: () => void;
+  onForward: () => void;
+  onCopy: () => void;
+  onMore: (el: HTMLButtonElement) => void;
+}) {
+  return (
+    <div
+      className={cn(
+        'absolute z-20 hidden select-none sm:block',
+        'pointer-events-none opacity-0 transition-opacity duration-150',
+        'group-hover:pointer-events-auto group-hover:opacity-100',
+        pinned && 'pointer-events-auto opacity-100',
+        mine ? 'right-0' : 'left-0',
+        'bottom-full mb-0',
+      )}
+    >
+      {/* Padding keeps hover when moving from the bubble up into the bar. */}
+      <div className="pb-1.5">
+        <div className="flex items-center gap-px rounded-full border border-white/[0.07] bg-[#1a1d22]/95 p-[3px] shadow-[0_10px_28px_rgba(0,0,0,0.5)] backdrop-blur-xl">
+          <HoverIconButton label="Reply" onClick={() => onReply()}>
+            <IconReply className="h-3.5 w-3.5" />
+          </HoverIconButton>
+          <HoverIconButton label="Forward" onClick={() => onForward()}>
+            <IconForward className="h-3.5 w-3.5" />
+          </HoverIconButton>
+          {canCopy ? (
+            <HoverIconButton label={copied ? 'Copied' : 'Copy'} onClick={() => onCopy()}>
+              {copied ? (
+                <IconCheck className="h-3.5 w-3.5 text-[#4BDE80]" />
+              ) : (
+                <IconCopy className="h-3.5 w-3.5" />
+              )}
+            </HoverIconButton>
+          ) : null}
+          <HoverIconButton label="More" onClick={onMore}>
+            <IconDots className="h-3.5 w-3.5" />
+          </HoverIconButton>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function NewGroupModal({
   users,
   meId,
@@ -1404,6 +1492,7 @@ export function ChatPage() {
   const [modal, setModal] = useState<'dm' | 'group' | 'manage' | null>(null);
   const [menuMsgId, setMenuMsgId] = useState<string | null>(null);
   const [actionMsgId, setActionMsgId] = useState<string | null>(null);
+  const [copiedMsgId, setCopiedMsgId] = useState<string | null>(null);
   const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
   const [deleteMsg, setDeleteMsg] = useState<ChatMessage | null>(null);
   const [deletingMsg, setDeletingMsg] = useState(false);
@@ -2185,6 +2274,23 @@ export function ChatPage() {
     setForwardMsg(msg);
   }
 
+  async function copyMessage(msg: ChatMessage, close = true) {
+    const selected = window.getSelection()?.toString().trim() ?? '';
+    const text = selected || msg.body?.trim() || '';
+    if (!text) return;
+    if (close) closeMessageMenus();
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedMsgId(msg.id);
+      window.setTimeout(
+        () => setCopiedMsgId((id) => (id === msg.id ? null : id)),
+        1400,
+      );
+    } catch {
+      toast.error('Could not copy the message');
+    }
+  }
+
   async function confirmForward(targetId: string) {
     if (!forwardMsg) return;
     setForwardBusy(true);
@@ -2875,7 +2981,6 @@ export function ChatPage() {
                           )}
                         >
                           <div
-                            role="button"
                             tabIndex={deleted ? -1 : 0}
                             onClick={(e) => {
                               if (deleted) return;
@@ -2893,6 +2998,8 @@ export function ChatPage() {
                             }}
                             onContextMenu={(e) => {
                               if (deleted) return;
+                              const selection = window.getSelection()?.toString();
+                              if (selection) return;
                               e.preventDefault();
                               openMessageActions(msg.id);
                             }}
@@ -2992,7 +3099,7 @@ export function ChatPage() {
 
                               {textOnly ? (
                                 <div className="flex items-end gap-1">
-                                  <p className="min-w-0 whitespace-pre-wrap break-words text-[13px] leading-relaxed sm:text-[13.5px]">
+                                  <p className="selectable min-w-0 whitespace-pre-wrap break-words text-[13px] leading-relaxed sm:text-[13.5px]">
                                     {msg.body}
                                   </p>
                                   {meta}
@@ -3000,7 +3107,7 @@ export function ChatPage() {
                               ) : hasCaption ? (
                                 <p
                                   className={cn(
-                                    'whitespace-pre-wrap break-words text-[13px] leading-relaxed sm:text-[13.5px]',
+                                    'selectable whitespace-pre-wrap break-words text-[13px] leading-relaxed sm:text-[13.5px]',
                                     hasVisualMedia && 'mt-1.5 px-1',
                                   )}
                                 >
@@ -3025,57 +3132,16 @@ export function ChatPage() {
                           </div>
 
                           {!deleted ? (
-                            <div
-                              className={cn(
-                                'absolute -top-2.5 z-20 hidden sm:block',
-                                'opacity-0 pointer-events-none transition-opacity group-hover:opacity-100 group-hover:pointer-events-auto',
-                                (actionMsgId === msg.id || menuMsgId === msg.id) &&
-                                  'opacity-100 pointer-events-auto',
-                                mine ? 'right-1' : 'left-1',
-                              )}
-                            >
-                              <div className="flex items-center gap-0.5 rounded-lg border border-ink-600/70 bg-ink-800/95 p-0.5 text-ink-300 backdrop-blur-sm">
-                                <Tooltip label="Reply" side="top">
-                                <button
-                                  type="button"
-                                  aria-label="Reply"
-                                  className="rounded-md p-1.5 transition hover:bg-ink-700 hover:text-ink-50"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    startReply(msg);
-                                  }}
-                                >
-                                  <IconReply className="h-3.5 w-3.5" />
-                                </button>
-                                </Tooltip>
-                                <Tooltip label="Forward" side="top">
-                                <button
-                                  type="button"
-                                  aria-label="Forward"
-                                  className="rounded-md p-1.5 transition hover:bg-ink-700 hover:text-ink-50"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    requestForward(msg);
-                                  }}
-                                >
-                                  <IconForward className="h-3.5 w-3.5" />
-                                </button>
-                                </Tooltip>
-                                <Tooltip label="More" side="top">
-                                <button
-                                  type="button"
-                                  aria-label="More"
-                                  className="rounded-md px-1.5 py-1 text-[11px] font-bold transition hover:bg-ink-700 hover:text-ink-50"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    toggleMoreMenu(msg, e.currentTarget);
-                                  }}
-                                >
-                                  ···
-                                </button>
-                                </Tooltip>
-                              </div>
-                            </div>
+                            <MessageHoverActions
+                              mine={mine}
+                              pinned={actionMsgId === msg.id || menuMsgId === msg.id}
+                              copied={copiedMsgId === msg.id}
+                              canCopy={Boolean(msg.body?.trim())}
+                              onReply={() => startReply(msg)}
+                              onForward={() => requestForward(msg)}
+                              onCopy={() => void copyMessage(msg, false)}
+                              onMore={(el) => toggleMoreMenu(msg, el)}
+                            />
                           ) : null}
                         </div>
                       </div>
@@ -3467,6 +3533,16 @@ export function ChatPage() {
                   <IconForward className="h-4 w-4 text-ink-300" />
                   Forward
                 </button>
+                {actionMessage.body?.trim() ? (
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium text-ink-50 hover:bg-ink-700"
+                    onClick={() => void copyMessage(actionMessage)}
+                  >
+                    <IconCopy className="h-4 w-4 text-ink-300" />
+                    Copy
+                  </button>
+                ) : null}
                 {actionMessage.senderId === meId ? (
                   <button
                     type="button"
@@ -3530,6 +3606,15 @@ export function ChatPage() {
                 >
                   Forward
                 </button>
+                {menuMessage.body?.trim() ? (
+                  <button
+                    type="button"
+                    className="block w-full px-3 py-2 text-left text-xs font-medium text-ink-100 hover:bg-ink-900"
+                    onClick={() => void copyMessage(menuMessage)}
+                  >
+                    Copy
+                  </button>
+                ) : null}
                 {menuMessage.senderId === meId ? (
                   <button
                     type="button"

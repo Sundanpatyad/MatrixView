@@ -1,4 +1,5 @@
 import { API_BASE } from '../config';
+import { isOfflineError, isTransientServerError } from './errors';
 
 export class ApiError extends Error {
   status: number;
@@ -135,13 +136,18 @@ export async function apiFetch<T>(path: string, options: ApiRequestOptions = {})
   }
 
   if (response.status === 401 && auth && !skipRefresh) {
-    const nextToken = await refreshAccessToken();
-    if (nextToken) {
-      try {
-        response = await performRequest(path, options, nextToken);
-      } catch {
-        throw new ApiError('Cannot reach the server. Check your connection and try again.', 0, 'NETWORK_ERROR');
+    try {
+      const nextToken = await refreshAccessToken();
+      if (nextToken) {
+        try {
+          response = await performRequest(path, options, nextToken);
+        } catch {
+          throw new ApiError('Cannot reach the server. Check your connection and try again.', 0, 'NETWORK_ERROR');
+        }
       }
+    } catch (err) {
+      if (isOfflineError(err) || isTransientServerError(err)) throw err;
+      if (err instanceof ApiError && err.status === 0) throw err;
     }
   }
 

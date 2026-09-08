@@ -1,3 +1,5 @@
+import { isOfflineError, isTransientServerError } from './errors';
+
 export const DESKTOP_AUTH_STORAGE_KEY = 'dockx.desktop.auth';
 
 export const API_BASE =
@@ -25,7 +27,7 @@ type TokenRefresher = () => Promise<string | null>;
 
 function tokenFromStorage(): string | null {
   try {
-    const raw = localStorage.getItem(DESKTOP_AUTH_STORAGE_KEY);
+    const raw = localStorage.getItem(DESKTOP_AUTH_STORAGE_KEY) || sessionStorage.getItem(DESKTOP_AUTH_STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as { accessToken?: string };
     return parsed.accessToken || null;
@@ -95,18 +97,23 @@ export async function apiFetch<T>(
   }
 
   if (res.status === 401 && !skipRefresh) {
-    const next = await accessTokenRefresher();
-    if (next) {
-      finalHeaders.set('Authorization', `Bearer ${next}`);
-      try {
-        res = await fetch(url, { ...rest, headers: finalHeaders });
-      } catch {
-        throw new ApiError(
-          'Cannot reach the DockX API. Check your network connection.',
-          0,
-          'NETWORK_ERROR',
-        );
+    try {
+      const next = await accessTokenRefresher();
+      if (next) {
+        finalHeaders.set('Authorization', `Bearer ${next}`);
+        try {
+          res = await fetch(url, { ...rest, headers: finalHeaders });
+        } catch {
+          throw new ApiError(
+            'Cannot reach the DockX API. Check your network connection.',
+            0,
+            'NETWORK_ERROR',
+          );
+        }
       }
+    } catch (err) {
+      if (isOfflineError(err) || isTransientServerError(err)) throw err;
+      if (err instanceof ApiError && err.status === 0) throw err;
     }
   }
 

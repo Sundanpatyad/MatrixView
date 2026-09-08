@@ -22,6 +22,7 @@ export function LoginScreen({ navigation }: Props) {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [googleSubmitting, setGoogleSubmitting] = useState(false);
@@ -33,7 +34,7 @@ export function LoginScreen({ navigation }: Props) {
     setSubmitting(true);
     setError(null);
     try {
-      await login(email, password);
+      await login(email, password, rememberMe);
     } catch (err) {
       setError(messageFromError(err, 'Could not sign you in.'));
     } finally {
@@ -46,7 +47,7 @@ export function LoginScreen({ navigation }: Props) {
     setGoogleSubmitting(true);
     setError(null);
     try {
-      await loginWithGoogle();
+      await loginWithGoogle(rememberMe);
     } catch (err) {
       if (err instanceof GoogleAndroidSetupError) {
         Alert.alert(
@@ -118,6 +119,27 @@ export function LoginScreen({ navigation }: Props) {
       />
 
       <Pressable
+        onPress={() => setRememberMe((value) => !value)}
+        hitSlop={6}
+        style={styles.rememberRow}
+      >
+        <View
+          style={[
+            styles.checkbox,
+            {
+              borderColor: rememberMe ? colors.brand : colors.textSubtle,
+              backgroundColor: rememberMe ? colors.brand : 'transparent',
+            },
+          ]}
+        >
+          {rememberMe ? <Text style={styles.checkMark}>✓</Text> : null}
+        </View>
+        <Text style={[styles.rememberLabel, { color: colors.textMuted }]}>
+          Remember me on this device
+        </Text>
+      </Pressable>
+
+      <Pressable
         onPress={() =>
           Alert.alert(
             'Reset password',
@@ -144,6 +166,31 @@ export function LoginScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
+  rememberRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  checkbox: {
+    height: 18,
+    width: 18,
+    borderRadius: 5,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkMark: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '800',
+    lineHeight: 12,
+  },
+  rememberLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
   linkWrap: {
     alignSelf: 'flex-start',
     marginTop: -2,

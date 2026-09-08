@@ -3,18 +3,18 @@ import { appendUploadFile } from '../pickers';
 import { apiFetch } from './client';
 import type { AuthResponse, AuthUser, InvitePreview, PickedFile } from './types';
 
-export function loginRequest(email: string, password: string) {
+export function loginRequest(email: string, password: string, rememberMe = true) {
   return apiFetch<AuthResponse>('/api/auth/login', {
     method: 'POST',
-    body: { email, password, deviceType: DEVICE_TYPE, deviceId: DEVICE_ID },
+    body: { email, password, rememberMe, deviceType: DEVICE_TYPE, deviceId: DEVICE_ID },
   });
 }
 
 /** Native Google Sign-In: exchange a Google ID token for DockX session tokens. */
-export function googleLoginRequest(idToken: string) {
+export function googleLoginRequest(idToken: string, rememberMe = true) {
   return apiFetch<AuthResponse>('/api/auth/google', {
     method: 'POST',
-    body: { idToken, deviceType: DEVICE_TYPE, deviceId: DEVICE_ID },
+    body: { idToken, rememberMe, deviceType: DEVICE_TYPE, deviceId: DEVICE_ID },
     skipRefresh: true,
   });
 }
@@ -25,10 +25,11 @@ export function registerRequest(input: {
   password: string;
   orgName?: string;
   inviteToken?: string;
+  rememberMe?: boolean;
 }) {
   return apiFetch<AuthResponse>('/api/auth/register', {
     method: 'POST',
-    body: { ...input, deviceType: DEVICE_TYPE, deviceId: DEVICE_ID },
+    body: { ...input, rememberMe: input.rememberMe !== false, deviceType: DEVICE_TYPE, deviceId: DEVICE_ID },
   });
 }
 
