@@ -213,4 +213,4 @@ jobs:
           args: ${{ matrix.args }}
           includeUpdaterJson: true
           # Include arch label so Silicon + Intel DMGs don't overwrite each other
-          releaseAssetNamePattern: 'docx_${{ matrix.arch_label }}[ext]'
+          assetNamePattern: 'docx_${{ matrix.arch_label }}[ext]'
