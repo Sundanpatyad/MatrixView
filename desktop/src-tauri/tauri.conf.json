@@ -2,7 +2,7 @@
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "DockX",
   "mainBinaryName": "DockX",
-  "version": "1.0.19",
+  "version": "1.0.20",
   "identifier": "com.dockx.desktop",
   "build": {
     "frontendDist": "../dist",
