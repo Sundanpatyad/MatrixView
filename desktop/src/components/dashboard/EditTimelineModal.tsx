@@ -1,8 +1,9 @@
 import { useMemo, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
-import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/Button';
 import { DatePicker } from '@/components/ui/DatePicker';
-import { Input } from '@/components/ui/Input';
+import { FieldLabel } from '@/components/ui/FieldLabel';
+import { Input, Textarea } from '@/components/ui/Input';
+import { Modal, ModalFooter, ModalHeader } from '@/components/ui/Modal';
 import { Select } from '@/components/ui/Select';
 import {
   TASK_PRIORITIES,
@@ -99,64 +100,80 @@ export function EditTimelineModal({ item, onClose }: Props) {
     }
   }
 
-  return createPortal(
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/55 p-4">
-      <button type="button" className="absolute inset-0" onClick={onClose} aria-label="Close" />
-      <div
-        role="dialog"
-        aria-modal="true"
-        className="relative z-10 max-h-[90vh] w-full max-w-lg overflow-y-auto border border-ink-600 bg-ink-800 p-5"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h2 className="text-base font-semibold text-ink-50">Edit timeline task</h2>
-        <p className="mt-1 text-xs text-ink-300">
-          Update name, assignee, details, and files
-          {item.taskId ? ' — board task stays in sync.' : '.'}
-        </p>
-
-        <form onSubmit={onSubmit} className="mt-4 space-y-3">
-          <Input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Task name"
-            required
-            autoFocus
-          />
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            rows={3}
-            placeholder="Description"
-            className="w-full border border-ink-600 px-3 py-2 text-sm outline-none focus:border-ink-400"
-          />
-          <div className="grid grid-cols-2 gap-2">
-            <Select
-              size="sm"
-              value={type}
-              onChange={(v) => setType(v as TaskType)}
-              options={TASK_TYPES.map((t) => ({ value: t.id, label: t.label }))}
-              aria-label="Type"
-            />
-            <Select
-              size="sm"
-              value={priority}
-              onChange={(v) => setPriority(v as TaskPriority)}
-              options={TASK_PRIORITIES.map((p) => ({
-                value: p,
-                label: p.charAt(0).toUpperCase() + p.slice(1),
-              }))}
-              aria-label="Priority"
+  return (
+    <Modal size="lg" labelledBy="edit-timeline-title" onClose={onClose}>
+      <ModalHeader
+        titleId="edit-timeline-title"
+        title="Edit timeline task"
+        description={
+          item.taskId
+            ? 'Update name, assignee, details, and files — the board task stays in sync.'
+            : 'Update name, assignee, details, and files.'
+        }
+        onClose={onClose}
+      />
+      <form onSubmit={onSubmit} className="flex min-h-0 flex-1 flex-col">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
+          <div>
+            <FieldLabel htmlFor="timeline-title" required>
+              Task name
+            </FieldLabel>
+            <Input
+              id="timeline-title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Task name"
+              required
+              autoFocus
             />
           </div>
-          <DatePicker value={dueDate} onChange={setDueDate} clearable />
+          <div>
+            <FieldLabel htmlFor="timeline-desc" optional>
+              Description
+            </FieldLabel>
+            <Textarea
+              id="timeline-desc"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={3}
+              placeholder="Description"
+            />
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <FieldLabel required>Type</FieldLabel>
+              <Select
+                size="md"
+                value={type}
+                onChange={(v) => setType(v as TaskType)}
+                options={TASK_TYPES.map((t) => ({ value: t.id, label: t.label }))}
+                aria-label="Type"
+              />
+            </div>
+            <div>
+              <FieldLabel required>Priority</FieldLabel>
+              <Select
+                size="md"
+                value={priority}
+                onChange={(v) => setPriority(v as TaskPriority)}
+                options={TASK_PRIORITIES.map((p) => ({
+                  value: p,
+                  label: p.charAt(0).toUpperCase() + p.slice(1),
+                }))}
+                aria-label="Priority"
+              />
+            </div>
+          </div>
+          <div>
+            <FieldLabel optional>Due date</FieldLabel>
+            <DatePicker value={dueDate} onChange={setDueDate} clearable size="md" />
+          </div>
 
           {teams.length > 0 ? (
             <div>
-              <p className="mb-1.5 text-[10px] font-bold tracking-wide text-ink-300 uppercase">
-                Group
-              </p>
+              <FieldLabel optional>Group</FieldLabel>
               <Select
-                size="sm"
+                size="md"
                 value={teamId}
                 onChange={setTeamId}
                 options={[
@@ -169,46 +186,38 @@ export function EditTimelineModal({ item, onClose }: Props) {
           ) : null}
 
           <div>
-            <p className="mb-1.5 text-[10px] font-bold tracking-wide text-ink-300 uppercase">
-              Assignee
-            </p>
+            <FieldLabel optional>Assignee</FieldLabel>
             {members.length === 0 ? (
               <p className="text-xs text-ink-400">Invite project members to assign this task.</p>
             ) : (
               <Select
-                size="sm"
+                size="md"
                 value={assigneeId}
                 placeholder="Unassigned"
                 onChange={setAssigneeId}
                 options={[
-                  ...(item.taskId
-                    ? []
-                    : [{ value: '', label: 'Unassigned' }]),
+                  ...(item.taskId ? [] : [{ value: '', label: 'Unassigned' }]),
                   ...members.map((m) => ({ value: m.id, label: m.name })),
                 ]}
                 aria-label="Assignee"
               />
             )}
-            {item.taskId ? (
-              <p className="mt-1 text-[10px] text-ink-400">
-                Changing assignee updates the board task.
-              </p>
-            ) : (
-              <p className="mt-1 text-[10px] text-ink-400">
-                Choosing someone assigns this to the board.
-              </p>
-            )}
+            <p className="mt-1 text-[11px] text-ink-400">
+              {item.taskId
+                ? 'Changing assignee updates the board task.'
+                : 'Choosing someone assigns this to the board.'}
+            </p>
           </div>
 
           <div>
             <div className="flex items-center justify-between">
-              <p className="text-[10px] font-bold tracking-wide text-ink-300 uppercase">
+              <FieldLabel optional className="mb-0">
                 Files / images
-              </p>
+              </FieldLabel>
               <button
                 type="button"
                 onClick={() => fileRef.current?.click()}
-                className="text-[11px] font-semibold text-brand-800 hover:underline"
+                className="text-[11px] font-semibold text-brand-300 hover:underline"
               >
                 + Add file
               </button>
@@ -223,7 +232,9 @@ export function EditTimelineModal({ item, onClose }: Props) {
             </div>
 
             {kept.length === 0 && newFiles.length === 0 ? (
-              <p className="mt-2 text-xs text-ink-400">No files attached.</p>
+              <p className="mt-2 rounded-xl border border-dashed border-ink-600 px-3 py-4 text-center text-xs text-ink-400">
+                No files attached.
+              </p>
             ) : (
               <ul className="mt-2 space-y-1.5">
                 {kept.map((att) => {
@@ -231,12 +242,12 @@ export function EditTimelineModal({ item, onClose }: Props) {
                   return (
                     <li
                       key={att.id}
-                      className="flex items-center gap-2 border border-ink-600 px-2.5 py-2"
+                      className="flex items-center gap-2 rounded-xl border border-ink-600/70 bg-ink-900/40 px-2.5 py-2"
                     >
                       {att.mimeType.startsWith('image/') && href ? (
-                        <img src={href} alt="" className="h-8 w-8 object-cover" />
+                        <img src={href} alt="" className="h-8 w-8 rounded-md object-cover" />
                       ) : (
-                        <span className="flex h-8 w-8 items-center justify-center bg-ink-700 text-[9px] font-bold text-ink-200">
+                        <span className="flex h-8 w-8 items-center justify-center rounded-md bg-ink-700 text-[9px] font-bold text-ink-200">
                           FILE
                         </span>
                       )}
@@ -257,7 +268,7 @@ export function EditTimelineModal({ item, onClose }: Props) {
                 {newFiles.map((file, idx) => (
                   <li
                     key={`${file.name}-${idx}`}
-                    className="flex items-center justify-between border border-dashed border-ink-500 px-2.5 py-2 text-xs"
+                    className="flex items-center justify-between rounded-xl border border-dashed border-ink-500 px-2.5 py-2 text-xs"
                   >
                     <span className="truncate font-semibold text-ink-100">
                       New · {file.name} · {formatFileSize(file.size)}
@@ -274,18 +285,16 @@ export function EditTimelineModal({ item, onClose }: Props) {
               </ul>
             )}
           </div>
-
-          <div className="flex justify-end gap-2 pt-1">
-            <Button type="button" size="sm" variant="secondary" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button type="submit" size="sm" disabled={saving || !title.trim()}>
-              {saving ? 'Saving…' : 'Save changes'}
-            </Button>
-          </div>
-        </form>
-      </div>
-    </div>,
-    document.body,
+        </div>
+        <ModalFooter>
+          <Button type="button" size="sm" variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" size="sm" disabled={saving || !title.trim()}>
+            {saving ? 'Saving…' : 'Save changes'}
+          </Button>
+        </ModalFooter>
+      </form>
+    </Modal>
   );
 }

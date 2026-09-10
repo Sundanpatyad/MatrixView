@@ -17,8 +17,10 @@ import {
 } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
 import { useNotifications } from '@/context/NotificationContext';
+import { useToast } from '@/context/ToastContext';
 import { useWorkspace } from '@/context/WorkspaceContext';
 import { formatRelative, isOverdue } from '@/lib/format';
+import type { PendingInvite } from '@/lib/api/workspace';
 import type { RootStackParamList } from '@/navigation/types';
 import { radius, resolveAccentColor, statusAccent, useColors } from '@/theme';
 
@@ -45,13 +47,18 @@ export function DashboardScreen() {
     isLoading,
     refresh,
     isProjectAdmin,
+    pendingInvites,
+    acceptInvite,
+    declineInvite,
   } = useWorkspace();
   const { unreadCount } = useNotifications();
+  const toast = useToast();
   const tabBarHeight = useTabBarPadding();
 
   const [filter, setFilter] = useState<TaskFilter>('mine');
   const [projectSheet, setProjectSheet] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [inviteBusyId, setInviteBusyId] = useState<string | null>(null);
 
   const canViewActivity =
     activeProjectId === 'all'
@@ -62,6 +69,34 @@ export function DashboardScreen() {
     setRefreshing(true);
     await refresh();
     setRefreshing(false);
+  };
+
+  const onAcceptInvite = async (invite: PendingInvite) => {
+    if (inviteBusyId) return;
+    setInviteBusyId(invite.id);
+    try {
+      const project = await acceptInvite(invite.id);
+      setActiveProjectId(project.id);
+      toast.success(`Joined ${project.name}`);
+      navigation.navigate('Tabs', { screen: 'Board' });
+    } catch (error) {
+      toast.fromError(error, 'Could not accept invite');
+    } finally {
+      setInviteBusyId(null);
+    }
+  };
+
+  const onDeclineInvite = async (invite: PendingInvite) => {
+    if (inviteBusyId) return;
+    setInviteBusyId(invite.id);
+    try {
+      await declineInvite(invite.id);
+      toast.success('Invite declined');
+    } catch (error) {
+      toast.fromError(error, 'Could not decline invite');
+    } finally {
+      setInviteBusyId(null);
+    }
   };
 
   const stats = useMemo(() => {
@@ -203,6 +238,60 @@ export function DashboardScreen() {
             <Avatar name={user?.name} uri={user?.avatarUrl} size={40} userId={user?.id} />
           </Pressable>
         </View>
+
+        {pendingInvites.length > 0 ? (
+          <View style={[styles.inviteCard, { backgroundColor: colors.warningSoft, borderColor: colors.warning }]}>
+            <Text style={[styles.inviteTitle, { color: colors.text }]}>
+              {pendingInvites.length === 1 ? 'Project invite' : 'Project invites'}
+            </Text>
+            <Text style={[styles.inviteHint, { color: colors.textSubtle }]}>
+              Accept to join. You will not see the board until then.
+            </Text>
+            {pendingInvites.map((invite) => {
+              const busy = inviteBusyId === invite.id;
+              return (
+                <View
+                  key={invite.id}
+                  style={[styles.inviteRow, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                >
+                  <View style={styles.inviteText}>
+                    <Text style={[styles.inviteProject, { color: colors.text }]} numberOfLines={1}>
+                      {invite.projectName}{' '}
+                      <Text style={{ color: colors.textSubtle }}>({invite.projectKey})</Text>
+                    </Text>
+                    <Text style={[styles.inviteMeta, { color: colors.textSubtle }]} numberOfLines={1}>
+                      {invite.inviterName} invited you as {invite.role}
+                    </Text>
+                  </View>
+                  <View style={styles.inviteActions}>
+                    <Pressable
+                      disabled={busy}
+                      onPress={() => void onAcceptInvite(invite)}
+                      style={({ pressed }) => [
+                        styles.inviteBtn,
+                        { backgroundColor: colors.brand },
+                        (pressed || busy) && { opacity: 0.7 },
+                      ]}
+                    >
+                      <Text style={styles.inviteBtnText}>{busy ? '…' : 'Accept'}</Text>
+                    </Pressable>
+                    <Pressable
+                      disabled={busy}
+                      onPress={() => void onDeclineInvite(invite)}
+                      style={({ pressed }) => [
+                        styles.inviteBtn,
+                        { backgroundColor: colors.surfaceAlt },
+                        (pressed || busy) && { opacity: 0.7 },
+                      ]}
+                    >
+                      <Text style={[styles.inviteBtnText, { color: colors.text }]}>Decline</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        ) : null}
 
         {/* Project scope */}
         <Pressable
@@ -541,6 +630,51 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingTop: 10,
     marginBottom: 2,
+  },
+  inviteCard: {
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 14,
+    gap: 10,
+  },
+  inviteTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  inviteHint: {
+    fontSize: 12.5,
+    lineHeight: 17,
+    marginTop: -4,
+  },
+  inviteRow: {
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 12,
+    gap: 10,
+  },
+  inviteText: {
+    gap: 2,
+  },
+  inviteProject: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  inviteMeta: {
+    fontSize: 12,
+  },
+  inviteActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  inviteBtn: {
+    borderRadius: radius.sm,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  inviteBtnText: {
+    color: '#fff',
+    fontSize: 12.5,
+    fontWeight: '700',
   },
   headerText: { flex: 1 },
   greeting: {

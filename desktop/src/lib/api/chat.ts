@@ -227,6 +227,27 @@ export function forwardMessage(
   });
 }
 
+export function setConversationMuted(conversationId: string, muted: boolean) {
+  return apiFetch<{ conversation: ChatConversation }>(
+    `/api/chat/conversations/${conversationId}/mute`,
+    { method: 'POST', auth: true, body: JSON.stringify({ muted }) },
+  );
+}
+
+export function setConversationBlocked(conversationId: string, blocked: boolean) {
+  return apiFetch<{ conversation?: ChatConversation; ok?: true; removed?: true }>(
+    `/api/chat/conversations/${conversationId}/block`,
+    { method: 'POST', auth: true, body: JSON.stringify({ blocked }) },
+  );
+}
+
+export function deleteConversation(conversationId: string) {
+  return apiFetch<{ ok: true; removed: true }>(`/api/chat/conversations/${conversationId}`, {
+    method: 'DELETE',
+    auth: true,
+  });
+}
+
 export function deleteMessage(messageId: string): Promise<{ message: ChatMessage }> {
   return apiFetch(`/api/chat/messages/${messageId}`, {
     method: 'DELETE',

@@ -315,6 +315,7 @@ export interface ActivitySession {
   status: 'active' | 'closed';
   startedAt: string;
   endedAt: string | null;
+  autoCheckoutAt?: string | null;
   totalTrackedMs: number;
   totalAwayMs?: number;
   apps: AppUsage[];

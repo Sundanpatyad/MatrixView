@@ -20,7 +20,22 @@ import { InviteMembersModal } from '@/components/dashboard/InviteMembersModal';
 import { Button } from '@/components/ui/Button';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { DatePicker } from '@/components/ui/DatePicker';
-import { IconChevronLeft, IconChevronRight, IconSearch, IconUsers, IconX } from '@/components/ui/Icons';
+import {
+  IconCalendar,
+  IconCheck,
+  IconChevronLeft,
+  IconChevronRight,
+  IconColumns,
+  IconFolderPlus,
+  IconLayers,
+  IconPlay,
+  IconPlus,
+  IconSearch,
+  IconTrash,
+  IconUserPlus,
+  IconUsers,
+  IconX,
+} from '@/components/ui/Icons';
 import { MultiSelect } from '@/components/ui/MultiSelect';
 import { Select } from '@/components/ui/Select';
 import { Tooltip } from '@/components/ui/Tooltip';
@@ -116,6 +131,7 @@ export function BoardWorkspacePage() {
   const [showInvite, setShowInvite] = useState(false);
   const [showTeams, setShowTeams] = useState(false);
   const [showCreateTask, setShowCreateTask] = useState(false);
+  const [createTaskStatus, setCreateTaskStatus] = useState<string | undefined>();
   const [showPlan, setShowPlan] = useState(false);
   const [extendOpen, setExtendOpen] = useState(false);
   const [extendDate, setExtendDate] = useState('');
@@ -498,6 +514,33 @@ export function BoardWorkspacePage() {
     return map;
   }, [filtered, columns]);
 
+  const filtersActive =
+    query.trim().length > 0 ||
+    typeFilter !== 'all' ||
+    priorityFilter !== 'all' ||
+    statusFilter !== 'all' ||
+    assigneeFilter.length > 0 ||
+    (hasGroups && groupFilter !== 'all');
+
+  function clearBoardFilters() {
+    setQuery('');
+    setTypeFilter('all');
+    setPriorityFilter('all');
+    setStatusFilter('all');
+    onAssigneeChange([]);
+    if (hasGroups && groupFilter !== 'all') onGroupChange('all');
+  }
+
+  function openCreateTask(status?: string) {
+    setCreateTaskStatus(status);
+    setShowCreateTask(true);
+  }
+
+  function closeCreateTask() {
+    setShowCreateTask(false);
+    setCreateTaskStatus(undefined);
+  }
+
   const selected = useMemo(
     () =>
       projectId
@@ -519,7 +562,7 @@ export function BoardWorkspacePage() {
       }
       if (e.key.toLowerCase() === 'c' && projectId) {
         e.preventDefault();
-        setShowCreateTask(true);
+        openCreateTask();
       }
     }
     window.addEventListener('keydown', onKey);
@@ -582,8 +625,9 @@ export function BoardWorkspacePage() {
   if (projects.length === 0) {
     return (
       <div className="flex h-full min-h-0 flex-col">
-        <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-ink-600 bg-ink-800 px-3 py-2.5 sm:px-4">
+        <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-ink-700/80 bg-ink-800 px-3 py-2 sm:px-4">
           <Button size="sm" onClick={() => setShowCreateProject(true)}>
+            <IconFolderPlus className="h-3.5 w-3.5" />
             New project
           </Button>
         </div>
@@ -594,6 +638,7 @@ export function BoardWorkspacePage() {
           </p>
           <div className="mt-2 flex flex-wrap items-center justify-center gap-2">
             <Button size="sm" onClick={() => setShowCreateProject(true)}>
+              <IconFolderPlus className="h-3.5 w-3.5" />
               New project
             </Button>
             <Button size="sm" variant="secondary" onClick={() => navigate('/')}>
@@ -618,38 +663,56 @@ export function BoardWorkspacePage() {
     <div className="relative flex h-full min-h-0 overflow-hidden">
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Toolbar */}
-        <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-ink-600 bg-ink-800 px-3 py-2.5 sm:px-4">
-          <div className="flex flex-wrap items-center gap-1.5">
+        <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-ink-700/80 bg-ink-800 px-3 py-2 sm:px-4">
+          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+            <Tooltip label="Create a task (C)" side="bottom">
+              <Button size="sm" disabled={!project} onClick={() => openCreateTask()}>
+                <IconPlus className="h-3.5 w-3.5" />
+                <span className="sm:hidden">Task</span>
+                <span className="hidden sm:inline">New task</span>
+              </Button>
+            </Tooltip>
+            <Tooltip label="Create a project" side="bottom">
+              <Button size="sm" variant="secondary" onClick={() => setShowCreateProject(true)}>
+                <IconFolderPlus className="h-3.5 w-3.5" />
+                <span className="sm:hidden">Project</span>
+                <span className="hidden sm:inline">New project</span>
+              </Button>
+            </Tooltip>
+
+            <span className="mx-0.5 hidden h-5 w-px bg-ink-600 sm:block" aria-hidden />
+
             {canManageProject ? (
+              <Tooltip label="Invite people to this project" side="bottom">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={!project}
+                  onClick={() => setShowInvite(true)}
+                >
+                  <IconUserPlus className="h-3.5 w-3.5" />
+                  Invite
+                </Button>
+              </Tooltip>
+            ) : null}
+            <Tooltip label="Manage groups" side="bottom">
               <Button
                 size="sm"
                 variant="secondary"
                 disabled={!project}
-                onClick={() => setShowInvite(true)}
+                onClick={() => setShowTeams(true)}
               >
-                Invite
+                <IconLayers className="h-3.5 w-3.5" />
+                Groups
               </Button>
-            ) : null}
-            <Button
-              size="sm"
-              variant="secondary"
-              disabled={!project}
-              onClick={() => setShowTeams(true)}
-            >
-              Groups
-            </Button>
-            <Button size="sm" variant="secondary" onClick={() => setShowCreateProject(true)}>
-              <span className="sm:hidden">New</span>
-              <span className="hidden sm:inline">New project</span>
-            </Button>
-            <Button size="sm" disabled={!project} onClick={() => setShowCreateTask(true)}>
-              <span className="sm:hidden">Task</span>
-              <span className="hidden sm:inline">New task</span>
-            </Button>
+            </Tooltip>
             {canManageProject ? (
-              <Button size="sm" variant="secondary" disabled={!project} onClick={() => setShowPlan(true)}>
-                Plan
-              </Button>
+              <Tooltip label="Plan and manage sprints" side="bottom">
+                <Button size="sm" variant="secondary" disabled={!project} onClick={() => setShowPlan(true)}>
+                  <IconCalendar className="h-3.5 w-3.5" />
+                  Plan
+                </Button>
+              </Tooltip>
             ) : null}
             {canEditColumns ? (
               addingColumn ? (
@@ -669,13 +732,14 @@ export function BoardWorkspacePage() {
                     }}
                     placeholder="Column name"
                     disabled={columnBusy}
-                    className="h-8 w-28 rounded-md border border-ink-600 bg-ink-900 px-2.5 text-xs text-ink-50 outline-none focus:border-brand-500 sm:w-36"
+                    className="h-8 w-28 rounded-lg border border-ink-500/70 bg-ink-900/70 px-2.5 text-xs text-ink-50 outline-none focus:border-brand-500 sm:w-36"
                   />
                   <Button
                     type="submit"
                     size="sm"
                     disabled={columnBusy || !newColumnName.trim()}
                   >
+                    <IconPlus className="h-3.5 w-3.5" />
                     Add
                   </Button>
                   <Button
@@ -692,37 +756,44 @@ export function BoardWorkspacePage() {
                   </Button>
                 </form>
               ) : (
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  disabled={!project || columnBusy}
-                  onClick={() => setAddingColumn(true)}
-                  className="hidden sm:inline-flex"
-                >
-                  Add column
-                </Button>
+                <Tooltip label="Add a board column" side="bottom">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={!project || columnBusy}
+                    onClick={() => setAddingColumn(true)}
+                    className="hidden sm:inline-flex"
+                  >
+                    <IconColumns className="h-3.5 w-3.5" />
+                    Add column
+                  </Button>
+                </Tooltip>
               )
             ) : null}
           </div>
 
           <div className="ml-auto flex items-center gap-2">
             <Tooltip label="People on this project" side="bottom">
-            <Button
-              size="sm"
-              variant="secondary"
-              disabled={!project}
-              onClick={() => setMembersPanelOpen(true)}
-            >
-              <IconUsers className="h-3.5 w-3.5" />
-              People
-            </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={!project}
+                onClick={() => setMembersPanelOpen(true)}
+              >
+                <IconUsers className="h-3.5 w-3.5" />
+                People
+                {project ? (
+                  <span className="inline-flex min-w-4 items-center justify-center rounded-md bg-ink-700 px-1.5 text-[10px] font-semibold tabular-nums text-ink-200">
+                    {members.filter((m) => m.status !== 'pending').length}
+                  </span>
+                ) : null}
+              </Button>
             </Tooltip>
           </div>
         </div>
 
-        {/* Project chrome + filters — hide filters until a project exists */}
-        <div className="shrink-0 border-b border-ink-600 bg-ink-800 px-3 py-2.5 sm:px-4">
-            <div className={cn('flex items-center gap-2.5', project && 'mb-2.5')}>
+        <div className="shrink-0 border-b border-ink-700/80 bg-ink-800 px-3 py-2.5 sm:px-4">
+            <div className={cn('flex items-center gap-3', project && 'mb-3')}>
               {project ? (
                 <ProjectAvatar
                   name={project.name}
@@ -765,7 +836,7 @@ export function BoardWorkspacePage() {
                 ) : null}
               </div>
               {project ? (
-                <div className="w-[200px] shrink-0">
+                <div className="w-[210px] shrink-0">
                   <Select
                     size="sm"
                     value={boardSprintId ?? 'backlog'}
@@ -817,17 +888,20 @@ export function BoardWorkspacePage() {
                     />
                   </div>
                 ) : null}
-                <label className="relative min-w-[160px] flex-1 sm:max-w-[220px]">
+                <label className="relative min-w-[180px] flex-1 sm:max-w-[240px]">
                   <IconSearch className="pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-ink-400" />
                   <input
                     ref={searchInputRef}
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
-                    placeholder="Search tasks…  /"
-                    className="h-8 w-full rounded-md border border-ink-600 bg-ink-900 pr-2.5 pl-8 text-xs text-ink-50 outline-none placeholder:text-ink-400 focus:border-brand-500"
+                    placeholder="Search tasks…"
+                    className="h-8 w-full rounded-lg border border-ink-500/70 bg-ink-900/70 pr-10 pl-8 text-xs text-ink-50 outline-none placeholder:text-ink-400 focus:border-brand-500"
                   />
+                  <kbd className="pointer-events-none absolute top-1/2 right-2 hidden -translate-y-1/2 rounded border border-ink-600 bg-ink-800 px-1 py-px text-[10px] font-medium text-ink-400 sm:inline">
+                    /
+                  </kbd>
                 </label>
-                <div className="w-[100px] shrink-0">
+                <div className="w-[108px] shrink-0">
                   <Select
                     size="sm"
                     value={typeFilter}
@@ -839,19 +913,22 @@ export function BoardWorkspacePage() {
                     aria-label="Filter by type"
                   />
                 </div>
-                <div className="w-[110px] shrink-0">
+                <div className="w-[118px] shrink-0">
                   <Select
                     size="sm"
                     value={priorityFilter}
                     onChange={(v) => setPriorityFilter(v as TaskPriority | 'all')}
                     options={[
                       { value: 'all', label: 'Priority' },
-                      ...TASK_PRIORITIES.map((p) => ({ value: p, label: p })),
+                      ...TASK_PRIORITIES.map((p) => ({
+                        value: p,
+                        label: p.charAt(0).toUpperCase() + p.slice(1),
+                      })),
                     ]}
                     aria-label="Filter by priority"
                   />
                 </div>
-                <div className="w-[110px] shrink-0">
+                <div className="w-[118px] shrink-0">
                   <Select
                     size="sm"
                     value={statusFilter}
@@ -863,12 +940,18 @@ export function BoardWorkspacePage() {
                     aria-label="Filter by column"
                   />
                 </div>
+                {filtersActive ? (
+                  <Button size="sm" variant="ghost" onClick={clearBoardFilters} className="shrink-0">
+                    <IconX className="h-3.5 w-3.5" />
+                    Clear
+                  </Button>
+                ) : null}
               </div>
             ) : null}
         </div>
 
         {activeSprint ? (
-          <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-ink-600 bg-ink-800 px-3 py-1.5 sm:px-4">
+          <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-ink-700/80 bg-ink-800/80 px-3 py-1.5 sm:px-4">
             <p className="text-[12px] text-ink-300">
               <span className="font-semibold text-ink-50">{activeSprint.name}</span>
               <span className="mx-1.5 text-ink-500">·</span>
@@ -892,6 +975,7 @@ export function BoardWorkspacePage() {
                       );
                     }}
                   >
+                    <IconPlay className="h-3 w-3" />
                     Start sprint
                   </Button>
                 ) : null}
@@ -907,6 +991,7 @@ export function BoardWorkspacePage() {
                           .catch((err) => toast.fromError(err, 'Could not extend the sprint.'));
                       }}
                     >
+                      <IconCheck className="h-3 w-3" />
                       Save
                     </Button>
                     <Button size="xs" variant="ghost" onClick={() => setExtendOpen(false)}>
@@ -922,6 +1007,7 @@ export function BoardWorkspacePage() {
                       setExtendOpen(true);
                     }}
                   >
+                    <IconCalendar className="h-3 w-3" />
                     Extend
                   </Button>
                 )}
@@ -934,6 +1020,7 @@ export function BoardWorkspacePage() {
                     );
                   }}
                 >
+                  <IconCheck className="h-3 w-3" />
                   Complete
                 </Button>
               </div>
@@ -942,7 +1029,7 @@ export function BoardWorkspacePage() {
         ) : null}
 
         {/* Board fills remaining viewport */}
-        <div className="min-h-0 flex-1 overflow-hidden p-2 sm:p-2.5">
+        <div className="min-h-0 flex-1 overflow-hidden p-3">
             {!project ? (
               <div className="flex h-full flex-col items-center justify-center border border-dashed border-ink-600 bg-ink-800/60 px-6 py-12 text-center">
                 <p className="text-sm font-semibold text-ink-50">No project yet</p>
@@ -951,6 +1038,7 @@ export function BoardWorkspacePage() {
                 </p>
                 <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
                   <Button size="sm" onClick={() => setShowCreateProject(true)}>
+                    <IconFolderPlus className="h-3.5 w-3.5" />
                     New project
                   </Button>
                   <Button size="sm" variant="secondary" onClick={() => navigate('/')}>
@@ -961,7 +1049,7 @@ export function BoardWorkspacePage() {
             ) : (
               <div
                 className={cn(
-                  'flex h-full min-h-0 gap-2 overflow-x-auto overflow-y-hidden sm:gap-2.5',
+                  'flex h-full min-h-0 gap-2.5 overflow-x-auto overflow-y-hidden sm:gap-3',
                   columns.length <= 6 && 'md:overflow-x-hidden',
                 )}
               >
@@ -984,20 +1072,20 @@ export function BoardWorkspacePage() {
                       onDragLeave={(e) => leaveColumn(e, col.id)}
                       onDrop={(e) => void handleDrop(e, col.id)}
                       className={cn(
-                        'flex h-full min-h-0 flex-col rounded-md border border-ink-600 bg-ink-900/80 transition-colors',
-                        'w-[min(82vw,260px)] shrink-0',
+                        'group/col flex h-full min-h-0 flex-col rounded-xl border border-ink-600/80 bg-ink-900/70 transition-colors',
+                        'w-[min(82vw,268px)] shrink-0',
                         fillWidth
                           ? 'md:w-auto md:min-w-0 md:flex-1 md:shrink'
                           : 'md:w-[calc((100%-5*0.625rem)/6)] md:min-w-[calc((100%-5*0.625rem)/6)] md:shrink-0',
                         dropTarget === col.id &&
-                          'border-brand-500 bg-brand-500/5',
+                          'border-brand-500/80 bg-brand-500/5',
                       )}
                     >
-                    <div className="flex shrink-0 items-center justify-between gap-1.5 border-b border-ink-700/70 px-2.5 py-2">
+                    <div className="flex shrink-0 items-center justify-between gap-1.5 px-2.5 py-2">
                       <div className="flex min-w-0 flex-1 items-center gap-2">
                         <span
                           className={cn(
-                            'h-1.5 w-1.5 shrink-0 rounded-full',
+                            'h-2 w-2 shrink-0 rounded-full',
                             col.accent || accents[idx % accents.length],
                           )}
                         />
@@ -1009,7 +1097,7 @@ export function BoardWorkspacePage() {
                             onBlur={() => void commitRenameColumn()}
                             onKeyDown={onRenameKeyDown}
                             disabled={columnBusy}
-                            className="h-7 min-w-0 flex-1 rounded-md border border-brand-500 bg-ink-800 px-2 text-[13px] font-semibold text-ink-50 outline-none"
+                            className="h-7 min-w-0 flex-1 rounded-lg border border-brand-500 bg-ink-800 px-2 text-[13px] font-semibold text-ink-50 outline-none"
                             aria-label="Column name"
                           />
                         ) : (
@@ -1028,11 +1116,22 @@ export function BoardWorkspacePage() {
                         )}
                       </div>
                       <div className="flex shrink-0 items-center gap-0.5">
-                        <span className="inline-flex min-w-5 items-center justify-center rounded-md bg-ink-800 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-ink-300">
+                        <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-ink-800 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-ink-300">
                           {count}
                         </span>
+                        <Tooltip label={`Add task in ${col.label}`} side="top">
+                          <button
+                            type="button"
+                            aria-label={`Add task in ${col.label}`}
+                            disabled={!project}
+                            onClick={() => openCreateTask(col.id)}
+                            className="flex h-6 w-6 items-center justify-center rounded-md text-ink-400 hover:bg-ink-800 hover:text-ink-50 disabled:opacity-30"
+                          >
+                            <IconPlus className="h-3.5 w-3.5" />
+                          </button>
+                        </Tooltip>
                         {canEditColumns ? (
-                          <>
+                          <div className="flex items-center opacity-100 sm:opacity-0 sm:group-hover/col:opacity-100 sm:focus-within:opacity-100">
                             <Tooltip label="Move column left" side="top">
                             <button
                               type="button"
@@ -1068,12 +1167,12 @@ export function BoardWorkspacePage() {
                               </button>
                               </Tooltip>
                             ) : null}
-                          </>
+                          </div>
                         ) : null}
                       </div>
                     </div>
                     <div
-                      className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain px-2 py-2"
+                      className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain px-2 pb-2"
                       onDragOver={(e) => allowDrop(e, col.id)}
                       onDrop={(e) => void handleDrop(e, col.id)}
                     >
@@ -1098,9 +1197,25 @@ export function BoardWorkspacePage() {
                         />
                       ))}
                       {count === 0 ? (
-                        <div className="flex min-h-[5.5rem] flex-1 items-center justify-center border border-dashed border-ink-600 px-3 py-4">
-                          <p className="text-center text-[12px] font-medium text-ink-400">
-                            Drop tasks here
+                        <div
+                          className={cn(
+                            'flex min-h-[6.5rem] flex-1 flex-col items-center justify-center rounded-lg border border-dashed px-3 py-5',
+                            dropTarget === col.id
+                              ? 'border-brand-400/70 bg-brand-500/10'
+                              : 'border-ink-700/80 bg-ink-800/25',
+                          )}
+                        >
+                          <p
+                            className={cn(
+                              'text-center text-[12px] font-medium',
+                              dropTarget === col.id ? 'text-brand-200' : 'text-ink-500',
+                            )}
+                          >
+                            {dropTarget === col.id
+                              ? 'Drop to move here'
+                              : draggingId
+                                ? 'Drop here'
+                                : 'No tasks'}
                           </p>
                         </div>
                       ) : null}
@@ -1121,7 +1236,7 @@ export function BoardWorkspacePage() {
             className="absolute inset-0 z-30 bg-black/50"
             onClick={() => setMembersPanelOpen(false)}
           />
-          <aside className="absolute inset-y-0 right-0 z-40 flex w-[min(18rem,92vw)] flex-col border-l border-ink-600 bg-ink-800 sm:w-60">
+          <aside className="absolute inset-y-0 right-0 z-40 flex w-[min(18rem,92vw)] flex-col border-l border-ink-600 bg-ink-800 sm:w-64">
             <div className="border-b border-ink-600 px-3 py-3">
               <div className="flex items-start justify-between gap-2">
                 <div>
@@ -1134,21 +1249,24 @@ export function BoardWorkspacePage() {
                 </div>
                 <div className="flex items-center gap-1">
                   {canManageProject ? (
-                    <button
-                      type="button"
-                      disabled={!project}
-                      onClick={() => setShowInvite(true)}
-                      className="shrink-0 px-1 text-xs font-semibold text-brand-800 disabled:opacity-40"
-                    >
-                      Invite
-                    </button>
+                    <Tooltip label="Invite people" side="bottom">
+                      <Button
+                        size="xs"
+                        variant="ghost"
+                        disabled={!project}
+                        onClick={() => setShowInvite(true)}
+                      >
+                        <IconUserPlus className="h-3.5 w-3.5" />
+                        Invite
+                      </Button>
+                    </Tooltip>
                   ) : null}
                   <Tooltip label="Close" side="left">
                   <button
                     type="button"
                     aria-label="Close"
                     onClick={() => setMembersPanelOpen(false)}
-                    className="flex h-7 w-7 items-center justify-center rounded-md text-ink-400 hover:bg-ink-700 hover:text-ink-100"
+                    className="flex h-7 w-7 items-center justify-center rounded-lg text-ink-400 hover:bg-ink-700 hover:text-ink-100"
                   >
                     <IconX className="h-4 w-4" />
                   </button>
@@ -1245,14 +1363,16 @@ export function BoardWorkspacePage() {
                             </div>
                             </button>
                             {canRemove ? (
+                              <Tooltip label="Remove from project" side="left">
                               <button
                                 type="button"
-                                title="Remove from project"
+                                aria-label={`Remove ${m.name}`}
                                 onClick={() => setMemberToRemove(m)}
-                                className="shrink-0 px-1 text-[11px] font-semibold text-[#ed4245] hover:underline"
+                                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-ink-500 hover:bg-[#ed4245]/12 hover:text-[#ed4245]"
                               >
-                                Remove
+                                <IconTrash className="h-3.5 w-3.5" />
                               </button>
+                              </Tooltip>
                             ) : null}
                           </div>
                         </li>
@@ -1291,6 +1411,7 @@ export function BoardWorkspacePage() {
         <CreateTaskModal
           projectId={projectId}
           sprintId={boardSprintId ?? null}
+          defaultStatus={createTaskStatus}
           defaultAssignee={
             defaultAssignee
               ? { id: defaultAssignee.id, name: defaultAssignee.name }
@@ -1299,7 +1420,7 @@ export function BoardWorkspacePage() {
           defaultTeamId={
             hasGroups && groupFilter !== 'all' && groupFilter !== 'global' ? groupFilter : null
           }
-          onClose={() => setShowCreateTask(false)}
+          onClose={closeCreateTask}
         />
       ) : null}
       {showPlan && projectId ? (

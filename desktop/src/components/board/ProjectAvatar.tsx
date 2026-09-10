@@ -1,4 +1,4 @@
-import { useRef, useState, type ChangeEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { cn } from '@/lib/cn';
 import { resolveMediaUrl } from '@/lib/mediaUrl';
@@ -34,7 +34,13 @@ export function ProjectAvatar({
 }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [failed, setFailed] = useState(false);
   const src = resolveMediaUrl(avatarUrl);
+  const showPhoto = Boolean(src) && !failed;
+
+  useEffect(() => {
+    setFailed(false);
+  }, [src]);
 
   async function onFileChange(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -53,8 +59,14 @@ export function ProjectAvatar({
         className,
       )}
     >
-      {src ? (
-        <img src={src} alt="" className="h-full w-full object-cover" />
+      {showPhoto ? (
+        <img
+          src={src}
+          alt=""
+          className="h-full w-full object-cover"
+          referrerPolicy="no-referrer"
+          onError={() => setFailed(true)}
+        />
       ) : (
         name.charAt(0).toUpperCase() || 'P'
       )}

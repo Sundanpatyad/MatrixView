@@ -5,8 +5,10 @@ import { CreateTaskModal } from '@/components/board/CreateTaskModal';
 import { TaskDetailModal } from '@/components/board/TaskDetailModal';
 import { Button } from '@/components/ui/Button';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
+import { FieldLabel } from '@/components/ui/FieldLabel';
 import { Input } from '@/components/ui/Input';
 import { IconX } from '@/components/ui/Icons';
+import { Modal, ModalFooter, ModalHeader } from '@/components/ui/Modal';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { avatarFromMembers } from '@/components/ui/UserAvatar';
 import type { BoardTask, TaskStatus } from '@/lib/workspace/types';
@@ -204,55 +206,49 @@ export function ProjectBoardPage() {
       </div>
 
       {showAddColumn ? (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/55 p-4">
-          <button
-            type="button"
-            className="absolute inset-0"
-            onClick={() => setShowAddColumn(false)}
-            aria-label="Close"
+        <Modal size="sm" labelledBy="add-column-title" onClose={() => setShowAddColumn(false)}>
+          <ModalHeader
+            titleId="add-column-title"
+            title="Add custom column"
+            description="Examples: Testing, On Host, Staging, Blocked"
+            onClose={() => setShowAddColumn(false)}
           />
-          <form
-            onSubmit={onAddColumn}
-            className="relative z-10 w-full max-w-sm rounded-2xl bg-ink-800 p-5 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 className="text-lg font-bold text-ink-50">Add custom column</h2>
-            <p className="mt-1 text-sm font-medium text-ink-200">
-              Examples: Testing, On Host, Staging, Blocked
-            </p>
-            <div className="mt-4">
-              <label className="mb-1 block text-xs font-bold text-ink-200 uppercase" htmlFor="col">
-                Column name
-              </label>
-              <Input
-                id="col"
-                value={newColumnName}
-                onChange={(e) => setNewColumnName(e.target.value)}
-                placeholder="Testing"
-                autoFocus
-                required
-              />
+          <form onSubmit={onAddColumn} className="flex min-h-0 flex-1 flex-col">
+            <div className="space-y-4 px-5 py-4">
+              <div>
+                <FieldLabel htmlFor="col" required>
+                  Column name
+                </FieldLabel>
+                <Input
+                  id="col"
+                  value={newColumnName}
+                  onChange={(e) => setNewColumnName(e.target.value)}
+                  placeholder="Testing"
+                  autoFocus
+                  required
+                />
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {['Testing', 'On Host', 'Staging', 'Blocked', 'QA'].map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setNewColumnName(preset)}
+                    className="rounded-full border border-ink-500/70 bg-ink-900/70 px-2.5 py-1 text-xs font-semibold text-ink-100 hover:border-brand-500/50"
+                  >
+                    {preset}
+                  </button>
+                ))}
+              </div>
             </div>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {['Testing', 'On Host', 'Staging', 'Blocked', 'QA'].map((preset) => (
-                <button
-                  key={preset}
-                  type="button"
-                  onClick={() => setNewColumnName(preset)}
-                  className="rounded-full border border-ink-500 bg-ink-900 px-2.5 py-1 text-xs font-bold text-ink-100 hover:border-brand-600"
-                >
-                  {preset}
-                </button>
-              ))}
-            </div>
-            <div className="mt-5 flex justify-end gap-2">
+            <ModalFooter>
               <Button type="button" variant="secondary" onClick={() => setShowAddColumn(false)}>
                 Cancel
               </Button>
               <Button type="submit">Add column</Button>
-            </div>
+            </ModalFooter>
           </form>
-        </div>
+        </Modal>
       ) : null}
 
       {showCreate ? (

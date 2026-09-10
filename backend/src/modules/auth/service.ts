@@ -182,6 +182,11 @@ export async function register(input: {
     status: 'active',
   });
 
+  const { claimPendingInvitesForUser } = await import('../workspace/service.js');
+  await claimPendingInvitesForUser(user).catch((err) =>
+    console.error('[auth] claim pending invites after register', err),
+  );
+
   return issueSession(user, {
     deviceType: input.deviceType ?? 'web',
     deviceId: input.deviceId,
@@ -243,6 +248,11 @@ export async function login(input: {
   user.lockedUntil = null;
   await user.save();
 
+  const { claimPendingInvitesForUser } = await import('../workspace/service.js');
+  await claimPendingInvitesForUser(user).catch((err) =>
+    console.error('[auth] claim pending invites after login', err),
+  );
+
   return issueSession(user, {
     deviceType: input.deviceType ?? 'web',
     deviceId: input.deviceId,
@@ -302,6 +312,11 @@ export async function loginWithGoogle(input: {
       status: 'active',
     });
   }
+
+  const { claimPendingInvitesForUser } = await import('../workspace/service.js');
+  await claimPendingInvitesForUser(user).catch((err) =>
+    console.error('[auth] claim pending invites after Google', err),
+  );
 
   return issueSession(user, {
     deviceType: input.deviceType ?? 'web',

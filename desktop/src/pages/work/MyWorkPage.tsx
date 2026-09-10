@@ -5,6 +5,7 @@ import { TaskDetailModal } from '@/components/board/TaskDetailModal';
 import { CreateProjectModal } from '@/components/dashboard/CreateProjectModal';
 import { InviteMembersModal } from '@/components/dashboard/InviteMembersModal';
 import { OnboardingChecklist } from '@/components/onboarding/OnboardingChecklist';
+import { PendingInvites } from '@/components/work/PendingInvites';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import { Tooltip } from '@/components/ui/Tooltip';
@@ -173,6 +174,8 @@ export function MyWorkPage() {
             </div>
           </div>
         </header>
+
+        <PendingInvites />
 
         <OnboardingChecklist
           onCreateProject={() => setShowCreateProject(true)}

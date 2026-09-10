@@ -14,7 +14,7 @@ export function FieldLabel({ htmlFor, required, optional, className, children }:
     <label
       htmlFor={htmlFor}
       className={cn(
-        'mb-1.5 flex items-center gap-1.5 text-[11px] font-bold tracking-wide text-ink-300 uppercase',
+        'mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-ink-400 uppercase',
         className,
       )}
     >

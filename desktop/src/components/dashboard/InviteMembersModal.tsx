@@ -1,8 +1,9 @@
 import { useState, type FormEvent } from 'react';
-import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/Button';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
+import { FieldLabel } from '@/components/ui/FieldLabel';
 import { Input } from '@/components/ui/Input';
+import { Modal, ModalFooter, ModalHeader } from '@/components/ui/Modal';
 import { Select } from '@/components/ui/Select';
 import type { Project, ProjectMember, ProjectRole } from '@/lib/workspace/types';
 import { useWorkspace } from '@/lib/workspace/WorkspaceContext';
@@ -76,102 +77,107 @@ export function InviteMembersModal({ project, onClose }: Props) {
     }
   }
 
-  return createPortal(
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/55 p-4">
-      <button type="button" className="absolute inset-0" onClick={onClose} aria-label="Close" />
-      <div
-        role="dialog"
-        aria-modal="true"
-        className="relative z-10 w-full max-w-lg border border-ink-600 bg-ink-800 p-5"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h2 className="text-base font-semibold text-ink-50">Invite members</h2>
-        <p className="mt-1 text-xs text-ink-300">
-          {live.name} · They stay Pending until they Accept (in DockX or via the email link).
-          They cannot see the board until then.
-        </p>
-
-        <form onSubmit={onAdd} className="mt-4 grid gap-2 sm:grid-cols-[1fr_120px_auto]">
-          <Input
-            type="email"
-            placeholder="Email address"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            autoFocus
-          />
-          <Select
-            size="md"
-            value={role}
-            onChange={(v) => setRole(v as ProjectRole)}
-            options={ROLE_OPTIONS}
-            aria-label="Role"
-          />
-          <Button type="submit" size="sm" disabled={busy}>
-            Invite
-          </Button>
-        </form>
-        {inviteLink ? (
-          <div className="mt-2 flex gap-2">
-            <input
-              readOnly
-              value={inviteLink}
-              className="h-8 min-w-0 flex-1 truncate rounded-md border border-ink-600 bg-ink-900 px-2 text-[11px] text-ink-200"
-            />
-            <Button type="button" size="xs" variant="secondary" onClick={() => void copyLink()}>
-              Copy link
-            </Button>
-          </div>
-        ) : null}
-
-        <div className="mt-4 max-h-64 overflow-y-auto border-t border-ink-700">
-          {live.members.map((member) => (
-            <div
-              key={member.id}
-              className="flex flex-wrap items-center justify-between gap-2 border-b border-ink-700 py-2.5"
-            >
-              <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-ink-50">
-                  {member.name}
-                  {member.status === 'pending' ? (
-                    <span className="ml-1.5 text-[10px] font-semibold uppercase tracking-wide text-[#fee75c]">
-                      Pending
-                    </span>
-                  ) : null}
-                </p>
-                <p className="truncate text-xs text-ink-300">{member.email}</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-[110px]">
-                  <Select
-                    size="xs"
-                    value={member.role}
-                    onChange={(v) =>
-                      void updateMemberRole(live.id, member.id, v as ProjectRole)
-                    }
-                    options={ROLE_OPTIONS}
-                    aria-label={`Role for ${member.name}`}
-                  />
-                </div>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  disabled={member.role === 'admin' && admins <= 1}
-                  onClick={() => setMemberToRemove(member)}
-                >
-                  Remove
-                </Button>
-              </div>
+  return (
+    <>
+      <Modal size="lg" labelledBy="invite-members-title" onClose={onClose}>
+        <ModalHeader
+          titleId="invite-members-title"
+          title="Invite members"
+          description={`${live.name} · They stay Pending until they Accept. They cannot see the board until then.`}
+          onClose={onClose}
+        />
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
+          <form onSubmit={onAdd} className="grid gap-2 sm:grid-cols-[1fr_140px_auto]">
+            <div className="min-w-0">
+              <FieldLabel htmlFor="invite-email" required>
+                Email
+              </FieldLabel>
+              <Input
+                id="invite-email"
+                type="email"
+                placeholder="colleague@company.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                autoFocus
+              />
             </div>
-          ))}
-        </div>
+            <div>
+              <FieldLabel required>Role</FieldLabel>
+              <Select
+                size="md"
+                value={role}
+                onChange={(v) => setRole(v as ProjectRole)}
+                options={ROLE_OPTIONS}
+                aria-label="Role"
+              />
+            </div>
+            <div className="flex items-end">
+              <Button type="submit" size="sm" disabled={busy} className="h-10 w-full sm:w-auto">
+                Invite
+              </Button>
+            </div>
+          </form>
+          {inviteLink ? (
+            <div className="flex gap-2 rounded-xl border border-ink-600/70 bg-ink-900/40 p-2">
+              <Input readOnly value={inviteLink} size="sm" className="min-w-0 flex-1 truncate" />
+              <Button type="button" size="sm" variant="secondary" onClick={() => void copyLink()}>
+                Copy link
+              </Button>
+            </div>
+          ) : null}
 
-        <div className="mt-4 flex justify-end">
+          <div>
+            <p className="mb-2 text-[11px] font-semibold tracking-wide text-ink-400 uppercase">
+              People on this project
+            </p>
+            <div className="max-h-72 overflow-y-auto rounded-xl border border-ink-600/70">
+              {live.members.map((member) => (
+                <div
+                  key={member.id}
+                  className="flex flex-wrap items-center justify-between gap-2 border-b border-ink-700/80 px-3 py-2.5 last:border-b-0"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-ink-50">
+                      {member.name}
+                      {member.status === 'pending' ? (
+                        <span className="ml-1.5 text-[10px] font-semibold uppercase tracking-wide text-[#fee75c]">
+                          Pending
+                        </span>
+                      ) : null}
+                    </p>
+                    <p className="truncate text-xs text-ink-400">{member.email}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-[118px]">
+                      <Select
+                        size="sm"
+                        value={member.role}
+                        onChange={(v) => void updateMemberRole(live.id, member.id, v as ProjectRole)}
+                        options={ROLE_OPTIONS}
+                        aria-label={`Role for ${member.name}`}
+                      />
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={member.role === 'admin' && admins <= 1}
+                      onClick={() => setMemberToRemove(member)}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+        <ModalFooter>
           <Button size="sm" variant="secondary" onClick={onClose}>
             Done
           </Button>
-        </div>
-      </div>
+        </ModalFooter>
+      </Modal>
 
       <ConfirmModal
         open={Boolean(memberToRemove)}
@@ -196,7 +202,6 @@ export function InviteMembersModal({ project, onClose }: Props) {
           }
         }}
       />
-    </div>,
-    document.body,
+    </>
   );
 }

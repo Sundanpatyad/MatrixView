@@ -29,9 +29,9 @@ type Props = {
 };
 
 const sizes: Record<Size, string> = {
-  xs: 'h-7 rounded-md px-2 text-[11px]',
-  sm: 'h-8 rounded-md px-2.5 text-xs',
-  md: 'h-9 rounded-md px-3 text-sm',
+  xs: 'h-7 rounded-lg px-2 text-[11px]',
+  sm: 'h-8 rounded-lg px-2.5 text-xs',
+  md: 'h-10 rounded-lg px-3 text-sm',
 };
 
 export function Select({
@@ -179,7 +179,7 @@ export function Select({
               ref={listRef}
               role="listbox"
               aria-labelledby={id}
-              className="fixed z-[10000] max-h-56 overflow-y-auto border border-ink-600 bg-ink-800 py-1 shadow-[0_8px_24px_rgba(15,23,42,0.12)]"
+              className="fixed z-[10000] max-h-56 overflow-y-auto rounded-lg border border-ink-600 bg-ink-800 py-1 shadow-[0_8px_24px_rgba(15,23,42,0.18)]"
               style={{
                 top: pos.openUp ? undefined : pos.top,
                 bottom: pos.openUp ? window.innerHeight - pos.top + 4 : undefined,

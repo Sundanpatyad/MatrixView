@@ -16,6 +16,7 @@ import {
 } from '@/lib/offline/activityStore';
 import { isOfflineDbAvailable } from '@/lib/offline/db';
 import { syncService } from '@/lib/offline/sync';
+import { isActivitySessionExpired } from '@/lib/api/errors';
 import { getForegroundApp, type ForegroundApp } from './native';
 
 const POLL_MS = 5_000;
@@ -117,10 +118,15 @@ class ActivityTracker {
   private listeners = new Set<Listener>();
   private lockStreak = 0;
   private visibilityHandler: (() => void) | null = null;
+  private onExpired: (() => void) | null = null;
 
   configureUser(user: { id: string; orgId: string } | null) {
     this.userId = user?.id ?? null;
     this.orgId = user?.orgId ?? null;
+  }
+
+  setExpiredHandler(handler: (() => void) | null) {
+    this.onExpired = handler;
   }
 
   /** Called when offline start syncs and server assigns a real session id. */
@@ -487,7 +493,17 @@ class ActivityTracker {
           await persistActivitySamples(storageId, batch, { synced: true });
         }
         return;
-      } catch {
+      } catch (err) {
+        if (isActivitySessionExpired(err)) {
+          this.clearTimers();
+          if (isOfflineDbAvailable()) {
+            await markLocalSessionClosed(storageId);
+          }
+          this.resetLocal(true);
+          this.emit();
+          this.onExpired?.();
+          return;
+        }
         /* fall through to local queue */
       }
     }

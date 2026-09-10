@@ -19,6 +19,7 @@ import {
 } from '../../gateway/io.js';
 import { Conversation } from './models/Conversation.js';
 import { ConversationMemberState } from './models/ConversationMemberState.js';
+import { UserBlock } from './models/UserBlock.js';
 import { Message } from './models/Message.js';
 import { fetchLinkPreview, firstHttpUrl } from './linkPreview.js';
 import {
@@ -72,6 +73,43 @@ async function fileToChatAttachment(file: Express.Multer.File) {
 function oid(id: string) {
   if (!Types.ObjectId.isValid(id)) throw new AuthError('Invalid id', 400);
   return new Types.ObjectId(id);
+}
+
+export async function blockedUserIdsFor(userId: string): Promise<Set<string>> {
+  const rows = await UserBlock.find({ userId: oid(userId) }).select('blockedUserId').lean();
+  return new Set(rows.map((row) => String(row.blockedUserId)));
+}
+
+export async function areUsersBlocked(a: string, b: string): Promise<boolean> {
+  if (!Types.ObjectId.isValid(a) || !Types.ObjectId.isValid(b)) return false;
+  const row = await UserBlock.exists({
+    $or: [
+      { userId: new Types.ObjectId(a), blockedUserId: new Types.ObjectId(b) },
+      { userId: new Types.ObjectId(b), blockedUserId: new Types.ObjectId(a) },
+    ],
+  });
+  return Boolean(row);
+}
+
+async function assertCanDm(actorId: string, otherId: string) {
+  const iBlocked = await UserBlock.exists({
+    userId: oid(actorId),
+    blockedUserId: oid(otherId),
+  });
+  if (iBlocked) {
+    throw new AuthError(
+      'You blocked this person. Unblock them to send a message.',
+      403,
+      'USER_BLOCKED',
+    );
+  }
+  const theyBlocked = await UserBlock.exists({
+    userId: oid(otherId),
+    blockedUserId: oid(actorId),
+  });
+  if (theyBlocked) {
+    throw new AuthError('Message could not be sent', 403, 'USER_BLOCKED');
+  }
 }
 
 async function requireMember(conversationId: string, actor: Actor) {
@@ -443,12 +481,19 @@ export async function listConversations(actor: Actor) {
     memberIds: oid(actor.sub),
   }).sort({ lastMessageAt: -1 });
 
-  const prefsById = await prefsMapForUser(
-    actor.sub,
-    list.map((c) => String(c._id)),
-  );
+  const [prefsById, blockedIds] = await Promise.all([
+    prefsMapForUser(
+      actor.sub,
+      list.map((c) => String(c._id)),
+    ),
+    blockedUserIdsFor(actor.sub),
+  ]);
 
   const visible = list.filter((c) => {
+    if (c.type === 'dm') {
+      const otherId = c.memberIds.map(String).find((id) => id !== actor.sub);
+      if (otherId && blockedIds.has(otherId)) return false;
+    }
     const prefs = prefsById.get(String(c._id));
     if (!prefs?.hiddenAt) return true;
     const last = c.lastMessageAt?.getTime?.() ?? 0;
@@ -487,7 +532,13 @@ export async function listChatUsers(actor: Actor) {
     return { users: [] };
   }
 
-  const peerObjectIds = [...peerIds].map((id) => oid(id));
+  const blockedIds = await blockedUserIdsFor(actor.sub);
+  const peerObjectIds = [...peerIds]
+    .filter((id) => !blockedIds.has(id))
+    .map((id) => oid(id));
+  if (peerObjectIds.length === 0) {
+    return { users: [] };
+  }
   const [users, activeSessions] = await Promise.all([
     User.find({
       _id: { $in: peerObjectIds },
@@ -560,6 +611,7 @@ export async function getOrCreateDm(
   }
 
   const otherId = String(other._id);
+  await assertCanDm(actor.sub, otherId);
   const existing = await Conversation.findOne({
     type: 'dm',
     memberIds: { $all: [oid(actor.sub), oid(otherId)], $size: 2 },
@@ -810,6 +862,10 @@ export async function sendMessage(
   files: Express.Multer.File[] = [],
 ) {
   const conversation = await requireMember(conversationId, actor);
+  if (conversation.type === 'dm') {
+    const otherId = conversation.memberIds.map(String).find((id) => id !== actor.sub);
+    if (otherId) await assertCanDm(actor.sub, otherId);
+  }
   const body = (input.body ?? '').trim();
   const attachments = await Promise.all(files.map((f) => fileToChatAttachment(f)));
 
@@ -926,6 +982,10 @@ export async function forwardMessage(
   }
   await requireMember(String(source.conversationId), actor);
   const target = await requireMember(targetConversationId, actor);
+  if (target.type === 'dm') {
+    const otherId = target.memberIds.map(String).find((id) => id !== actor.sub);
+    if (otherId) await assertCanDm(actor.sub, otherId);
+  }
 
   const body = (source.body ?? '').trim();
   const attachments = (source.attachments ?? []).map((a) => ({
@@ -1308,6 +1368,42 @@ export async function setConversationMuted(
 ) {
   const conversation = await requireMember(conversationId, actor);
   await upsertMemberState(actor, conversationId, { muted });
+  return { conversation: await serializeConversation(conversation, actor.sub) };
+}
+
+/** Block or unblock the other person in a DM. Blocking also removes the chat from your list. */
+export async function setConversationBlocked(
+  actor: Actor,
+  conversationId: string,
+  blocked: boolean,
+) {
+  const conversation = await requireMember(conversationId, actor);
+  if (conversation.type !== 'dm') {
+    throw new AuthError('You can only block people in direct messages', 400, 'NOT_DM');
+  }
+  const otherId = conversation.memberIds.map(String).find((id) => id !== actor.sub);
+  if (!otherId) throw new AuthError('User not found', 404, 'NOT_FOUND');
+
+  if (blocked) {
+    await UserBlock.findOneAndUpdate(
+      { userId: oid(actor.sub), blockedUserId: oid(otherId) },
+      {
+        $set: {
+          orgId: oid(actor.orgId),
+          userId: oid(actor.sub),
+          blockedUserId: oid(otherId),
+        },
+      },
+      { upsert: true },
+    );
+    return deleteConversationForMe(actor, conversationId);
+  }
+
+  await UserBlock.deleteOne({ userId: oid(actor.sub), blockedUserId: oid(otherId) });
+  await upsertMemberState(actor, conversationId, { hiddenAt: null });
+  emitToUser(actor.sub, 'conversation:upsert', {
+    conversation: await serializeConversation(conversation, actor.sub),
+  });
   return { conversation: await serializeConversation(conversation, actor.sub) };
 }
 

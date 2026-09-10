@@ -23,9 +23,9 @@ type Props = {
 };
 
 const sizes: Record<Size, string> = {
-  xs: 'h-7 px-2 text-[11px]',
-  sm: 'h-9 px-2.5 text-xs',
-  md: 'h-11 px-3 text-sm',
+  xs: 'h-7 rounded-lg px-2 text-[11px]',
+  sm: 'h-8 rounded-lg px-2.5 text-xs',
+  md: 'h-10 rounded-lg px-3 text-sm',
 };
 
 const WEEKDAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
@@ -193,9 +193,12 @@ export function DatePicker({
         onClick={() => !disabled && setOpen((v) => !v)}
         onKeyDown={onKeyDown}
         className={cn(
-          'inline-flex w-full items-center justify-between gap-2 border border-ink-600 bg-ink-800 font-semibold text-ink-50 transition',
-          'hover:border-ink-500 focus:border-ink-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-45',
-          open && 'border-ink-500',
+          'inline-flex w-full items-center justify-between gap-2 border border-ink-500/70 bg-ink-900/70 font-semibold text-ink-50',
+          'transition-[border-color,background-color,box-shadow] duration-150',
+          'hover:border-brand-500/40 hover:bg-ink-800',
+          'focus:border-brand-500/60 focus:outline-none focus:ring-2 focus:ring-brand-500/20',
+          'disabled:cursor-not-allowed disabled:opacity-45',
+          open && 'border-brand-500/50 bg-ink-800',
           sizes[size],
           className,
         )}
@@ -217,7 +220,7 @@ export function DatePicker({
               ref={panelRef}
               role="dialog"
               aria-label="Calendar"
-              className="fixed z-[10000] w-72 border border-ink-600 bg-ink-800 p-3 shadow-[0_8px_24px_rgba(15,23,42,0.12)]"
+              className="fixed z-[10000] w-72 rounded-xl border border-ink-600 bg-ink-800 p-3 shadow-[0_12px_32px_rgba(15,23,42,0.28)]"
               style={{
                 top: pos.openUp ? undefined : pos.top,
                 bottom: pos.openUp ? window.innerHeight - pos.top + 4 : undefined,

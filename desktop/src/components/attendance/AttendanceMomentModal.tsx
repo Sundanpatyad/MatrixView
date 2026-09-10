@@ -144,7 +144,7 @@ export function AttendanceMomentModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="attendance-card relative z-10 w-full max-w-sm border border-ink-600 bg-ink-800 shadow-lg"
+        className="attendance-card relative z-10 w-full max-w-sm overflow-hidden rounded-2xl border border-ink-600/80 bg-ink-800 shadow-[0_24px_80px_rgba(0,0,0,0.45)]"
         onClick={(e) => e.stopPropagation()}
         onMouseEnter={() => setHoverPause(true)}
         onMouseLeave={() => setHoverPause(false)}

@@ -5,6 +5,7 @@ import { isAllowedCorsOrigin } from '../corsOrigin.js';
 import { Session } from '../modules/auth/models/Session.js';
 import { User } from '../modules/auth/models/User.js';
 import { ActivitySession } from '../modules/activity/models/ActivitySession.js';
+import { MAX_SESSION_DURATION_MS } from '../modules/activity/constants.js';
 import { Conversation } from '../modules/chat/models/Conversation.js';
 import { Project } from '../modules/workspace/models/Project.js';
 import * as chat from '../modules/chat/service.js';
@@ -459,6 +460,7 @@ export function initSocket(httpServer: HttpServer) {
       userId,
       orgId,
       status: 'active',
+      startedAt: { $gt: new Date(Date.now() - MAX_SESSION_DURATION_MS) },
     });
 
     await emitPresenceUpdate(orgId, {
@@ -702,6 +704,10 @@ export function initSocket(httpServer: HttpServer) {
           const dm = await getDmPeer(conversationId, userId, orgId);
           if (!dm) {
             ack?.({ ok: false, error: 'Calls are only available in direct or group chats' });
+            return;
+          }
+          if (await chat.areUsersBlocked(userId, dm.peerId)) {
+            ack?.({ ok: false, error: 'You can’t call this person' });
             return;
           }
           if (isUserBusy(dm.peerId)) {
@@ -1246,6 +1252,7 @@ export function initSocket(httpServer: HttpServer) {
               userId,
               orgId,
               status: 'active',
+              startedAt: { $gt: new Date(Date.now() - MAX_SESSION_DURATION_MS) },
             });
             await emitPresenceUpdate(orgId, {
               userId,

@@ -74,6 +74,13 @@ export function setConversationMuted(conversationId: string, muted: boolean) {
   );
 }
 
+export function setConversationBlocked(conversationId: string, blocked: boolean) {
+  return apiFetch<{ conversation?: ChatConversation; ok?: true; removed?: true }>(
+    `/api/chat/conversations/${conversationId}/block`,
+    { method: 'POST', body: { blocked }, auth: true },
+  );
+}
+
 export function markConversationRead(conversationId: string) {
   return apiFetch<{ ok: true }>(`/api/chat/conversations/${conversationId}/read`, {
     method: 'POST',

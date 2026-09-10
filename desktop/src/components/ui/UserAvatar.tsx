@@ -1,4 +1,6 @@
+import { useEffect, useState } from 'react';
 import { cn } from '@/lib/cn';
+import { resolveMediaUrl } from '@/lib/mediaUrl';
 import { useSocketOptional } from '@/lib/socket/SocketContext';
 
 const AVATAR_COLORS = [
@@ -84,6 +86,14 @@ export function UserAvatar({
       ? undefined
       : title ?? (showDot ? `${name} · ${flag ? 'Online' : 'Offline'}` : name);
   const color = avatarColor(seed || name || 'user');
+  const resolved = resolveMediaUrl(src);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    setFailed(false);
+  }, [resolved]);
+
+  const showPhoto = Boolean(resolved) && !failed;
 
   return (
     <span
@@ -94,16 +104,18 @@ export function UserAvatar({
         className={cn(
           'relative grid h-full w-full place-items-center overflow-hidden rounded-full leading-none',
           !bare && 'ring-1 ring-black/5',
-          src ? 'bg-ink-700' : color,
-          !src && 'font-bold text-white',
+          showPhoto ? 'bg-ink-700' : color,
+          !showPhoto && 'font-bold text-white',
         )}
       >
-        {src ? (
+        {showPhoto ? (
           <img
-            src={src}
-            alt={name}
+            src={resolved}
+            alt=""
             className="absolute inset-0 h-full w-full object-cover"
             draggable={false}
+            referrerPolicy="no-referrer"
+            onError={() => setFailed(true)}
           />
         ) : (
           <span className="relative z-[1] select-none">{initials(name)}</span>

@@ -14,11 +14,11 @@ const typeChip: Record<string, string> = {
 };
 
 const priorityChip: Record<string, string> = {
-  lowest: 'text-ink-400',
-  low: 'text-[#3ba55d]',
-  medium: 'text-[#f0b232]',
-  high: 'text-[#ed4245]',
-  highest: 'text-[#ed4245]',
+  lowest: 'bg-ink-700/80 text-ink-400',
+  low: 'bg-[#3ba55d]/12 text-[#3ba55d]',
+  medium: 'bg-[#f0b232]/15 text-[#f0b232]',
+  high: 'bg-[#ed4245]/12 text-[#ed4245]',
+  highest: 'bg-[#ed4245]/18 text-[#ff6b6e]',
 };
 
 function visibleDescription(description: string | undefined | null): string | null {
@@ -94,22 +94,25 @@ export function DashboardTaskCard({
         onOpen();
       }}
       className={cn(
-        'group cursor-grab select-none rounded-md border border-ink-600 bg-ink-800 p-2.5 transition-colors',
-        'hover:border-ink-500 hover:bg-ink-800/90 active:cursor-grabbing',
+        'group cursor-grab select-none rounded-xl border border-ink-600/70 bg-ink-800 p-3',
+        'shadow-[0_1px_0_rgba(255,255,255,0.03)]',
+        'transition-[border-color,background-color,box-shadow,opacity] duration-150',
+        'hover:border-ink-500 hover:bg-ink-800/95 hover:shadow-[0_8px_20px_rgba(0,0,0,0.18)]',
+        'active:cursor-grabbing',
         dragging && 'opacity-40 ring-2 ring-brand-500/35',
       )}
     >
       <div className="flex items-center justify-between gap-2">
         <span
           className={cn(
-            'inline-flex rounded px-1.5 py-0.5 text-[10px] font-semibold tracking-wide uppercase',
+            'inline-flex rounded-md px-1.5 py-0.5 text-[10px] font-semibold tracking-wide uppercase',
             typeChip[task.type] ?? 'bg-ink-700 text-ink-300',
           )}
         >
           {typeMeta?.label ?? task.type}
         </span>
         <div className="flex items-center gap-1">
-          <span className="text-[11px] font-medium tabular-nums text-ink-400">{task.key}</span>
+          <span className="text-[11px] font-medium tabular-nums text-ink-500">{task.key}</span>
           {onDelete ? (
             <Tooltip label="Delete task" side="top">
               <button
@@ -122,7 +125,7 @@ export function DashboardTaskCard({
                   e.preventDefault();
                   onDelete();
                 }}
-                className="flex h-5 w-5 items-center justify-center rounded text-ink-400 transition hover:bg-ink-700 hover:text-[#ed4245]"
+                className="flex h-6 w-6 items-center justify-center rounded-md text-ink-500 opacity-100 transition hover:bg-[#ed4245]/12 hover:text-[#ed4245] sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
               >
                 <IconTrash className="h-3 w-3" />
               </button>
@@ -136,7 +139,7 @@ export function DashboardTaskCard({
       </p>
 
       {teamName ? (
-        <span className="mt-1.5 inline-flex max-w-full truncate rounded bg-brand-500/10 px-1.5 py-0.5 text-[10px] font-medium text-brand-300">
+        <span className="mt-1.5 inline-flex max-w-full truncate rounded-md bg-brand-500/10 px-1.5 py-0.5 text-[10px] font-medium text-brand-300">
           {teamName}
         </span>
       ) : null}
@@ -145,7 +148,7 @@ export function DashboardTaskCard({
         <p className="mt-1 line-clamp-1 text-[11px] leading-snug text-ink-400">{description}</p>
       ) : null}
 
-      <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-ink-700/70 pt-2">
+      <div className="mt-3 flex items-center justify-between gap-2 border-t border-ink-700/60 pt-2.5">
         <div className="flex min-w-0 items-center gap-1.5">
           <UserAvatar
             name={task.assigneeName || 'Unassigned'}
@@ -160,8 +163,8 @@ export function DashboardTaskCard({
         </div>
         <span
           className={cn(
-            'shrink-0 text-[11px] font-semibold capitalize',
-            priorityChip[task.priority] ?? 'text-ink-400',
+            'inline-flex shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-semibold capitalize',
+            priorityChip[task.priority] ?? 'bg-ink-700 text-ink-400',
           )}
         >
           {task.priority}

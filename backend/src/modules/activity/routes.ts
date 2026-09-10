@@ -12,7 +12,7 @@ function actorFrom(req: AuthedRequest) {
   return {
     sub: req.auth.sub,
     orgId: req.auth.orgId,
-    email: req.auth.email,
+    email: String(req.auth.email ?? ''),
     role: req.auth.role,
   };
 }

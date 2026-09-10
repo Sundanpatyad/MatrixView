@@ -574,6 +574,92 @@ export async function listMyInvites(actor: Actor): Promise<PendingInviteView[]> 
   return out;
 }
 
+/**
+ * After someone creates an account (or logs in) with an email that already has
+ * pending project invites, link their userId on pending seats and deliver
+ * in-app / push invite notifications so they can Accept / Decline.
+ */
+export async function claimPendingInvitesForUser(user: {
+  _id: Types.ObjectId;
+  email: string;
+  name: string;
+  orgId: Types.ObjectId | string;
+}) {
+  const email = String(user.email ?? '')
+    .toLowerCase()
+    .trim();
+  if (!email) return 0;
+
+  const invites = await ProjectInvite.find({
+    email,
+    status: 'pending',
+    expiresAt: { $gt: new Date() },
+  });
+  if (invites.length === 0) return 0;
+
+  const { Notification } = await import('../notifications/models/Notification.js');
+  const userId = String(user._id);
+  const userOrgId = String(user.orgId);
+  let notified = 0;
+
+  for (const invite of invites) {
+    await Project.updateOne(
+      { _id: invite.projectId, 'members.email': email, 'members.status': 'pending' },
+      {
+        $set: {
+          'members.$.userId': user._id,
+          'members.$.name': user.name || email,
+        },
+      },
+    );
+
+    const already = await Notification.exists({
+      recipientId: user._id,
+      type: 'project.invited',
+      'meta.inviteId': String(invite._id),
+    });
+    if (already) continue;
+
+    const project = await Project.findById(invite.projectId).lean();
+    if (!project) continue;
+    const inviter = await User.findById(invite.invitedBy).lean();
+    const inviterName = inviter?.name ?? 'A teammate';
+
+    try {
+      await createAndEmit({
+        orgId: userOrgId,
+        recipientId: userId,
+        actorId: String(invite.invitedBy),
+        actorName: inviterName,
+        type: 'project.invited',
+        title: 'Project invite',
+        body: `${inviterName} invited you to ${project.name}. Accept to join.`,
+        href: '/notifications',
+        projectId: String(project._id),
+        meta: {
+          inviteId: String(invite._id),
+          projectId: String(project._id),
+          projectName: project.name,
+          projectKey: project.key,
+          role: invite.role,
+          inviterName,
+          expiresAt: invite.expiresAt.toISOString(),
+        },
+      });
+      notified += 1;
+    } catch (err) {
+      console.error('[notifications] claim project.invited', err);
+    }
+
+    const view = await presentPendingInvite(invite);
+    if (view) {
+      emitToUser(userId, 'invite:new', { invite: view });
+    }
+  }
+
+  return notified;
+}
+
 async function activateInviteForUser(
   invite: InstanceType<typeof ProjectInvite>,
   user: { _id: Types.ObjectId; email: string; name: string },

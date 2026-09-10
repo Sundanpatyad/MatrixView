@@ -57,6 +57,7 @@ interface ChatContextValue {
   setMuted: (conversationId: string, muted: boolean) => Promise<void>;
   clearMessages: (conversationId: string) => Promise<void>;
   deleteChat: (conversationId: string) => Promise<void>;
+  blockChat: (conversationId: string) => Promise<void>;
   deleteGroup: (conversationId: string) => Promise<void>;
 }
 
@@ -563,6 +564,14 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     [dropConversation],
   );
 
+  const blockChat = useCallback(
+    async (conversationId: string) => {
+      await chatApi.setConversationBlocked(conversationId, true);
+      dropConversation(conversationId);
+    },
+    [dropConversation],
+  );
+
   const deleteGroup = useCallback(
     async (conversationId: string) => {
       await chatApi.deleteGroup(conversationId);
@@ -617,6 +626,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       setMuted,
       clearMessages,
       deleteChat,
+      blockChat,
       deleteGroup,
     }),
     [
@@ -651,6 +661,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       setMuted,
       clearMessages,
       deleteChat,
+      blockChat,
       deleteGroup,
     ],
   );

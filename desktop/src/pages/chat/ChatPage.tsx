@@ -11,10 +11,14 @@ import {
 import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
 import {
+  IconBell,
+  IconBellOff,
+  IconBan,
   IconCheck,
   IconChevronLeft,
   IconCopy,
   IconDots,
+  IconDotsVertical,
   IconEdit,
   IconFile,
   IconForward,
@@ -41,6 +45,7 @@ import { Button } from '@/components/ui/Button';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { UserAvatar } from '@/components/ui/UserAvatar';
 import { Input } from '@/components/ui/Input';
+import { Modal, ModalBody, ModalHeader } from '@/components/ui/Modal';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { setDesktopPushContext } from '@/lib/notifications/desktopPush';
@@ -51,11 +56,14 @@ import {
   addGroupMembers,
   createDm,
   createGroup,
+  deleteConversation,
   deleteMessage,
   editMessage,
   listChatUsers,
   forwardMessage,
   removeGroupMember,
+  setConversationBlocked,
+  setConversationMuted,
   updateGroup,
   uploadGroupAvatar,
   type ChatAttachment,
@@ -99,6 +107,7 @@ import {
   markOptimisticFailed,
   upsertCachedConversation,
   upsertLiveMessage,
+  removeCachedConversation,
 } from '@/lib/offline/chatStore';
 import { useOffline } from '@/lib/offline/OfflineContext';
 
@@ -823,33 +832,11 @@ function fileKindLabel(file: File) {
 type ModalProps = { onClose: () => void; children: React.ReactNode; title: string; subtitle?: string };
 
 function ModalShell({ onClose, children, title, subtitle }: ModalProps) {
-  return createPortal(
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/55 p-4">
-      <button type="button" className="absolute inset-0" onClick={onClose} aria-label="Close" />
-      <div
-        role="dialog"
-        aria-modal="true"
-        className="relative z-10 w-full max-w-md border border-ink-600 bg-ink-800 p-5 shadow-lg"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h2 className="text-base font-semibold text-ink-50">{title}</h2>
-            {subtitle ? <p className="mt-0.5 text-xs text-ink-300">{subtitle}</p> : null}
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-md p-1 text-ink-300 hover:bg-ink-600 hover:text-ink-100"
-            aria-label="Close"
-          >
-            <IconX className="h-4 w-4" />
-          </button>
-        </div>
-        {children}
-      </div>
-    </div>,
-    document.body,
+  return (
+    <Modal size="md" onClose={onClose}>
+      <ModalHeader title={title} description={subtitle} onClose={onClose} />
+      <ModalBody>{children}</ModalBody>
+    </Modal>
   );
 }
 
@@ -1500,6 +1487,16 @@ export function ChatPage() {
   const [deletingMsg, setDeletingMsg] = useState(false);
   const [forwardMsg, setForwardMsg] = useState<ChatMessage | null>(null);
   const [forwardBusy, setForwardBusy] = useState(false);
+  const [chatMenu, setChatMenu] = useState<{
+    conversation: ChatConversation;
+    top: number;
+    left: number;
+  } | null>(null);
+  const [chatConfirm, setChatConfirm] = useState<{
+    kind: 'delete' | 'block';
+    conversation: ChatConversation;
+  } | null>(null);
+  const [chatActionBusy, setChatActionBusy] = useState(false);
   const [attachMenuOpen, setAttachMenuOpen] = useState(false);
   const [recording, setRecording] = useState(false);
   const [recordSecs, setRecordSecs] = useState(0);
@@ -1674,6 +1671,64 @@ export function ChatPage() {
     [meId],
   );
 
+  const dropConversation = useCallback(
+    (conversationId: string) => {
+      setConversations((prev) => prev.filter((c) => c.id !== conversationId));
+      setActiveId((prev) => (prev === conversationId ? null : prev));
+      if (meId) void removeCachedConversation(meId, conversationId);
+    },
+    [meId],
+  );
+
+  const openChatMenu = useCallback((event: { currentTarget: EventTarget }, conversation: ChatConversation) => {
+    const el = event.currentTarget as HTMLElement;
+    const rect = el.getBoundingClientRect();
+    const menuW = 188;
+    const menuH = conversation.type === 'dm' ? 132 : 92;
+    let left = rect.right - menuW;
+    let top = rect.bottom + 4;
+    if (left < 8) left = 8;
+    if (left + menuW > window.innerWidth - 8) left = window.innerWidth - menuW - 8;
+    if (top + menuH > window.innerHeight - 8) top = Math.max(8, rect.top - menuH - 4);
+    setChatMenu({ conversation, top, left });
+  }, []);
+
+  const muteChat = useCallback(
+    async (conversation: ChatConversation) => {
+      setChatMenu(null);
+      try {
+        const { conversation: next } = await setConversationMuted(conversation.id, !conversation.muted);
+        upsertConversationQuiet(next);
+        toast.success(next.muted ? 'Chat muted' : 'Chat unmuted');
+      } catch (err) {
+        toast.fromError(err, 'Could not update mute');
+      }
+    },
+    [toast, upsertConversationQuiet],
+  );
+
+  const confirmChatAction = useCallback(async () => {
+    if (!chatConfirm) return;
+    const { kind, conversation } = chatConfirm;
+    setChatActionBusy(true);
+    try {
+      if (kind === 'block') {
+        await setConversationBlocked(conversation.id, true);
+        dropConversation(conversation.id);
+        toast.success(`${conversation.name} blocked`);
+      } else {
+        await deleteConversation(conversation.id);
+        dropConversation(conversation.id);
+        toast.success(conversation.type === 'group' ? 'Left group' : 'Chat deleted');
+      }
+      setChatConfirm(null);
+    } catch (err) {
+      toast.fromError(err, kind === 'block' ? 'Could not block' : 'Could not delete chat');
+    } finally {
+      setChatActionBusy(false);
+    }
+  }, [chatConfirm, dropConversation, toast]);
+
   useEffect(() => {
     if (!meId) return;
     let cancelled = false;
@@ -1847,8 +1902,7 @@ export function ChatPage() {
         upsertConversationQuiet(conversation);
       },
       onConversationRemoved: (conversationId) => {
-        setConversations((prev) => prev.filter((c) => c.id !== conversationId));
-        setActiveId((prev) => (prev === conversationId ? null : prev));
+        dropConversation(conversationId);
       },
     });
 
@@ -1863,7 +1917,7 @@ export function ChatPage() {
         'onConversationRemoved',
       ]);
     };
-  }, [user, meId, upsertConversationQuiet]);
+  }, [user, meId, upsertConversationQuiet, dropConversation]);
 
   useEffect(() => {
     setAttachMenuOpen(false);
@@ -2519,43 +2573,63 @@ export function ChatPage() {
                 : c.lastMessagePreview ||
                   (c.type === 'group' ? 'Team chat' : 'Direct message');
               return (
-                <button
+                <div
                   key={c.id}
-                  type="button"
-                  onClick={() => setActiveId(c.id)}
                   className={cn(
-                    'flex w-full items-center gap-3 rounded-xl px-2.5 py-2.5 text-left transition-colors',
+                    'group/chat relative flex w-full items-start gap-0.5 rounded-xl py-1 pr-1 pl-2.5 text-left transition-colors',
                     selected
                       ? 'bg-brand-500/12 ring-1 ring-brand-500/25'
                       : 'hover:bg-ink-900/55',
                   )}
                 >
-                  <span className="relative shrink-0">
-                    <ConversationAvatar conversation={c} meId={meId} size="lg" />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="flex items-baseline justify-between gap-2">
-                      <span className="truncate text-[13px] font-semibold text-ink-50">
-                        {c.name}
+                  <button
+                    type="button"
+                    onClick={() => setActiveId(c.id)}
+                    className="flex min-w-0 flex-1 items-center gap-3 rounded-lg py-1.5 text-left"
+                  >
+                    <span className="relative shrink-0">
+                      <ConversationAvatar conversation={c} meId={meId} size="lg" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-baseline justify-between gap-2">
+                        <span className="flex min-w-0 items-center gap-1">
+                          <span className="truncate text-[13px] font-semibold text-ink-50">
+                            {c.name}
+                          </span>
+                          {c.muted ? (
+                            <IconBellOff className="h-3.5 w-3.5 shrink-0 text-ink-400" />
+                          ) : null}
+                        </span>
+                        <span className="shrink-0 text-[11px] tabular-nums text-ink-400">
+                          {liveCall ? (
+                            <span className="font-semibold text-[#4BDE80]">Live</span>
+                          ) : (
+                            formatTime(c.lastMessageAt)
+                          )}
+                        </span>
                       </span>
-                      <span className="shrink-0 text-[11px] tabular-nums text-ink-400">
-                        {liveCall ? (
-                          <span className="font-semibold text-[#4BDE80]">Live</span>
-                        ) : (
-                          formatTime(c.lastMessageAt)
+                      <span
+                        className={cn(
+                          'mt-0.5 block truncate text-[12px]',
+                          liveCall ? 'font-medium text-[#4BDE80]' : 'text-ink-400',
                         )}
+                      >
+                        {liveCall ? preview : <MessagePreviewLabel text={preview} />}
                       </span>
                     </span>
-                    <span
-                      className={cn(
-                        'mt-0.5 block truncate text-[12px]',
-                        liveCall ? 'font-medium text-[#4BDE80]' : 'text-ink-400',
-                      )}
-                    >
-                      {liveCall ? preview : <MessagePreviewLabel text={preview} />}
-                    </span>
-                  </span>
-                </button>
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`More actions for ${c.name}`}
+                    className="mt-1.5 flex h-8 w-7 shrink-0 items-center justify-center rounded-lg text-ink-400 transition hover:bg-ink-800 hover:text-ink-50"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openChatMenu(e, c);
+                    }}
+                  >
+                    <IconDotsVertical className="h-4 w-4" />
+                  </button>
+                </div>
               );
             })
           )}
@@ -2753,6 +2827,16 @@ export function ChatPage() {
                   </button>
                   </Tooltip>
                 ) : null}
+                <Tooltip label="Chat actions" side="bottom">
+                  <button
+                    type="button"
+                    aria-label="Chat actions"
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-ink-600/70 bg-ink-900/40 text-ink-300 transition hover:border-brand-500/40 hover:bg-ink-900 hover:text-ink-50"
+                    onClick={(e) => openChatMenu(e, active)}
+                  >
+                    <IconDotsVertical className="h-4 w-4" />
+                  </button>
+                </Tooltip>
               </div>
             </header>
 
@@ -3461,6 +3545,86 @@ export function ChatPage() {
         onCancel={() => setDeleteMsg(null)}
         onConfirm={() => confirmDeleteMessage()}
       />
+
+      <ConfirmModal
+        open={Boolean(chatConfirm)}
+        title={
+          chatConfirm?.kind === 'block'
+            ? `Block ${chatConfirm.conversation.name}?`
+            : chatConfirm?.conversation.type === 'group'
+              ? 'Leave and delete chat?'
+              : 'Delete chat?'
+        }
+        message={
+          chatConfirm?.kind === 'block'
+            ? `They won’t be able to message or call you. This chat will be removed from your list.`
+            : chatConfirm?.conversation.type === 'group'
+              ? `You’ll leave “${chatConfirm.conversation.name}” and it will be removed from your list.`
+              : `“${chatConfirm?.conversation.name ?? 'This chat'}” will be removed from your list.`
+        }
+        confirmLabel={chatConfirm?.kind === 'block' ? 'Block' : 'Delete chat'}
+        danger
+        busy={chatActionBusy}
+        onCancel={() => setChatConfirm(null)}
+        onConfirm={confirmChatAction}
+      />
+
+      {chatMenu
+        ? createPortal(
+            <div className="fixed inset-0 z-[10050]">
+              <button
+                type="button"
+                aria-label="Close menu"
+                className="absolute inset-0 cursor-default"
+                onClick={() => setChatMenu(null)}
+              />
+              <div
+                className="absolute min-w-[11.5rem] overflow-hidden rounded-lg border border-ink-600 bg-ink-800 py-1 text-ink-100 shadow-lg"
+                style={{ top: chatMenu.top, left: chatMenu.left }}
+              >
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs font-medium text-ink-100 hover:bg-ink-900"
+                  onClick={() => void muteChat(chatMenu.conversation)}
+                >
+                  {chatMenu.conversation.muted ? (
+                    <IconBell className="h-3.5 w-3.5 text-ink-300" />
+                  ) : (
+                    <IconBellOff className="h-3.5 w-3.5 text-ink-300" />
+                  )}
+                  {chatMenu.conversation.muted ? 'Unmute' : 'Mute'}
+                </button>
+                {chatMenu.conversation.type === 'dm' ? (
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs font-medium text-ink-100 hover:bg-ink-900"
+                    onClick={() => {
+                      const conversation = chatMenu.conversation;
+                      setChatMenu(null);
+                      setChatConfirm({ kind: 'block', conversation });
+                    }}
+                  >
+                    <IconBan className="h-3.5 w-3.5 text-ink-300" />
+                    Block
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs font-medium text-[#ed4245] hover:bg-[#ed4245]/10"
+                  onClick={() => {
+                    const conversation = chatMenu.conversation;
+                    setChatMenu(null);
+                    setChatConfirm({ kind: 'delete', conversation });
+                  }}
+                >
+                  <IconTrash className="h-3.5 w-3.5" />
+                  Delete chat
+                </button>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
 
       {forwardMsg ? (
         <ModalShell

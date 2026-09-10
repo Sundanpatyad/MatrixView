@@ -139,7 +139,7 @@ export function MediaPermissionModal({ open, kind, onClose, onGranted }: Props) 
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="relative z-10 w-full max-w-md rounded-2xl border border-ink-600 bg-ink-800 p-5 sm:p-6"
+        className="relative z-10 w-full max-w-md overflow-hidden rounded-2xl border border-ink-600/80 bg-ink-800 p-5 shadow-[0_24px_80px_rgba(0,0,0,0.45)] sm:p-6"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start gap-3">

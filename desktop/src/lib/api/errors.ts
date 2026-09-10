@@ -49,3 +49,9 @@ export function isSessionDead(error: unknown): boolean {
   if (error.code && SESSION_DEAD_CODES.has(error.code)) return true;
   return false;
 }
+
+/** Tracking session hit the 24h auto check-out cap. */
+export function isActivitySessionExpired(error: unknown): boolean {
+  if (!isApiError(error)) return false;
+  return error.code === 'ACTIVITY_SESSION_EXPIRED';
+}

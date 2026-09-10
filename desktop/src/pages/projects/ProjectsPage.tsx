@@ -1,7 +1,9 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
+import { FieldLabel } from '@/components/ui/FieldLabel';
+import { Input, Textarea } from '@/components/ui/Input';
+import { Modal, ModalFooter, ModalHeader } from '@/components/ui/Modal';
 import { useWorkspace } from '@/lib/workspace/WorkspaceContext';
 
 export function ProjectsPage() {
@@ -90,35 +92,39 @@ export function ProjectsPage() {
       </div>
 
       {showCreate ? (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/55 p-4">
-          <button
-            type="button"
-            className="absolute inset-0"
-            onClick={() => projects.length > 0 && setShowCreate(false)}
-            aria-label="Close"
+        <Modal
+          size="md"
+          labelledBy="projects-create-title"
+          onClose={() => {
+            if (projects.length > 0) setShowCreate(false);
+          }}
+          closeOnBackdrop={projects.length > 0}
+        >
+          <ModalHeader
+            titleId="projects-create-title"
+            title="Create project"
+            description="You become Admin. Add members next."
+            onClose={projects.length > 0 ? () => setShowCreate(false) : undefined}
           />
-          <div className="relative z-10 w-full max-w-md rounded-2xl bg-ink-800 p-5 shadow-2xl">
-            <h2 className="text-xl font-bold text-ink-50">Create project</h2>
-            <p className="mt-1 text-sm font-medium text-ink-200">
-              You become Admin. Add members next.
-            </p>
-            <form onSubmit={onSubmit} className="mt-5 space-y-3">
+          <form onSubmit={onSubmit} className="flex min-h-0 flex-1 flex-col">
+            <div className="space-y-4 px-5 py-4">
               <div>
-                <label className="mb-1 block text-xs font-bold text-ink-200 uppercase" htmlFor="name">
+                <FieldLabel htmlFor="name" required>
                   Project name
-                </label>
+                </FieldLabel>
                 <Input
                   id="name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="e.g. Client Portal"
                   required
+                  autoFocus
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-bold text-ink-200 uppercase" htmlFor="key">
+                <FieldLabel htmlFor="key" optional>
                   Project key
-                </label>
+                </FieldLabel>
                 <Input
                   id="key"
                   value={key}
@@ -128,29 +134,28 @@ export function ProjectsPage() {
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-bold text-ink-200 uppercase" htmlFor="desc">
+                <FieldLabel htmlFor="desc" optional>
                   Description
-                </label>
-                <textarea
+                </FieldLabel>
+                <Textarea
                   id="desc"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   rows={3}
-                  className="w-full rounded-lg border border-ink-500 px-3 py-2 text-sm font-medium"
                   placeholder="What is this project for?"
                 />
               </div>
-              <div className="flex justify-end gap-2 pt-2">
-                {projects.length > 0 ? (
-                  <Button type="button" variant="secondary" onClick={() => setShowCreate(false)}>
-                    Cancel
-                  </Button>
-                ) : null}
-                <Button type="submit">Create project</Button>
-              </div>
-            </form>
-          </div>
-        </div>
+            </div>
+            <ModalFooter>
+              {projects.length > 0 ? (
+                <Button type="button" variant="secondary" onClick={() => setShowCreate(false)}>
+                  Cancel
+                </Button>
+              ) : null}
+              <Button type="submit">Create project</Button>
+            </ModalFooter>
+          </form>
+        </Modal>
       ) : null}
     </div>
   );

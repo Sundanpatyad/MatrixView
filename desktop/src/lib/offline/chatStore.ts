@@ -43,6 +43,15 @@ export async function upsertCachedConversation(userId: string, conversation: Cha
   await cacheConversations(userId, [conversation]);
 }
 
+export async function removeCachedConversation(userId: string, conversationId: string) {
+  const db = await getOfflineDb();
+  if (!db) return;
+  await db.execute(`DELETE FROM conversations WHERE id = $1 AND user_id = $2`, [
+    conversationId,
+    userId,
+  ]);
+}
+
 export async function cacheMessages(userId: string, messages: ChatMessage[]) {
   const db = await getOfflineDb();
   if (!db) return;

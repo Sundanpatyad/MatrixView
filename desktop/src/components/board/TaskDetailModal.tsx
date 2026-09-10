@@ -1,10 +1,17 @@
-import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
-import { createPortal } from 'react-dom';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent, type FormEvent, type KeyboardEvent } from 'react';
 import { Button } from '@/components/ui/Button';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { DatePicker } from '@/components/ui/DatePicker';
-import { FieldError, FieldLabel } from '@/components/ui/FieldLabel';
+import { FieldError } from '@/components/ui/FieldLabel';
 import { Input } from '@/components/ui/Input';
+import {
+  IconCollapse,
+  IconExpand,
+  IconPaperclip,
+  IconTrash,
+  IconX,
+} from '@/components/ui/Icons';
+import { Modal } from '@/components/ui/Modal';
 import { Select } from '@/components/ui/Select';
 import { UserAvatar } from '@/components/ui/UserAvatar';
 import { Tooltip } from '@/components/ui/Tooltip';
@@ -34,8 +41,29 @@ type Props = {
 };
 
 const MAX_FILE_BYTES = 2 * 1024 * 1024;
+type ActivityTab = 'all' | 'comments' | 'history' | 'worklog';
 
-const labelClass = 'mb-0 text-[10px] font-bold tracking-wide text-ink-300 uppercase';
+type HistoryEvent = {
+  id: string;
+  kind: 'comment' | 'history' | 'worklog';
+  at: string;
+  actorName: string;
+  actorAvatarUrl?: string | null;
+  actorId?: string;
+  action: string;
+  body?: string;
+  from?: string;
+  to?: string;
+  fromTone?: string;
+  toTone?: string;
+  attachments?: TaskAttachment[];
+};
+
+const QUICK_REPLIES = [
+  { id: 'status', label: 'Status update…', text: 'Status update: ' },
+  { id: 'thanks', label: 'Thanks…', text: 'Thanks!' },
+  { id: 'agree', label: 'Agree…', text: 'Agreed — ' },
+];
 
 function filterFiles(files: FileList | File[]): { ok: File[]; skipped: string[] } {
   const ok: File[] = [];
@@ -58,6 +86,44 @@ function formatDateTime(iso: string) {
   }
 }
 
+function formatRelative(iso: string) {
+  const then = new Date(iso).getTime();
+  if (!Number.isFinite(then)) return iso;
+  const delta = Date.now() - then;
+  const minute = 60 * 1000;
+  const hour = 60 * minute;
+  const day = 24 * hour;
+  if (delta < minute) return 'just now';
+  if (delta < hour) {
+    const n = Math.floor(delta / minute);
+    return `${n} minute${n === 1 ? '' : 's'} ago`;
+  }
+  if (delta < day) {
+    const n = Math.floor(delta / hour);
+    return `${n} hour${n === 1 ? '' : 's'} ago`;
+  }
+  if (delta < 7 * day) {
+    const n = Math.floor(delta / day);
+    return n === 1 ? 'yesterday' : `${n} days ago`;
+  }
+  return formatDateTime(iso);
+}
+
+function statusTone(col?: BoardColumn | null) {
+  const id = col?.id ?? '';
+  const label = col?.label ?? '';
+  if (id === 'done' || /done|complete/i.test(label)) return 'bg-[#1f845a] text-white border-transparent';
+  if (id === 'in_progress' || /progress/i.test(label)) return 'bg-[#0c66e4] text-white border-transparent';
+  if (id === 'review' || /review/i.test(label)) return 'bg-[#5c53d8] text-white border-transparent';
+  if (id === 'todo' || /to\s?do|open|reopen/i.test(label)) return 'bg-ink-600 text-ink-50 border-transparent';
+  return 'bg-ink-700 text-ink-50 border-transparent';
+}
+
+function pillTone(label: string, columns: BoardColumn[]) {
+  const col = columns.find((c) => c.id === label || c.label === label);
+  return statusTone(col);
+}
+
 function AttachmentList({
   items,
   onRemove,
@@ -73,9 +139,9 @@ function AttachmentList({
         return (
           <li
             key={att.id}
-            className="flex items-center gap-2 border border-ink-600 bg-ink-800 px-2.5 py-2"
+            className="flex items-center gap-2 rounded-lg border border-ink-600/70 bg-ink-900/50 px-2.5 py-2"
           >
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center bg-ink-700 text-[10px] font-bold text-ink-200">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-ink-700 text-[10px] font-bold text-ink-200">
               {att.mimeType.startsWith('image/') ? 'IMG' : 'FILE'}
             </span>
             <div className="min-w-0 flex-1">
@@ -84,23 +150,19 @@ function AttachmentList({
                   href={href}
                   target="_blank"
                   rel="noreferrer"
-                  className="block truncate text-xs font-semibold text-brand-800 hover:underline"
+                  className="block truncate text-xs font-semibold text-brand-300 hover:underline"
                 >
                   {att.name}
                 </a>
               ) : (
                 <p className="truncate text-xs font-semibold text-ink-100">{att.name}</p>
               )}
-              <p className="text-[10px] text-ink-300">
+              <p className="text-[10px] text-ink-400">
                 {formatFileSize(att.size)} · {att.uploadedBy}
               </p>
             </div>
             {att.mimeType.startsWith('image/') && href ? (
-              <img
-                src={href}
-                alt=""
-                className="h-8 w-8 shrink-0 object-cover ring-1 ring-ink-600"
-              />
+              <img src={href} alt="" className="h-8 w-8 shrink-0 rounded object-cover ring-1 ring-ink-600" />
             ) : null}
             {onRemove ? (
               <button
@@ -118,42 +180,160 @@ function AttachmentList({
   );
 }
 
+function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="grid grid-cols-[92px_minmax(0,1fr)] items-center gap-2 py-1.5">
+      <span className="text-[13px] text-ink-400">{label}</span>
+      <div className="min-w-0">{children}</div>
+    </div>
+  );
+}
+
+function ChangePills({
+  from,
+  to,
+  fromTone,
+  toTone,
+}: {
+  from?: string;
+  to?: string;
+  fromTone?: string;
+  toTone?: string;
+}) {
+  if (!from && !to) return null;
+  return (
+    <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[12px]">
+      <span className={cn('inline-flex rounded px-1.5 py-0.5 font-medium', fromTone ?? 'bg-ink-700 text-ink-200')}>
+        {from || 'None'}
+      </span>
+      <span className="text-ink-500">→</span>
+      <span className={cn('inline-flex rounded px-1.5 py-0.5 font-medium', toTone ?? 'bg-ink-700 text-ink-200')}>
+        {to || 'None'}
+      </span>
+    </div>
+  );
+}
+
 export function TaskDetailModal({ task, projectName, columns, onClose }: Props) {
   const { user } = useAuth();
-  const { getProject, getProjectTeams, getProjectSprints, updateTask, addComment, addTaskAttachments, removeTaskAttachment, getTask, deleteTask } =
-    useWorkspace();
+  const {
+    getProject,
+    getProjectTeams,
+    getProjectSprints,
+    updateTask,
+    addComment,
+    addTaskAttachments,
+    removeTaskAttachment,
+    getTask,
+    deleteTask,
+  } = useWorkspace();
   const liveTask = getTask(task.id) ?? task;
   const [comment, setComment] = useState('');
+  const [commentFocused, setCommentFocused] = useState(false);
   const [labelDraft, setLabelDraft] = useState('');
+  const [addingLabel, setAddingLabel] = useState(false);
   const [commentFiles, setCommentFiles] = useState<File[]>([]);
   const [titleDraft, setTitleDraft] = useState(liveTask.title);
+  const [descDraft, setDescDraft] = useState(liveTask.description);
   const [titleError, setTitleError] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [activityTab, setActivityTab] = useState<ActivityTab>('comments');
+  const [expanded, setExpanded] = useState(false);
+  const [dropActive, setDropActive] = useState(false);
+  const [localHistory, setLocalHistory] = useState<HistoryEvent[]>([]);
+  const [logHours, setLogHours] = useState('');
   const toast = useToast();
   const taskFileRef = useRef<HTMLInputElement>(null);
   const commentFileRef = useRef<HTMLInputElement>(null);
+  const commentRef = useRef<HTMLTextAreaElement>(null);
 
   const project = getProject(liveTask.projectId);
   const teams = getProjectTeams(liveTask.projectId);
   const sprints = getProjectSprints(liveTask.projectId);
   const members = (project?.members ?? []).filter((m) => m.status !== 'pending');
   const typeMeta = TASK_TYPES.find((t) => t.id === liveTask.type);
+  const currentCol = columns.find((c) => c.id === liveTask.status);
 
   useEffect(() => {
     setTitleDraft(liveTask.title);
+    setDescDraft(liveTask.description);
     setTitleError('');
-  }, [liveTask.id, liveTask.title]);
+  }, [liveTask.id, liveTask.title, liveTask.description]);
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
+    function onKey(e: globalThis.KeyboardEvent) {
+      const el = e.target as HTMLElement | null;
+      const tag = el?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || el?.isContentEditable) return;
+      if (e.key === 'm' || e.key === 'M') {
+        e.preventDefault();
+        setActivityTab('comments');
+        window.setTimeout(() => commentRef.current?.focus(), 0);
+      }
+    }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, []);
+
+  function recordHistory(event: Omit<HistoryEvent, 'id' | 'at' | 'actorName'> & { actorName?: string }) {
+    setLocalHistory((prev) => [
+      {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        at: new Date().toISOString(),
+        actorName: event.actorName ?? user?.name ?? 'You',
+        actorId: user?.id,
+        ...event,
+      },
+      ...prev,
+    ]);
+  }
 
   function patch(partial: Partial<BoardTask>) {
+    if (partial.status && partial.status !== liveTask.status) {
+      const from = columns.find((c) => c.id === liveTask.status);
+      const to = columns.find((c) => c.id === partial.status);
+      recordHistory({
+        kind: 'history',
+        action: 'changed the Status',
+        from: from?.label ?? liveTask.status,
+        to: to?.label ?? partial.status,
+        fromTone: statusTone(from),
+        toTone: statusTone(to),
+      });
+    }
+    if (partial.assigneeName !== undefined && partial.assigneeName !== liveTask.assigneeName) {
+      recordHistory({
+        kind: 'history',
+        action: 'changed the Assignee',
+        from: liveTask.assigneeName || 'Unassigned',
+        to: partial.assigneeName || 'Unassigned',
+      });
+    }
+    if (partial.description !== undefined && partial.description !== liveTask.description) {
+      recordHistory({
+        kind: 'history',
+        action: 'updated the Description',
+        from: liveTask.description.trim() ? liveTask.description : 'None',
+        to: partial.description.trim() ? partial.description : 'None',
+      });
+    }
+    if (partial.priority && partial.priority !== liveTask.priority) {
+      recordHistory({
+        kind: 'history',
+        action: 'changed the Priority',
+        from: liveTask.priority,
+        to: partial.priority,
+      });
+    }
+    if (partial.loggedHours !== undefined && partial.loggedHours !== liveTask.loggedHours) {
+      const added = Number(partial.loggedHours) - liveTask.loggedHours;
+      recordHistory({
+        kind: 'worklog',
+        action: added > 0 ? `logged ${added}h` : 'updated time spent',
+        to: `${partial.loggedHours}h total`,
+      });
+    }
     void updateTask(liveTask.id, partial);
   }
 
@@ -168,6 +348,10 @@ export function TaskDetailModal({ task, projectName, columns, onClose }: Props) 
     if (next !== liveTask.title) patch({ title: next });
   }
 
+  function commitDescription() {
+    if (descDraft !== liveTask.description) patch({ description: descDraft });
+  }
+
   function assignMember(member: ProjectMember | null) {
     if (!member) {
       patch({ assigneeId: '', assigneeName: 'Unassigned' });
@@ -176,9 +360,7 @@ export function TaskDetailModal({ task, projectName, columns, onClose }: Props) 
     patch({ assigneeId: member.id, assigneeName: member.name });
   }
 
-  async function onTaskFiles(e: ChangeEvent<HTMLInputElement>) {
-    const files = e.target.files;
-    if (!files?.length) return;
+  async function uploadFiles(files: File[]) {
     const { ok, skipped } = filterFiles(files);
     try {
       if (ok.length) await addTaskAttachments(liveTask.id, ok);
@@ -186,7 +368,20 @@ export function TaskDetailModal({ task, projectName, columns, onClose }: Props) 
     } catch (err) {
       toast.fromError(err, 'Upload failed');
     }
+  }
+
+  async function onTaskFiles(e: ChangeEvent<HTMLInputElement>) {
+    const files = e.target.files;
+    if (!files?.length) return;
+    await uploadFiles(Array.from(files));
     e.target.value = '';
+  }
+
+  function onDropFiles(e: DragEvent) {
+    e.preventDefault();
+    setDropActive(false);
+    const files = Array.from(e.dataTransfer.files ?? []);
+    if (files.length) void uploadFiles(files);
   }
 
   function onCommentFiles(e: ChangeEvent<HTMLInputElement>) {
@@ -198,12 +393,20 @@ export function TaskDetailModal({ task, projectName, columns, onClose }: Props) 
     e.target.value = '';
   }
 
-  async function onAddComment(e: FormEvent) {
-    e.preventDefault();
+  async function onAddComment(e?: FormEvent) {
+    e?.preventDefault();
     if (!comment.trim() && commentFiles.length === 0) return;
     await addComment(liveTask.id, comment, commentFiles);
     setComment('');
     setCommentFiles([]);
+    setCommentFocused(false);
+  }
+
+  function onCommentKey(e: KeyboardEvent<HTMLTextAreaElement>) {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      e.preventDefault();
+      void onAddComment();
+    }
   }
 
   function onAddLabel(e: FormEvent) {
@@ -212,13 +415,22 @@ export function TaskDetailModal({ task, projectName, columns, onClose }: Props) 
     if (!value) return;
     if (liveTask.labels.includes(value)) {
       setLabelDraft('');
+      setAddingLabel(false);
       return;
     }
-    patch({ labels: [...task.labels, value] });
+    patch({ labels: [...liveTask.labels, value] });
     setLabelDraft('');
+    setAddingLabel(false);
   }
 
-  const comments = [...(liveTask.comments ?? [])].reverse();
+  function logTime(e: FormEvent) {
+    e.preventDefault();
+    const hours = Number(logHours);
+    if (!Number.isFinite(hours) || hours <= 0) return;
+    patch({ loggedHours: liveTask.loggedHours + hours });
+    setLogHours('');
+  }
+
   const selectedMember =
     members.find(
       (m) =>
@@ -226,361 +438,404 @@ export function TaskDetailModal({ task, projectName, columns, onClose }: Props) 
         m.name.toLowerCase() === liveTask.assigneeName.toLowerCase(),
     ) ?? null;
 
-  return createPortal(
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/55 p-3 sm:p-6">
-      <button
-        type="button"
-        className="absolute inset-0 cursor-default"
-        onClick={onClose}
-        aria-label="Close overlay"
-      />
-      <div
-        role="dialog"
-        aria-modal="true"
-        className="relative z-10 flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-ink-600 bg-ink-800 shadow-xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <header className="flex shrink-0 items-start justify-between gap-4 border-b border-ink-600 px-5 py-3.5">
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <span
-                className={cn(
-                  'rounded-md px-2 py-0.5 text-[10px] font-bold uppercase text-white',
-                  typeMeta?.color ?? 'bg-ink-700',
-                )}
-              >
-                {typeMeta?.label ?? liveTask.type}
-              </span>
-              <div className="w-[110px]">
-                <Select
-                  size="xs"
-                  value={liveTask.type}
-                  onChange={(v) => patch({ type: v as TaskType })}
-                  options={TASK_TYPES.map((t) => ({ value: t.id, label: t.label }))}
-                  aria-label="Issue type"
-                />
-              </div>
-              <span className="text-xs font-bold text-ink-200">{liveTask.key}</span>
-              <span className="text-xs text-ink-400">·</span>
-              <span className="text-xs font-semibold text-ink-200">{projectName}</span>
-            </div>
-            <FieldLabel htmlFor="task-title" required className="mt-3 mb-1">
-              Title
-            </FieldLabel>
-            <input
+  const reporterMember =
+    members.find((m) => m.name.toLowerCase() === (liveTask.reporterName || liveTask.createdByName).toLowerCase()) ??
+    null;
+
+  const activity = useMemo(() => {
+    const items: HistoryEvent[] = [
+      {
+        id: `created-${liveTask.id}`,
+        kind: 'history',
+        at: liveTask.createdAt,
+        actorName: liveTask.createdByName,
+        action: 'created this task',
+      },
+      ...localHistory,
+      ...(liveTask.comments ?? []).map((c) => ({
+        id: c.id,
+        kind: 'comment' as const,
+        at: c.createdAt,
+        actorName: c.authorName,
+        actorAvatarUrl: c.authorAvatarUrl,
+        actorId: c.authorId,
+        action: 'commented',
+        body: c.body,
+        attachments: c.attachments,
+      })),
+    ];
+    if (liveTask.loggedHours > 0 && !localHistory.some((h) => h.kind === 'worklog')) {
+      items.push({
+        id: `logged-${liveTask.id}`,
+        kind: 'worklog',
+        at: liveTask.updatedAt,
+        actorName: liveTask.assigneeName || liveTask.createdByName,
+        action: `logged ${liveTask.loggedHours}h`,
+        to: `${liveTask.remainingHours}h remaining`,
+      });
+    }
+    return items.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+  }, [liveTask, localHistory]);
+
+  const visibleActivity = activity.filter((item) => {
+    if (activityTab === 'all') return true;
+    if (activityTab === 'comments') return item.kind === 'comment';
+    if (activityTab === 'history') return item.kind === 'history';
+    return item.kind === 'worklog';
+  });
+
+  const iconBtn =
+    'flex h-8 w-8 items-center justify-center rounded-lg text-ink-400 transition hover:bg-ink-700 hover:text-ink-50';
+
+  return (
+    <Modal
+      size="3xl"
+      onClose={onClose}
+      labelledBy="task-title"
+      className={cn(
+        'max-h-[96vh] bg-[#1d2125]',
+        expanded && 'h-[96vh] max-w-[min(96vw,86rem)]',
+      )}
+    >
+      <header className="flex shrink-0 items-center justify-between gap-3 border-b border-ink-700/70 px-4 py-2.5">
+        <div className="flex min-w-0 items-center gap-1.5 text-[13px]">
+          <span className="truncate font-medium text-ink-300">{project?.key ?? projectName}</span>
+          <span className="text-ink-600">/</span>
+          <span
+            className={cn(
+              'inline-flex h-5 items-center rounded px-1.5 text-[10px] font-bold uppercase text-white',
+              typeMeta?.color ?? 'bg-ink-700',
+            )}
+          >
+            {typeMeta?.label ?? liveTask.type}
+          </span>
+          <span className="font-semibold tabular-nums text-ink-200">{liveTask.key}</span>
+        </div>
+        <div className="flex shrink-0 items-center gap-0.5">
+          <Tooltip label="Delete task" side="bottom">
+            <button type="button" aria-label="Delete task" className={iconBtn} onClick={() => setConfirmDelete(true)}>
+              <IconTrash className="h-4 w-4" />
+            </button>
+          </Tooltip>
+          <Tooltip label={expanded ? 'Exit full screen' : 'Full screen'} side="bottom">
+            <button
+              type="button"
+              aria-label={expanded ? 'Exit full screen' : 'Full screen'}
+              className={iconBtn}
+              onClick={() => setExpanded((v) => !v)}
+            >
+              {expanded ? <IconCollapse className="h-4 w-4" /> : <IconExpand className="h-4 w-4" />}
+            </button>
+          </Tooltip>
+          <button type="button" aria-label="Close" className={iconBtn} onClick={onClose}>
+            <IconX className="h-4 w-4" />
+          </button>
+        </div>
+      </header>
+
+      <div className="grid min-h-0 flex-1 overflow-hidden md:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="min-h-0 space-y-6 overflow-y-auto px-6 py-5">
+          <div>
+            <textarea
               id="task-title"
-              className={cn(
-                'w-full rounded-lg border bg-ink-900/40 px-3 py-2 text-lg font-semibold text-ink-50 outline-none',
-                titleError ? 'border-[#ed4245]/70' : 'border-ink-600 focus:border-brand-500',
-              )}
               value={titleDraft}
+              rows={Math.min(3, Math.max(1, Math.ceil(titleDraft.length / 72)))}
               onChange={(e) => {
                 setTitleDraft(e.target.value);
                 if (e.target.value.trim()) setTitleError('');
               }}
               onBlur={commitTitle}
               onKeyDown={(e) => {
-                if (e.key === 'Enter') {
+                if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
-                  (e.target as HTMLInputElement).blur();
+                  (e.target as HTMLTextAreaElement).blur();
                 }
               }}
-              required
+              className={cn(
+                'w-full resize-none bg-transparent text-[22px] font-semibold leading-snug text-ink-50 outline-none',
+                'rounded-lg px-1.5 py-1 -mx-1.5',
+                'hover:bg-ink-900/40 focus:bg-ink-900/50 focus:ring-1 focus:ring-brand-500/35',
+                titleError && 'ring-1 ring-[#ed4245]/70',
+              )}
             />
             <FieldError>{titleError}</FieldError>
           </div>
-          <div className="flex shrink-0 items-center gap-1.5">
-            <Button variant="danger" size="xs" onClick={() => setConfirmDelete(true)}>
-              Delete
-            </Button>
-            <Button variant="secondary" size="xs" onClick={onClose}>
-              Close
-            </Button>
-          </div>
-        </header>
 
-        <div className="grid min-h-0 flex-1 gap-0 overflow-hidden md:grid-cols-[1fr_300px]">
-          <div className="min-h-0 space-y-5 overflow-y-auto p-5">
-            <section>
-              <FieldLabel htmlFor="task-desc" optional>
-                Description
-              </FieldLabel>
-              <textarea
-                id="task-desc"
-                className="mt-0 min-h-[100px] w-full rounded-lg border border-ink-600 bg-ink-900/30 px-3 py-2 text-sm text-ink-50 outline-none focus:border-brand-500"
-                value={liveTask.description}
-                onChange={(e) => patch({ description: e.target.value })}
-                placeholder="Add a description"
-              />
-            </section>
+          <section>
+            <h3 className="mb-2 text-sm font-semibold text-ink-50">Description</h3>
+            <textarea
+              value={descDraft}
+              onChange={(e) => setDescDraft(e.target.value)}
+              onBlur={commitDescription}
+              placeholder="Add a description…"
+              rows={descDraft ? 6 : 3}
+              className="min-h-[4.5rem] w-full resize-y rounded-lg border border-transparent bg-ink-900/40 px-3 py-2.5 text-sm leading-relaxed text-ink-100 outline-none placeholder:text-ink-500 hover:border-ink-600 focus:border-brand-500/50 focus:bg-ink-900/60"
+            />
+          </section>
 
-            <section>
-              <div className="flex items-center justify-between gap-2">
-                <FieldLabel optional className="mb-0">
-                  Attachments
-                </FieldLabel>
-                <button
-                  type="button"
-                  onClick={() => taskFileRef.current?.click()}
-                  className="text-[11px] font-semibold text-brand-800 hover:underline"
-                >
-                  + Attach file
-                </button>
-                <input
-                  ref={taskFileRef}
-                  type="file"
-                  multiple
-                  className="hidden"
-                  onChange={onTaskFiles}
-                />
-              </div>
-              {(liveTask.attachments ?? []).length === 0 ? (
-                <p className="mt-2 text-xs text-ink-400">No files on this task yet.</p>
-              ) : (
-                <AttachmentList
-                  items={liveTask.attachments}
-                  onRemove={(id) => void removeTaskAttachment(liveTask.id, id)}
-                />
+          <section>
+            <h3 className="mb-2 text-sm font-semibold text-ink-50">Attachments</h3>
+            <div
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDropActive(true);
+              }}
+              onDragLeave={() => setDropActive(false)}
+              onDrop={onDropFiles}
+              className={cn(
+                'flex flex-col items-center justify-center rounded-xl border border-dashed px-4 py-7 text-center',
+                dropActive ? 'border-brand-400 bg-brand-500/10' : 'border-ink-600 bg-ink-900/25',
               )}
-            </section>
+            >
+              <Button type="button" size="sm" variant="secondary" onClick={() => taskFileRef.current?.click()}>
+                <IconPaperclip className="h-3.5 w-3.5" />
+                Add attachment
+              </Button>
+              <p className="mt-2 text-[11px] text-ink-500">Drop files here · max 2MB each</p>
+              <input ref={taskFileRef} type="file" multiple className="hidden" onChange={onTaskFiles} />
+            </div>
+            <AttachmentList
+              items={liveTask.attachments ?? []}
+              onRemove={(id) => void removeTaskAttachment(liveTask.id, id)}
+            />
+          </section>
 
-            <section>
-              <FieldLabel optional>Time tracking</FieldLabel>
-              <div className="mt-2 grid grid-cols-3 gap-2">
-                <label className="border border-ink-600 bg-ink-800/60 px-2.5 py-2">
-                  <span className="text-[10px] font-bold text-ink-300 uppercase">Estimate</span>
-                  <Input
-                    type="number"
-                    min={0}
-                    step={0.5}
-                    className="mt-1 h-8 text-xs"
-                    value={liveTask.estimateHours}
-                    onChange={(e) => patch({ estimateHours: Number(e.target.value) || 0 })}
-                  />
-                </label>
-                <label className="border border-ink-600 bg-ink-800/60 px-2.5 py-2">
-                  <span className="text-[10px] font-bold text-ink-300 uppercase">Logged</span>
-                  <Input
-                    type="number"
-                    min={0}
-                    step={0.5}
-                    className="mt-1 h-8 text-xs"
-                    value={liveTask.loggedHours}
-                    onChange={(e) => patch({ loggedHours: Number(e.target.value) || 0 })}
-                  />
-                </label>
-                <div className="border border-ink-600 bg-ink-800/60 px-2.5 py-2">
-                  <p className="text-[10px] font-bold text-ink-300 uppercase">Remaining</p>
-                  <p className="mt-1.5 text-base font-semibold text-ink-50">
-                    {liveTask.remainingHours}h
-                  </p>
-                </div>
-              </div>
-            </section>
+          <section>
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold text-ink-50">Activity</h3>
+            </div>
+            <div className="mb-4 flex flex-wrap items-center gap-1.5">
+              {(
+                [
+                  ['all', 'All'],
+                  ['comments', 'Comments'],
+                  ['history', 'History'],
+                  ['worklog', 'Work log'],
+                ] as const
+              ).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setActivityTab(id)}
+                  className={cn(
+                    'rounded-md px-2.5 py-1 text-[13px] font-medium transition',
+                    activityTab === id
+                      ? 'bg-ink-800 text-ink-50 ring-1 ring-[#579dff]'
+                      : 'text-ink-300 hover:bg-ink-800 hover:text-ink-50',
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
 
-            <section>
-              <FieldLabel optional>Labels</FieldLabel>
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {liveTask.labels.map((label) => (
-                  <Tooltip key={label} label="Remove label" side="top">
-                  <button
-                    type="button"
-                    aria-label={`Remove ${label}`}
-                    onClick={() => patch({ labels: liveTask.labels.filter((l) => l !== label) })}
-                    className="bg-ink-700 px-2 py-0.5 text-[11px] font-semibold text-ink-200"
-                  >
-                    {label} ×
-                  </button>
-                  </Tooltip>
-                ))}
-              </div>
-              <form onSubmit={onAddLabel} className="mt-2 flex gap-1.5">
-                <Input
-                  value={labelDraft}
-                  onChange={(e) => setLabelDraft(e.target.value)}
-                  placeholder="Add label"
-                  className="h-8 text-xs"
+            {activityTab === 'all' || activityTab === 'comments' ? (
+              <form onSubmit={(e) => void onAddComment(e)} className="mb-5 flex gap-2.5">
+                <UserAvatar
+                  name={user?.name ?? 'You'}
+                  src={user?.avatarUrl}
+                  seed={user?.email || user?.name}
+                  size="md"
+                  className="!h-8 !w-8 !text-[10px]"
+                  userId={user?.id}
                 />
-                <Button type="submit" size="xs" variant="secondary">
-                  Add
-                </Button>
-              </form>
-            </section>
-
-            <section>
-              <FieldLabel optional>Comments</FieldLabel>
-              <form onSubmit={onAddComment} className="mt-2 space-y-2">
-                <textarea
-                  className="min-h-[72px] w-full border border-ink-600 px-3 py-2 text-sm text-ink-50 outline-none focus:border-ink-400"
-                  placeholder={`Comment as ${user?.name ?? 'you'}…`}
-                  value={comment}
-                  onChange={(e) => setComment(e.target.value)}
-                />
-                {commentFiles.length > 0 ? (
-                  <ul className="space-y-1">
-                    {commentFiles.map((file, idx) => (
-                      <li
-                        key={`${file.name}-${idx}`}
-                        className="flex items-center justify-between border border-ink-600 px-2.5 py-1.5 text-xs"
-                      >
-                        <span className="truncate font-semibold text-ink-100">
-                          {file.name} · {formatFileSize(file.size)}
-                        </span>
-                        <button
-                          type="button"
-                          className="font-semibold text-ink-400 hover:text-[#ed4245]"
-                          onClick={() =>
-                            setCommentFiles((prev) => prev.filter((_, i) => i !== idx))
-                          }
-                        >
-                          Remove
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
-                <div className="flex items-center justify-between gap-2">
-                  <button
-                    type="button"
-                    onClick={() => commentFileRef.current?.click()}
-                    className="text-[11px] font-semibold text-ink-200 hover:text-ink-50"
+                <div className="min-w-0 flex-1">
+                  <div
+                    className={cn(
+                      'rounded-lg border bg-ink-900/50 transition',
+                      commentFocused ? 'border-brand-500/50' : 'border-ink-600',
+                    )}
                   >
-                    Attach to comment
-                  </button>
-                  <input
-                    ref={commentFileRef}
-                    type="file"
-                    multiple
-                    className="hidden"
-                    onChange={onCommentFiles}
-                  />
-                  <Button
-                    type="submit"
-                    size="xs"
-                    disabled={!comment.trim() && commentFiles.length === 0}
-                  >
-                    Comment
-                  </Button>
-                </div>
-              </form>
-
-              <div className="mt-4 space-y-2">
-                {comments.length === 0 ? (
-                  <p className="text-xs text-ink-400">No comments yet.</p>
-                ) : (
-                  comments.map((c) => (
-                    <article key={c.id} className="border border-ink-600 bg-ink-800/50 px-3 py-2.5">
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                          <UserAvatar
-                            name={c.authorName}
-                            src={c.authorAvatarUrl}
-                            seed={c.authorName}
-                            size="sm"
-                            userId={c.authorId}
-                          />
-                          <p className="text-xs font-semibold text-ink-50">{c.authorName}</p>
+                    <textarea
+                      ref={commentRef}
+                      value={comment}
+                      onChange={(e) => setComment(e.target.value)}
+                      onFocus={() => setCommentFocused(true)}
+                      onBlur={() => {
+                        if (!comment.trim() && commentFiles.length === 0) setCommentFocused(false);
+                      }}
+                      onKeyDown={onCommentKey}
+                      placeholder="Add a comment…"
+                      rows={commentFocused || comment ? 3 : 1}
+                      className="w-full resize-none bg-transparent px-3 py-2.5 text-sm text-ink-50 outline-none placeholder:text-ink-500"
+                    />
+                    {commentFocused || comment ? (
+                      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-ink-700/80 px-2 py-2">
+                        <div className="flex flex-wrap gap-1.5">
+                          {QUICK_REPLIES.map((item) => (
+                            <button
+                              key={item.id}
+                              type="button"
+                              onClick={() => {
+                                setComment(item.text);
+                                commentRef.current?.focus();
+                              }}
+                              className="rounded-full border border-ink-600 px-2.5 py-0.5 text-[11px] font-medium text-ink-200 hover:border-ink-400 hover:text-ink-50"
+                            >
+                              {item.label}
+                            </button>
+                          ))}
                         </div>
-                        <p className="text-[10px] font-medium text-ink-400">
-                          {formatDateTime(c.createdAt)}
-                        </p>
+                        <div className="flex items-center gap-1.5">
+                          <Tooltip label="Attach files" side="top">
+                            <button
+                              type="button"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => commentFileRef.current?.click()}
+                              className={iconBtn}
+                            >
+                              <IconPaperclip className="h-3.5 w-3.5" />
+                            </button>
+                          </Tooltip>
+                          <Button
+                            type="submit"
+                            size="xs"
+                            disabled={!comment.trim() && commentFiles.length === 0}
+                          >
+                            Comment
+                          </Button>
+                        </div>
                       </div>
-                      {c.body ? (
-                        <p className="mt-1.5 whitespace-pre-wrap text-sm text-ink-100">{c.body}</p>
-                      ) : null}
-                      <AttachmentList items={c.attachments ?? []} />
-                    </article>
-                  ))
-                )}
-              </div>
-            </section>
-          </div>
-
-          <aside className="min-h-0 space-y-4 overflow-y-auto border-t border-ink-600 bg-ink-950 p-4 md:border-t-0 md:border-l">
-            <div>
-              <FieldLabel required>Status</FieldLabel>
-              <Select
-                value={liveTask.status}
-                onChange={(v) => patch({ status: v as TaskStatus })}
-                options={columns.map((c) => ({ value: c.id, label: c.label }))}
-                aria-label="Status"
-              />
-            </div>
-
-            <div>
-              <FieldLabel required>Priority</FieldLabel>
-              <Select
-                value={liveTask.priority}
-                onChange={(v) => patch({ priority: v as TaskPriority })}
-                options={TASK_PRIORITIES.map((p) => ({
-                  value: p,
-                  label: p.charAt(0).toUpperCase() + p.slice(1),
-                }))}
-                aria-label="Priority"
-              />
-            </div>
-
-            {sprints.length > 0 ? (
-              <div>
-                <FieldLabel optional>Sprint</FieldLabel>
-                <Select
-                  value={liveTask.sprintId ?? ''}
-                  onChange={(v) => patch({ sprintId: v || null })}
-                  options={[
-                    { value: '', label: 'Backlog' },
-                    ...sprints.map((s) => ({ value: s.id, label: s.name })),
-                  ]}
-                  aria-label="Sprint"
-                />
-              </div>
-            ) : null}
-
-            {teams.length > 0 ? (
-              <div>
-                <FieldLabel optional>Group</FieldLabel>
-                <Select
-                  value={liveTask.teamId ?? ''}
-                  onChange={(v) => patch({ teamId: v || null })}
-                  options={[
-                    { value: '', label: 'No group' },
-                    ...teams.map((t) => ({ value: t.id, label: t.name })),
-                  ]}
-                  aria-label="Group"
-                />
-              </div>
-            ) : null}
-
-            <div>
-              <FieldLabel optional>Assignee</FieldLabel>
-              {selectedMember ? (
-                <div className="mb-2 flex items-center gap-2 rounded-lg border border-ink-600 bg-ink-800 px-2.5 py-2">
-                  <UserAvatar
-                    name={selectedMember.name}
-                    src={selectedMember.avatarUrl}
-                    seed={selectedMember.email || selectedMember.name}
-                    size="sm"
-                    className="!h-7 !w-7 !text-[10px]"
-                    userId={selectedMember.userId || selectedMember.id}
-                  />
-                  <div className="min-w-0">
-                    <p className="truncate text-xs font-semibold text-ink-50">{selectedMember.name}</p>
-                    <p className="truncate text-[10px] text-ink-300">{selectedMember.email}</p>
+                    ) : null}
                   </div>
+                  {commentFiles.length > 0 ? (
+                    <ul className="mt-1.5 space-y-1">
+                      {commentFiles.map((file, idx) => (
+                        <li
+                          key={`${file.name}-${idx}`}
+                          className="flex items-center justify-between rounded-md border border-ink-600 px-2.5 py-1.5 text-xs"
+                        >
+                          <span className="truncate font-semibold text-ink-100">
+                            {file.name} · {formatFileSize(file.size)}
+                          </span>
+                          <button
+                            type="button"
+                            className="font-semibold text-ink-400 hover:text-[#ed4245]"
+                            onClick={() => setCommentFiles((prev) => prev.filter((_, i) => i !== idx))}
+                          >
+                            Remove
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  <p className="mt-1.5 text-[11px] text-ink-500">
+                    Pro tip: press{' '}
+                    <kbd className="rounded border border-ink-600 bg-ink-800 px-1 py-px font-medium text-ink-300">M</kbd>{' '}
+                    to comment
+                  </p>
+                  <input ref={commentFileRef} type="file" multiple className="hidden" onChange={onCommentFiles} />
                 </div>
-              ) : liveTask.assigneeName && liveTask.assigneeName !== 'Unassigned' ? (
-                <div className="mb-2 rounded-lg border border-ink-600 bg-ink-800 px-2.5 py-2">
-                  <p className="text-xs font-semibold text-ink-100">{liveTask.assigneeName}</p>
-                  <p className="text-[10px] text-ink-400">Not a project member</p>
+              </form>
+            ) : activityTab === 'worklog' ? (
+              <form onSubmit={logTime} className="mb-5 flex flex-wrap items-end gap-2 rounded-xl border border-ink-600/70 bg-ink-900/30 p-3">
+                <div className="min-w-[120px] flex-1">
+                  <p className="mb-1 text-[11px] font-medium text-ink-400">Log hours</p>
+                  <Input
+                    type="number"
+                    min={0.25}
+                    step={0.25}
+                    size="sm"
+                    value={logHours}
+                    onChange={(e) => setLogHours(e.target.value)}
+                    placeholder="e.g. 1.5"
+                  />
                 </div>
-              ) : null}
+                <Button type="submit" size="sm" disabled={!logHours || Number(logHours) <= 0}>
+                  Log time
+                </Button>
+                <p className="w-full text-[11px] text-ink-500">
+                  {liveTask.loggedHours}h logged · {liveTask.estimateHours}h estimated · {liveTask.remainingHours}h remaining
+                </p>
+              </form>
+            ) : null}
+
+            <div className="space-y-4">
+              {visibleActivity.length === 0 ? (
+                <p className="py-6 text-center text-sm text-ink-500">
+                  {activityTab === 'comments'
+                    ? 'No comments yet.'
+                    : activityTab === 'worklog'
+                      ? 'No work logged yet.'
+                      : 'No activity yet.'}
+                </p>
+              ) : (
+                visibleActivity.map((item) => (
+                  <article key={item.id}>
+                    <div className="flex gap-2.5">
+                      <UserAvatar
+                        name={item.actorName}
+                        src={item.actorAvatarUrl}
+                        seed={item.actorName}
+                        size="md"
+                        className="!h-8 !w-8 !text-[10px]"
+                        userId={item.actorId}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[13px] leading-snug">
+                          <span className="font-semibold text-ink-50">{item.actorName}</span>{' '}
+                          <span className="text-ink-400">{item.action}</span>
+                        </p>
+                        <p className="mt-0.5 text-[12px] text-ink-500">{formatRelative(item.at)}</p>
+                        {item.kind === 'comment' && item.body ? (
+                          <p className="mt-1.5 whitespace-pre-wrap text-[13px] leading-relaxed text-ink-100">
+                            {item.body}
+                          </p>
+                        ) : null}
+                        {item.kind === 'comment' ? <AttachmentList items={item.attachments ?? []} /> : null}
+                        {item.kind === 'history' ? (
+                          item.from || item.to ? (
+                            item.action.includes('Description') ? (
+                              <div className="mt-1.5 pl-0 text-[12px] text-ink-300">
+                                <span className="text-ink-500">{item.from}</span>
+                                <span className="mx-1.5 text-ink-600">→</span>
+                                <span className="whitespace-pre-wrap text-ink-200">{item.to}</span>
+                              </div>
+                            ) : (
+                              <ChangePills
+                                from={item.from}
+                                to={item.to}
+                                fromTone={item.fromTone ?? (item.from ? pillTone(item.from, columns) : undefined)}
+                                toTone={item.toTone ?? (item.to ? pillTone(item.to, columns) : undefined)}
+                              />
+                            )
+                          ) : null
+                        ) : null}
+                        {item.kind === 'worklog' && item.to ? (
+                          <p className="mt-1 text-[12px] text-ink-400">{item.to}</p>
+                        ) : null}
+                      </div>
+                    </div>
+                  </article>
+                ))
+              )}
+            </div>
+          </section>
+        </div>
+
+        <aside className="min-h-0 space-y-4 overflow-y-auto border-t border-ink-700/70 bg-[#1b1f23] px-4 py-4 md:border-t-0 md:border-l">
+          <Select
+            size="md"
+            value={liveTask.status}
+            onChange={(v) => patch({ status: v as TaskStatus })}
+            options={columns.map((c) => ({ value: c.id, label: c.label }))}
+            aria-label="Status"
+            className={cn('font-semibold', statusTone(currentCol))}
+          />
+
+          <div>
+            <p className="mb-1 text-[13px] font-semibold text-ink-200">Details</p>
+            <DetailRow label="Assignee">
               <Select
+                size="sm"
                 value={selectedMember?.id ?? ''}
                 onChange={(id) => assignMember(members.find((m) => m.id === id) ?? null)}
                 options={[
                   { value: '', label: 'Unassigned' },
                   ...members.map((m) => ({
                     value: m.id,
-                    label: user && m.email.toLowerCase() === user.email.toLowerCase() ? `${m.name} (you)` : m.name,
+                    label:
+                      user && m.email.toLowerCase() === user.email.toLowerCase() ? `${m.name} (you)` : m.name,
                   })),
                 ]}
                 aria-label="Assignee"
@@ -588,7 +843,7 @@ export function TaskDetailModal({ task, projectName, columns, onClose }: Props) 
               {user ? (
                 <button
                   type="button"
-                  className="mt-1.5 text-[11px] font-semibold text-brand-800 hover:underline"
+                  className="mt-1 text-[11px] font-semibold text-brand-300 hover:underline"
                   onClick={() => {
                     const me =
                       members.find(
@@ -603,20 +858,128 @@ export function TaskDetailModal({ task, projectName, columns, onClose }: Props) 
                   Assign to me
                 </button>
               ) : null}
-            </div>
+            </DetailRow>
 
-            <div>
-              <FieldLabel optional>Reporter</FieldLabel>
-              <Input
-                className="h-9 rounded-lg text-xs"
-                value={liveTask.reporterName}
-                onChange={(e) => patch({ reporterName: e.target.value })}
+            <DetailRow label="Type">
+              <Select
+                size="sm"
+                value={liveTask.type}
+                onChange={(v) => patch({ type: v as TaskType })}
+                options={TASK_TYPES.map((t) => ({ value: t.id, label: t.label }))}
+                aria-label="Issue type"
               />
-            </div>
+            </DetailRow>
 
-            <div>
-              <FieldLabel optional>Start date</FieldLabel>
+            <DetailRow label="Priority">
+              <Select
+                size="sm"
+                value={liveTask.priority}
+                onChange={(v) => patch({ priority: v as TaskPriority })}
+                options={TASK_PRIORITIES.map((p) => ({
+                  value: p,
+                  label: p.charAt(0).toUpperCase() + p.slice(1),
+                }))}
+                aria-label="Priority"
+              />
+            </DetailRow>
+
+            <DetailRow label="Labels">
+              <div className="flex flex-wrap items-center gap-1">
+                {liveTask.labels.map((label) => (
+                  <button
+                    key={label}
+                    type="button"
+                    onClick={() => patch({ labels: liveTask.labels.filter((l) => l !== label) })}
+                    className="rounded bg-ink-700 px-1.5 py-0.5 text-[11px] font-medium text-ink-200 hover:bg-ink-600"
+                  >
+                    {label} ×
+                  </button>
+                ))}
+                {addingLabel ? (
+                  <form onSubmit={onAddLabel} className="min-w-[120px] flex-1">
+                    <Input
+                      autoFocus
+                      size="sm"
+                      value={labelDraft}
+                      onChange={(e) => setLabelDraft(e.target.value)}
+                      onBlur={() => {
+                        if (!labelDraft.trim()) setAddingLabel(false);
+                      }}
+                      placeholder="Label"
+                    />
+                  </form>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setAddingLabel(true)}
+                    className="text-[12px] font-medium text-ink-500 hover:text-ink-200"
+                  >
+                    + Add
+                  </button>
+                )}
+              </div>
+            </DetailRow>
+
+            {sprints.length > 0 ? (
+              <DetailRow label="Sprint">
+                <Select
+                  size="sm"
+                  value={liveTask.sprintId ?? ''}
+                  onChange={(v) => patch({ sprintId: v || null })}
+                  options={[
+                    { value: '', label: 'Backlog' },
+                    ...sprints.map((s) => ({ value: s.id, label: s.name })),
+                  ]}
+                  aria-label="Sprint"
+                />
+              </DetailRow>
+            ) : null}
+
+            {teams.length > 0 ? (
+              <DetailRow label="Group">
+                <Select
+                  size="sm"
+                  value={liveTask.teamId ?? ''}
+                  onChange={(v) => patch({ teamId: v || null })}
+                  options={[
+                    { value: '', label: 'No group' },
+                    ...teams.map((t) => ({ value: t.id, label: t.name })),
+                  ]}
+                  aria-label="Group"
+                />
+              </DetailRow>
+            ) : null}
+
+            <DetailRow label="Reporter">
+              {reporterMember ? (
+                <div className="flex items-center gap-2">
+                  <UserAvatar
+                    name={reporterMember.name}
+                    src={reporterMember.avatarUrl}
+                    seed={reporterMember.email || reporterMember.name}
+                    size="xs"
+                    userId={reporterMember.userId || reporterMember.id}
+                  />
+                  <span className="truncate text-[13px] text-ink-100">{reporterMember.name}</span>
+                </div>
+              ) : (
+                <span className="text-[13px] text-ink-200">{liveTask.reporterName || liveTask.createdByName}</span>
+              )}
+            </DetailRow>
+
+            <DetailRow label="Due date">
               <DatePicker
+                size="sm"
+                clearable
+                value={liveTask.dueDate}
+                onChange={(v) => patch({ dueDate: v })}
+              />
+            </DetailRow>
+
+            <DetailRow label="Start">
+              <DatePicker
+                size="sm"
+                clearable
                 value={liveTask.startDate}
                 onChange={(v) => {
                   if (liveTask.endDate && v && liveTask.endDate < v) {
@@ -626,40 +989,62 @@ export function TaskDetailModal({ task, projectName, columns, onClose }: Props) 
                   patch({ startDate: v });
                 }}
               />
-            </div>
+            </DetailRow>
 
-            <div>
-              <FieldLabel optional>End date</FieldLabel>
+            <DetailRow label="End">
               <DatePicker
+                size="sm"
+                clearable
                 value={liveTask.endDate}
                 onChange={(v) => {
                   if (liveTask.startDate && v && v < liveTask.startDate) return;
                   patch({ endDate: v });
                 }}
               />
-              {liveTask.startDate && liveTask.endDate && liveTask.endDate < liveTask.startDate ? (
-                <FieldError>End date cannot be before the start date.</FieldError>
-              ) : null}
-            </div>
+            </DetailRow>
+          </div>
 
-            <div>
-              <FieldLabel optional>Due date</FieldLabel>
-              <DatePicker value={liveTask.dueDate} onChange={(v) => patch({ dueDate: v })} />
+          <div>
+            <p className="mb-1 text-[13px] font-semibold text-ink-200">Time tracking</p>
+            <div className="grid grid-cols-3 gap-1.5">
+              <label className="rounded-lg bg-ink-900/50 px-2 py-1.5">
+                <span className="text-[10px] font-medium text-ink-500">Estimate</span>
+                <Input
+                  type="number"
+                  min={0}
+                  step={0.5}
+                  size="sm"
+                  className="mt-1 h-7 border-0 bg-transparent px-0"
+                  value={liveTask.estimateHours}
+                  onChange={(e) => patch({ estimateHours: Number(e.target.value) || 0 })}
+                />
+              </label>
+              <label className="rounded-lg bg-ink-900/50 px-2 py-1.5">
+                <span className="text-[10px] font-medium text-ink-500">Logged</span>
+                <Input
+                  type="number"
+                  min={0}
+                  step={0.5}
+                  size="sm"
+                  className="mt-1 h-7 border-0 bg-transparent px-0"
+                  value={liveTask.loggedHours}
+                  onChange={(e) => patch({ loggedHours: Number(e.target.value) || 0 })}
+                />
+              </label>
+              <div className="rounded-lg bg-ink-900/50 px-2 py-1.5">
+                <p className="text-[10px] font-medium text-ink-500">Left</p>
+                <p className="mt-1.5 text-sm font-semibold text-ink-50">{liveTask.remainingHours}h</p>
+              </div>
             </div>
+          </div>
 
-            <div className="border-t border-ink-600 pt-3">
-              <p className={labelClass}>Created by</p>
-              <p className="mt-1 text-xs font-semibold text-ink-50">{liveTask.createdByName}</p>
-              <p className="text-[11px] text-ink-300">{formatDateTime(liveTask.createdAt)}</p>
-            </div>
-
-            <div>
-              <p className={labelClass}>Updated</p>
-              <p className="mt-1 text-[11px] text-ink-200">{formatDateTime(liveTask.updatedAt)}</p>
-            </div>
-          </aside>
-        </div>
+          <div className="border-t border-ink-700/70 pt-3 text-[11px] leading-relaxed text-ink-500">
+            <p>Created {formatRelative(liveTask.createdAt)}</p>
+            <p>Updated {formatRelative(liveTask.updatedAt)}</p>
+          </div>
+        </aside>
       </div>
+
       <ConfirmModal
         open={confirmDelete}
         title="Delete task?"
@@ -682,7 +1067,6 @@ export function TaskDetailModal({ task, projectName, columns, onClose }: Props) 
           }
         }}
       />
-    </div>,
-    document.body,
+    </Modal>
   );
 }

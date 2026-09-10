@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/Button';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { Input } from '@/components/ui/Input';
+import { Modal } from '@/components/ui/Modal';
 import { IconPlus, IconUsers, IconX } from '@/components/ui/Icons';
 import { UserAvatar } from '@/components/ui/UserAvatar';
 import { cn } from '@/lib/cn';
@@ -179,16 +179,14 @@ export function ManageTeamsModal({ projectId, onClose, onViewTeamTasks }: Props)
           memberIds.some((id) => !selectedTeam.memberIds.includes(id))
         : false;
 
-  return createPortal(
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/55 p-4">
-      <button type="button" className="absolute inset-0" onClick={onClose} aria-label="Close" />
-      <div
-        role="dialog"
-        aria-modal="true"
-        className="relative z-10 flex max-h-[min(92vh,720px)] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-ink-600 bg-ink-800 shadow-2xl sm:flex-row"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Team list */}
+  return (
+    <>
+    <Modal
+      size="xl"
+      onClose={onClose}
+      className="max-h-[min(92vh,720px)] sm:flex-row"
+    >
+      {/* Team list */}
         <aside className="flex w-full shrink-0 flex-col border-b border-ink-600 sm:w-56 sm:border-r sm:border-b-0">
           <div className="flex items-start justify-between gap-2 border-b border-ink-600 px-4 py-3">
             <div className="min-w-0">
@@ -300,7 +298,7 @@ export function ManageTeamsModal({ projectId, onClose, onViewTeamTasks }: Props)
                     placeholder="e.g. Design, Backend, QA"
                     required
                     disabled={!canManage || busy}
-                    className="h-9 text-sm"
+                    size="sm"
                     maxLength={80}
                   />
                 </div>
@@ -388,7 +386,8 @@ export function ManageTeamsModal({ projectId, onClose, onViewTeamTasks }: Props)
                       value={memberQuery}
                       onChange={(e) => setMemberQuery(e.target.value)}
                       placeholder="Search project members…"
-                      className="mb-2 h-8 text-xs"
+                      className="mb-2"
+                      size="sm"
                       disabled={busy}
                     />
                     <div className="max-h-40 space-y-1 overflow-y-auto rounded-lg border border-ink-600 bg-ink-900/40 p-1.5">
@@ -464,7 +463,7 @@ export function ManageTeamsModal({ projectId, onClose, onViewTeamTasks }: Props)
             </form>
           )}
         </section>
-      </div>
+    </Modal>
 
       <ConfirmModal
         open={Boolean(toDelete)}
@@ -490,7 +489,6 @@ export function ManageTeamsModal({ projectId, onClose, onViewTeamTasks }: Props)
           }
         }}
       />
-    </div>,
-    document.body,
+    </>
   );
 }

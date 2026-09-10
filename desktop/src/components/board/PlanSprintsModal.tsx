@@ -1,8 +1,9 @@
 import { useMemo, useState, type FormEvent } from 'react';
-import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/Button';
 import { DatePicker } from '@/components/ui/DatePicker';
+import { FieldLabel } from '@/components/ui/FieldLabel';
 import { Input } from '@/components/ui/Input';
+import { Modal, ModalFooter, ModalHeader } from '@/components/ui/Modal';
 import { Select } from '@/components/ui/Select';
 import { useToast } from '@/lib/toast/ToastContext';
 import { useWorkspace } from '@/lib/workspace/WorkspaceContext';
@@ -140,21 +141,15 @@ export function PlanSprintsModal({ projectId, onClose, onOpenSprint }: Props) {
     }
   }
 
-  return createPortal(
-    <div className="dockx-modal-layer fixed inset-0 z-[9999] flex items-center justify-center bg-black/55 p-4">
-      <button type="button" className="absolute inset-0" onClick={onClose} aria-label="Close" />
-      <div
-        role="dialog"
-        aria-modal="true"
-        className="relative z-10 flex max-h-[min(90vh,720px)] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-ink-600 bg-ink-800"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between border-b border-ink-600 px-5 py-3">
-          <div>
-            <h2 className="text-base font-semibold text-ink-50">Plan</h2>
-            <p className="text-[11px] text-ink-400">Phases are optional. Each sprint is its own board.</p>
-          </div>
-          <div className="flex rounded-md border border-ink-600 p-0.5">
+  return (
+    <Modal size="lg" labelledBy="plan-sprints-title" onClose={onClose}>
+      <ModalHeader
+        titleId="plan-sprints-title"
+        title="Plan"
+        description="Phases are optional. Each sprint is its own board."
+        onClose={onClose}
+        extra={
+          <div className="flex rounded-lg border border-ink-600 p-0.5">
             {(['sprints', 'phases'] as const).map((id) => (
               <button
                 key={id}
@@ -162,33 +157,42 @@ export function PlanSprintsModal({ projectId, onClose, onOpenSprint }: Props) {
                 onClick={() => setTab(id)}
                 className={
                   tab === id
-                    ? 'rounded px-2.5 py-1 text-[11px] font-semibold bg-brand-500 text-[#062816]'
-                    : 'rounded px-2.5 py-1 text-[11px] font-semibold text-ink-300 hover:text-ink-50'
+                    ? 'rounded-md px-2.5 py-1 text-[11px] font-semibold bg-brand-500 text-[#062816]'
+                    : 'rounded-md px-2.5 py-1 text-[11px] font-semibold text-ink-300 hover:text-ink-50'
                 }
               >
                 {id === 'sprints' ? 'Sprints' : 'Phases'}
               </button>
             ))}
           </div>
-        </div>
-
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+        }
+      />
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
           {tab === 'sprints' ? (
             <div className="space-y-4">
-              <form onSubmit={(e) => void onCreateSprint(e)} className="space-y-2.5 rounded-lg border border-ink-600 p-3">
-                <p className="text-xs font-semibold text-ink-50">New sprint</p>
-                <Input
-                  value={sprintName}
-                  onChange={(e) => setSprintName(e.target.value)}
-                  placeholder="Sprint name"
-                />
-                <Select
-                  size="sm"
-                  value={sprintPhaseId}
-                  onChange={(v) => setSprintPhaseId(v as string)}
-                  options={phaseOptions}
-                  aria-label="Phase"
-                />
+              <form onSubmit={(e) => void onCreateSprint(e)} className="space-y-3 rounded-xl border border-ink-600/70 bg-ink-900/30 p-4">
+                <p className="text-sm font-semibold text-ink-50">New sprint</p>
+                <div>
+                  <FieldLabel htmlFor="sprint-name" required>
+                    Name
+                  </FieldLabel>
+                  <Input
+                    id="sprint-name"
+                    value={sprintName}
+                    onChange={(e) => setSprintName(e.target.value)}
+                    placeholder="Sprint name"
+                  />
+                </div>
+                <div>
+                  <FieldLabel optional>Phase</FieldLabel>
+                  <Select
+                    size="md"
+                    value={sprintPhaseId}
+                    onChange={(v) => setSprintPhaseId(v as string)}
+                    options={phaseOptions}
+                    aria-label="Phase"
+                  />
+                </div>
                 <div className="flex flex-wrap gap-1.5">
                   <Button type="button" size="xs" variant="secondary" onClick={() => applyDuration('week')}>
                     1 week
@@ -200,14 +204,14 @@ export function PlanSprintsModal({ projectId, onClose, onOpenSprint }: Props) {
                     1 month
                   </Button>
                 </div>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-ink-400">Start</p>
-                    <DatePicker size="sm" value={startDate} onChange={setStartDate} />
+                    <FieldLabel required>Start</FieldLabel>
+                    <DatePicker size="md" value={startDate} onChange={setStartDate} />
                   </div>
                   <div>
-                    <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-ink-400">End</p>
-                    <DatePicker size="sm" value={endDate} onChange={setEndDate} />
+                    <FieldLabel required>End</FieldLabel>
+                    <DatePicker size="md" value={endDate} onChange={setEndDate} />
                   </div>
                 </div>
                 <Button type="submit" size="sm" disabled={busy || !sprintName.trim()} className="w-full">
@@ -222,7 +226,7 @@ export function PlanSprintsModal({ projectId, onClose, onOpenSprint }: Props) {
                   sprints.map((sprint) => {
                     const phase = phases.find((p) => p.id === sprint.phaseId);
                     return (
-                      <li key={sprint.id} className="rounded-lg border border-ink-600 px-3 py-2">
+                      <li key={sprint.id} className="rounded-xl border border-ink-600/70 px-3.5 py-3">
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0">
                             <p className="truncate text-sm font-semibold text-ink-50">{sprint.name}</p>
@@ -300,10 +304,10 @@ export function PlanSprintsModal({ projectId, onClose, onOpenSprint }: Props) {
             </div>
           ) : (
             <div className="space-y-4">
-              <form onSubmit={(e) => void onCreatePhases(e)} className="space-y-2.5 rounded-lg border border-ink-600 p-3">
-                <p className="text-xs font-semibold text-ink-50">New phases</p>
+              <form onSubmit={(e) => void onCreatePhases(e)} className="space-y-3 rounded-xl border border-ink-600/70 bg-ink-900/30 p-4">
+                <p className="text-sm font-semibold text-ink-50">New phases</p>
                 {phaseRows.map((row, index) => (
-                  <div key={row.key} className="space-y-1.5 rounded-md border border-ink-700 p-2">
+                  <div key={row.key} className="space-y-2 rounded-xl border border-ink-700/80 p-3">
                     <Input
                       value={row.name}
                       onChange={(e) =>
@@ -315,7 +319,7 @@ export function PlanSprintsModal({ projectId, onClose, onOpenSprint }: Props) {
                     />
                     <div className="grid grid-cols-2 gap-2">
                       <DatePicker
-                        size="xs"
+                        size="sm"
                         clearable
                         value={row.startDate}
                         onChange={(value) =>
@@ -326,7 +330,7 @@ export function PlanSprintsModal({ projectId, onClose, onOpenSprint }: Props) {
                         placeholder="Start"
                       />
                       <DatePicker
-                        size="xs"
+                        size="sm"
                         clearable
                         value={row.endDate}
                         onChange={(value) =>
@@ -364,7 +368,7 @@ export function PlanSprintsModal({ projectId, onClose, onOpenSprint }: Props) {
                   <p className="py-4 text-center text-xs text-ink-400">No phases. Sprints can live on the project without one.</p>
                 ) : (
                   phases.map((phase) => (
-                    <li key={phase.id} className="rounded-lg border border-ink-600 px-3 py-2">
+                    <li key={phase.id} className="rounded-xl border border-ink-600/70 px-3.5 py-3">
                       <p className="text-sm font-semibold text-ink-50">{phase.name}</p>
                       <p className="text-[11px] text-ink-400">
                         {phase.startDate || phase.endDate
@@ -400,15 +404,12 @@ export function PlanSprintsModal({ projectId, onClose, onOpenSprint }: Props) {
               </ul>
             </div>
           )}
-        </div>
-
-        <div className="border-t border-ink-600 px-5 py-3">
-          <Button size="sm" variant="secondary" className="w-full" onClick={onClose}>
-            Done
-          </Button>
-        </div>
       </div>
-    </div>,
-    document.body,
+      <ModalFooter>
+        <Button size="sm" variant="secondary" onClick={onClose}>
+          Done
+        </Button>
+      </ModalFooter>
+    </Modal>
   );
 }

@@ -1,12 +1,12 @@
 /** DockX must never appear in activity (dev binary is often named "app"). */
 export function isExcludedApp(
-  appName: string,
+  appName: string | null | undefined,
   processName = '',
   windowTitle = '',
 ) {
-  const app = appName.toLowerCase().trim();
-  const proc = processName.toLowerCase().trim();
-  const title = windowTitle.toLowerCase().trim();
+  const app = String(appName ?? '').toLowerCase().trim();
+  const proc = String(processName ?? '').toLowerCase().trim();
+  const title = String(windowTitle ?? '').toLowerCase().trim();
   const hay = `${app} ${proc}`;
 
   if (/dockx|com\.dockx/.test(hay)) return true;

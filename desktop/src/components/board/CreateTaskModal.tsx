@@ -1,13 +1,12 @@
 import { useEffect, useMemo, useState, type FormEvent, type KeyboardEvent } from 'react';
-import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/Button';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { FieldError, FieldLabel } from '@/components/ui/FieldLabel';
-import { Input } from '@/components/ui/Input';
+import { Input, Textarea } from '@/components/ui/Input';
+import { Modal, ModalFooter, ModalHeader } from '@/components/ui/Modal';
 import { Select } from '@/components/ui/Select';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { useAuth } from '@/lib/auth/AuthContext';
-import { cn } from '@/lib/cn';
 import { memberForUser } from '@/lib/workspace/taskHelpers';
 import {
   TASK_PRIORITIES,
@@ -22,6 +21,7 @@ type Props = {
   onClose: () => void;
   defaultAssignee?: { id: string; name: string };
   defaultTeamId?: string | null;
+  defaultStatus?: string;
   sprintId?: string | null;
 };
 
@@ -37,6 +37,7 @@ export function CreateTaskModal({
   onClose,
   defaultAssignee,
   defaultTeamId = null,
+  defaultStatus,
   sprintId = null,
 }: Props) {
   const { user } = useAuth();
@@ -65,7 +66,7 @@ export function CreateTaskModal({
   const [dueDate, setDueDate] = useState('');
   const [teamId, setTeamId] = useState<string>(defaultTeamId ?? '');
   const [selectedSprintId, setSelectedSprintId] = useState(sprintId ?? '');
-  const [status, setStatus] = useState('');
+  const [status, setStatus] = useState(defaultStatus ?? '');
   const [assigneeId, setAssigneeId] = useState(initialAssignee);
   const [labelDraft, setLabelDraft] = useState('');
   const [labels, setLabels] = useState<string[]>([]);
@@ -82,14 +83,6 @@ export function CreateTaskModal({
     if (!columns.length) return;
     setStatus((prev) => (prev && columns.some((c) => c.id === prev) ? prev : columns[0]!.id));
   }, [columns]);
-
-  useEffect(() => {
-    const onKey = (e: globalThis.KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
 
   const titleError = !title.trim() ? 'Title is required.' : '';
   const estimateValue = Number(estimateHours);
@@ -155,37 +148,17 @@ export function CreateTaskModal({
   const invalid = (show: boolean) =>
     show ? 'border-[#ed4245]/70 focus:border-[#ed4245]' : undefined;
 
-  return createPortal(
-    <div className="fixed inset-0 z-[9999] flex items-end justify-center bg-black/55 p-0 sm:items-center sm:p-4">
-      <button type="button" className="absolute inset-0" onClick={onClose} aria-label="Close" />
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="create-task-title"
-        className="relative z-10 flex max-h-[100dvh] w-full max-w-2xl flex-col overflow-hidden rounded-t-2xl border border-ink-600 bg-ink-800 shadow-2xl sm:max-h-[92vh] sm:rounded-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <header className="shrink-0 border-b border-ink-600 px-5 py-4">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-[11px] font-bold tracking-wide text-ink-300 uppercase">
-                {project?.key ?? 'Project'}
-              </p>
-              <h2 id="create-task-title" className="mt-0.5 text-xl font-bold text-ink-50">
-                Create task
-              </h2>
-              <p className="mt-1 text-sm font-medium text-ink-200">
-                Assign it now and it shows up on My Work for that person.
-              </p>
-            </div>
-            <Button type="button" variant="secondary" size="xs" onClick={onClose}>
-              Close
-            </Button>
-          </div>
-        </header>
-
-        <form onSubmit={(e) => void onSubmit(e)} className="flex min-h-0 flex-1 flex-col">
-          <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-4">
+  return (
+    <Modal size="lg" labelledBy="create-task-title" onClose={onClose}>
+      <ModalHeader
+        titleId="create-task-title"
+        kicker={project?.key ?? 'Project'}
+        title="Create task"
+        description="Assign it now and it shows up on My Work for that person."
+        onClose={onClose}
+      />
+      <form onSubmit={(e) => void onSubmit(e)} className="flex min-h-0 flex-1 flex-col">
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-4">
             <section>
               <FieldLabel htmlFor="title" required>
                 Title
@@ -198,7 +171,7 @@ export function CreateTaskModal({
                 required
                 autoFocus
                 aria-invalid={submitted && Boolean(titleError)}
-                className={cn('rounded-lg', invalid(submitted && Boolean(titleError)))}
+                className={invalid(submitted && Boolean(titleError))}
               />
               <FieldError>{submitted ? titleError : null}</FieldError>
             </section>
@@ -207,12 +180,11 @@ export function CreateTaskModal({
               <FieldLabel htmlFor="desc" optional>
                 Description
               </FieldLabel>
-              <textarea
+              <Textarea
                 id="desc"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 rows={4}
-                className="w-full rounded-lg border border-ink-600 bg-ink-800 px-3 py-2 text-sm font-medium text-ink-50 placeholder:text-ink-400 focus:border-brand-500 focus:outline-none"
                 placeholder="Details, steps, acceptance criteria"
               />
             </section>
@@ -264,7 +236,7 @@ export function CreateTaskModal({
                   step={0.5}
                   value={estimateHours}
                   onChange={(e) => setEstimateHours(e.target.value)}
-                  className={cn('rounded-lg', invalid(Boolean(estimateError)))}
+                  className={invalid(Boolean(estimateError))}
                 />
                 <FieldError>{estimateError}</FieldError>
               </div>
@@ -372,7 +344,8 @@ export function CreateTaskModal({
                   onChange={(e) => setLabelDraft(e.target.value)}
                   onKeyDown={onLabelKey}
                   placeholder="Add a label"
-                  className="h-9 rounded-lg text-xs"
+                  className="flex-1"
+                  size="sm"
                 />
                 <Button type="button" size="sm" variant="secondary" onClick={addLabel}>
                   Add
@@ -381,7 +354,7 @@ export function CreateTaskModal({
             </section>
           </div>
 
-          <footer className="flex shrink-0 items-center justify-between gap-3 border-t border-ink-600 px-5 py-3.5">
+          <ModalFooter className="justify-between">
             <p className="text-[11px] font-medium text-ink-400">
               <span className="text-[#ed4245]">*</span> Required
             </p>
@@ -393,10 +366,8 @@ export function CreateTaskModal({
                 {busy ? 'Creating…' : 'Create task'}
               </Button>
             </div>
-          </footer>
+          </ModalFooter>
         </form>
-      </div>
-    </div>,
-    document.body,
+    </Modal>
   );
 }

@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -110,6 +111,7 @@ export function AttendanceProvider({ children }: { children: ReactNode }) {
   const [activityApps, setActivityApps] = useState<AppUsage[]>([]);
   const [activitySession, setActivitySession] = useState<ActivitySession | null>(null);
   const [trackingError, setTrackingError] = useState<string | null>(null);
+  const checkedInRef = useRef(false);
   const [confirm, setConfirm] = useState<{
     kind: CheckPopupKind;
     message: string;
@@ -120,6 +122,7 @@ export function AttendanceProvider({ children }: { children: ReactNode }) {
     message: string;
     timeLabel: string | null;
   } | null>(null);
+  checkedInRef.current = checkedIn;
 
   const closePopup = useCallback(() => setPopup(null), []);
   const closeConfirm = useCallback(() => {
@@ -238,12 +241,6 @@ export function AttendanceProvider({ children }: { children: ReactNode }) {
     }
   }, [isAuthenticated]);
 
-  useEffect(() => {
-    if (!checkedIn || onBreak) return;
-    const id = window.setInterval(() => setTick((t) => t + 1), 1000);
-    return () => window.clearInterval(id);
-  }, [checkedIn, onBreak]);
-
   const elapsedMs = useMemo(() => {
     void tick;
     if (!checkedIn) return 0;
@@ -323,6 +320,53 @@ export function AttendanceProvider({ children }: { children: ReactNode }) {
       timeLabel: endedAt,
     });
   }, []);
+
+  const performAutoCheckOut = useCallback(async () => {
+    if (!checkedInRef.current) return;
+    try {
+      await activityTracker.stop();
+    } catch {
+      /* server already closed the 24h session */
+    }
+    const endedAt = clockLabel(new Date());
+    setCheckedIn(false);
+    setOnBreak(false);
+    setCheckOutAt(endedAt);
+    setCheckInAt(null);
+    setSessionStartedAt(null);
+    setWorkedMs(0);
+    setActiveTaskId(null);
+    setPopup({
+      kind: 'out',
+      message: 'Automatically checked out after 24 hours.',
+      timeLabel: endedAt,
+    });
+  }, []);
+
+  useEffect(() => {
+    activityTracker.setExpiredHandler(() => {
+      void performAutoCheckOut();
+    });
+    return () => activityTracker.setExpiredHandler(null);
+  }, [performAutoCheckOut]);
+
+  useEffect(() => {
+    if (!checkedIn || sessionStartedAt == null) return;
+    const deadline = activitySession?.autoCheckoutAt
+      ? new Date(activitySession.autoCheckoutAt).getTime()
+      : sessionStartedAt + 24 * 60 * 60 * 1000;
+    if (!Number.isFinite(deadline)) return;
+    const id = window.setTimeout(() => {
+      void performAutoCheckOut();
+    }, Math.max(0, deadline - Date.now()));
+    return () => window.clearTimeout(id);
+  }, [checkedIn, sessionStartedAt, activitySession?.autoCheckoutAt, performAutoCheckOut]);
+
+  useEffect(() => {
+    if (!checkedIn || onBreak) return;
+    const id = window.setInterval(() => setTick((t) => t + 1), 1000);
+    return () => window.clearInterval(id);
+  }, [checkedIn, onBreak]);
 
   const checkIn = useCallback(async () => {
     setConfirm({ kind: 'in', message: randomCheckInConfirmMessage() });

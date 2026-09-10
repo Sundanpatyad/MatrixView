@@ -5,9 +5,11 @@ import {
   type ChangeEvent,
   type FormEvent,
 } from 'react';
-import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/Button';
+import { FieldLabel } from '@/components/ui/FieldLabel';
 import { Input } from '@/components/ui/Input';
+import { IconX } from '@/components/ui/Icons';
+import { Modal } from '@/components/ui/Modal';
 import { UserAvatar } from '@/components/ui/UserAvatar';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { useAttendance } from '@/lib/attendance/AttendanceContext';
@@ -47,15 +49,6 @@ export function ProfileModal({ open, onClose }: Props) {
       return null;
     });
   }, [open, user?.id, user?.name, user?.phone, user?.avatarUrl]);
-
-  useEffect(() => {
-    if (!open) return;
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose();
-    }
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
 
   useEffect(() => {
     return () => {
@@ -126,16 +119,13 @@ export function ProfileModal({ open, onClose }: Props) {
     }
   }
 
-  return createPortal(
-    <div className="dockx-modal-layer fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4 backdrop-blur-[2px]">
-      <button type="button" className="absolute inset-0" aria-label="Close" onClick={onClose} />
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="profile-modal-title"
-        className="relative z-10 flex max-h-[min(720px,92vh)] w-full max-w-4xl overflow-hidden rounded-2xl border border-ink-600 bg-ink-800 shadow-[0_24px_80px_rgba(0,0,0,0.45)]"
-        onClick={(e) => e.stopPropagation()}
-      >
+  return (
+    <Modal
+      size="2xl"
+      labelledBy="profile-modal-title"
+      onClose={onClose}
+      className="max-h-[min(720px,92vh)] md:flex-row"
+    >
         {/* Left: editor */}
         <form
           onSubmit={(e) => void onSave(e)}
@@ -151,9 +141,10 @@ export function ProfileModal({ open, onClose }: Props) {
             <button
               type="button"
               onClick={onClose}
-              className="rounded-md px-2 py-1 text-sm font-bold text-ink-400 hover:bg-ink-700 hover:text-ink-100"
+              aria-label="Close"
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-ink-400 hover:bg-ink-700 hover:text-ink-100"
             >
-              ✕
+              <IconX className="h-4 w-4" />
             </button>
           </div>
 
@@ -217,9 +208,9 @@ export function ProfileModal({ open, onClose }: Props) {
             </div>
 
             <div>
-              <label className="mb-1.5 block text-xs font-semibold text-ink-200" htmlFor="profile-name">
+              <FieldLabel htmlFor="profile-name" required>
                 Display name
-              </label>
+              </FieldLabel>
               <Input
                 id="profile-name"
                 value={name}
@@ -231,16 +222,14 @@ export function ProfileModal({ open, onClose }: Props) {
             </div>
 
             <div>
-              <label className="mb-1.5 block text-xs font-semibold text-ink-200" htmlFor="profile-email">
-                Email
-              </label>
+              <FieldLabel htmlFor="profile-email">Email</FieldLabel>
               <Input id="profile-email" value={user.email} disabled />
             </div>
 
             <div>
-              <label className="mb-1.5 block text-xs font-semibold text-ink-200" htmlFor="profile-phone">
+              <FieldLabel htmlFor="profile-phone" optional>
                 Mobile number
-              </label>
+              </FieldLabel>
               <Input
                 id="profile-phone"
                 value={phone}
@@ -390,8 +379,6 @@ export function ProfileModal({ open, onClose }: Props) {
             </div>
           </div>
         </div>
-      </div>
-    </div>,
-    document.body,
+    </Modal>
   );
 }

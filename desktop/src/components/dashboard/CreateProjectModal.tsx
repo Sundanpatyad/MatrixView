@@ -1,7 +1,8 @@
 import { useRef, useState, type FormEvent } from 'react';
-import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
+import { FieldLabel } from '@/components/ui/FieldLabel';
+import { Input, Textarea } from '@/components/ui/Input';
+import { Modal, ModalFooter, ModalHeader } from '@/components/ui/Modal';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { resolveMediaUrl } from '@/lib/mediaUrl';
 import { useWorkspace } from '@/lib/workspace/WorkspaceContext';
@@ -63,33 +64,30 @@ export function CreateProjectModal({ onClose, onCreated }: Props) {
 
   const preview = resolveMediaUrl(previewUrl);
 
-  return createPortal(
-    <div className="dockx-modal-layer fixed inset-0 z-[9999] flex items-center justify-center bg-black/55 p-4">
-      <button type="button" className="absolute inset-0" onClick={onClose} aria-label="Close" />
-      <div
-        role="dialog"
-        aria-modal="true"
-        className="relative z-10 w-full max-w-md rounded-xl border border-ink-600 bg-ink-800 p-5"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h2 className="text-base font-semibold text-ink-50">New project</h2>
-        <p className="mt-1 text-xs text-ink-300">You become Admin. Optional project image.</p>
-
-        <form onSubmit={(e) => void onSubmit(e)} className="mt-4 space-y-2.5">
-          <div className="flex items-center gap-3">
+  return (
+    <Modal size="md" labelledBy="create-project-title" onClose={onClose}>
+      <ModalHeader
+        titleId="create-project-title"
+        title="New project"
+        description="You become Admin. Add an optional project image, then invite people."
+        onClose={onClose}
+      />
+      <form onSubmit={(e) => void onSubmit(e)} className="flex min-h-0 flex-1 flex-col">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
+          <div className="flex items-center gap-3 rounded-xl border border-ink-600/70 bg-ink-900/40 p-3">
             <Tooltip label="Add project image" side="right">
-            <button
-              type="button"
-              onClick={() => fileRef.current?.click()}
-              className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 text-lg font-bold text-white"
-              aria-label="Add project image"
-            >
-              {preview ? (
-                <img src={preview} alt="" className="h-full w-full object-cover" />
-              ) : (
-                (name.charAt(0).toUpperCase() || '+')
-              )}
-            </button>
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 text-lg font-bold text-white"
+                aria-label="Add project image"
+              >
+                {preview ? (
+                  <img src={preview} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  name.charAt(0).toUpperCase() || '+'
+                )}
+              </button>
             </Tooltip>
             <div className="min-w-0 flex-1">
               <p className="text-xs font-semibold text-ink-100">Project image</p>
@@ -104,12 +102,7 @@ export function CreateProjectModal({ onClose, onCreated }: Props) {
                   {avatarFile ? 'Change' : 'Choose'}
                 </Button>
                 {avatarFile ? (
-                  <Button
-                    type="button"
-                    size="xs"
-                    variant="ghost"
-                    onClick={() => onPickFile(null)}
-                  >
+                  <Button type="button" size="xs" variant="ghost" onClick={() => onPickFile(null)}>
                     Remove
                   </Button>
                 ) : null}
@@ -124,37 +117,53 @@ export function CreateProjectModal({ onClose, onCreated }: Props) {
             />
           </div>
 
-          <Input
-            placeholder="Project name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
-            autoFocus
-          />
-          <Input
-            placeholder="Key (e.g. ACME)"
-            value={key}
-            onChange={(e) => setKey(e.target.value.toUpperCase())}
-            maxLength={6}
-          />
-          <textarea
-            placeholder="Description (optional)"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            rows={3}
-            className="w-full rounded-lg border border-ink-600 bg-ink-900 px-3 py-2 text-sm text-ink-50 outline-none focus:border-ink-400"
-          />
-          <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" size="sm" variant="secondary" onClick={onClose} disabled={busy}>
-              Cancel
-            </Button>
-            <Button type="submit" size="sm" disabled={busy}>
-              {busy ? 'Creating…' : 'Create'}
-            </Button>
+          <div>
+            <FieldLabel htmlFor="project-name" required>
+              Project name
+            </FieldLabel>
+            <Input
+              id="project-name"
+              placeholder="e.g. Client Portal"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+              autoFocus
+            />
           </div>
-        </form>
-      </div>
-    </div>,
-    document.body,
+          <div>
+            <FieldLabel htmlFor="project-key" optional>
+              Key
+            </FieldLabel>
+            <Input
+              id="project-key"
+              placeholder="ACME"
+              value={key}
+              onChange={(e) => setKey(e.target.value.toUpperCase())}
+              maxLength={6}
+            />
+          </div>
+          <div>
+            <FieldLabel htmlFor="project-desc" optional>
+              Description
+            </FieldLabel>
+            <Textarea
+              id="project-desc"
+              placeholder="What is this project for?"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={3}
+            />
+          </div>
+        </div>
+        <ModalFooter>
+          <Button type="button" size="sm" variant="secondary" onClick={onClose} disabled={busy}>
+            Cancel
+          </Button>
+          <Button type="submit" size="sm" disabled={busy || !name.trim()}>
+            {busy ? 'Creating…' : 'Create project'}
+          </Button>
+        </ModalFooter>
+      </form>
+    </Modal>
   );
 }

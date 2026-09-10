@@ -2,6 +2,7 @@ import { Types } from 'mongoose';
 import type { Server } from 'socket.io';
 import { User } from '../modules/auth/models/User.js';
 import { ActivitySession } from '../modules/activity/models/ActivitySession.js';
+import { MAX_SESSION_DURATION_MS } from '../modules/activity/constants.js';
 import { Conversation } from '../modules/chat/models/Conversation.js';
 import { Project } from '../modules/workspace/models/Project.js';
 
@@ -117,7 +118,11 @@ export async function presenceSnapshotForUser(
   const activeSessions =
     oids.length === 0
       ? []
-      : await ActivitySession.find({ userId: { $in: oids }, status: 'active' })
+      : await ActivitySession.find({
+          userId: { $in: oids },
+          status: 'active',
+          startedAt: { $gt: new Date(Date.now() - MAX_SESSION_DURATION_MS) },
+        })
           .select('userId')
           .lean();
   const checkedIn = new Set(activeSessions.map((s) => String(s.userId)));

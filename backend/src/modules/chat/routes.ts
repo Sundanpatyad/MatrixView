@@ -176,6 +176,20 @@ router.post('/chat/conversations/:id/mute', async (req, res, next) => {
   }
 });
 
+router.post('/chat/conversations/:id/block', async (req, res, next) => {
+  try {
+    const body = z.object({ blocked: z.boolean() }).parse(req.body);
+    const data = await chat.setConversationBlocked(
+      actorFrom(req as AuthedRequest),
+      param(req.params.id),
+      body.blocked,
+    );
+    res.json(data);
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.post('/chat/conversations/:id/read', async (req, res, next) => {
   try {
     await chat.markMessagesRead(actorFrom(req as AuthedRequest), param(req.params.id));

@@ -3,9 +3,11 @@ import { createApp } from './app.js';
 import { config } from './config.js';
 import { connectDb } from './db.js';
 import { initSocket } from './gateway/socket.js';
+import { startSessionExpiryJob } from './modules/activity/expiryJob.js';
 
 async function main() {
   await connectDb();
+  startSessionExpiryJob();
 
   const app = createApp();
   const server = http.createServer(app);

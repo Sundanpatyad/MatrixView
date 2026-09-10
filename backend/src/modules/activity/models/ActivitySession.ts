@@ -58,6 +58,7 @@ const activitySessionSchema = new Schema(
 
 activitySessionSchema.index({ userId: 1, status: 1 });
 activitySessionSchema.index({ orgId: 1, startedAt: -1 });
+activitySessionSchema.index({ status: 1, startedAt: 1 });
 
 export type ActivitySessionDoc = HydratedDocument<
   InferSchemaType<typeof activitySessionSchema> & {

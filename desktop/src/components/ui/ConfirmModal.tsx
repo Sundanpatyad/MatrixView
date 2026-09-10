@@ -1,6 +1,6 @@
-import { useEffect, useId, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/Button';
+import { Modal, ModalFooter, ModalHeader } from '@/components/ui/Modal';
+import { useEffect, useId, useState } from 'react';
 
 type Props = {
   open: boolean;
@@ -34,15 +34,6 @@ export function ConfirmModal({
     if (!open) setPending(false);
   }, [open]);
 
-  useEffect(() => {
-    if (!open) return;
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape' && !loading) onCancel();
-    }
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, loading, onCancel]);
-
   if (!open) return null;
 
   async function handleConfirm() {
@@ -55,49 +46,32 @@ export function ConfirmModal({
     }
   }
 
-  return createPortal(
-    <div className="dockx-modal-layer fixed inset-0 z-[10000] flex items-center justify-center bg-black/55 p-4">
-      <button
-        type="button"
-        className="absolute inset-0"
-        onClick={() => {
-          if (!loading) onCancel();
-        }}
-        aria-label="Close"
-      />
-      <div
-        role="alertdialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        className="relative z-10 w-full max-w-sm border border-ink-600 bg-ink-800 p-5 shadow-lg"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h2 id={titleId} className="text-base font-semibold text-ink-50">
-          {title}
-        </h2>
-        <p className="mt-2 text-sm leading-relaxed text-ink-200">{message}</p>
-        <div className="mt-5 flex justify-end gap-2">
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            disabled={loading}
-            onClick={onCancel}
-          >
-            {cancelLabel}
-          </Button>
-          <Button
-            type="button"
-            variant={danger ? 'danger' : 'primary'}
-            size="sm"
-            disabled={loading}
-            onClick={() => void handleConfirm()}
-          >
-            {loading ? 'Please wait…' : confirmLabel}
-          </Button>
-        </div>
-      </div>
-    </div>,
-    document.body,
+  return (
+    <Modal
+      size="sm"
+      labelledBy={titleId}
+      onClose={onCancel}
+      closeOnBackdrop={!loading}
+      closeOnEscape={!loading}
+      zClass="z-[10000]"
+      className="sm:max-h-none"
+    >
+      <ModalHeader title={title} titleId={titleId} onClose={loading ? undefined : onCancel} />
+      <p className="px-5 py-4 text-sm leading-relaxed text-ink-200">{message}</p>
+      <ModalFooter>
+        <Button type="button" variant="secondary" size="sm" disabled={loading} onClick={onCancel}>
+          {cancelLabel}
+        </Button>
+        <Button
+          type="button"
+          variant={danger ? 'danger' : 'primary'}
+          size="sm"
+          disabled={loading}
+          onClick={() => void handleConfirm()}
+        >
+          {loading ? 'Please wait…' : confirmLabel}
+        </Button>
+      </ModalFooter>
+    </Modal>
   );
 }

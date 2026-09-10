@@ -44,6 +44,7 @@ export function ChatListScreen() {
     setMuted,
     clearMessages,
     deleteChat,
+    blockChat,
     deleteGroup,
   } = useChat();
   const pad = useGlassScreenPadding();
@@ -129,7 +130,7 @@ export function ChatListScreen() {
       title: isGroup ? 'Leave and delete chat?' : 'Delete chat?',
       message: isGroup
         ? `You’ll leave “${titleFor(conversation)}” and it will be removed from your list.`
-        : `“${titleFor(conversation)}” will be removed from your list. New messages will bring it back.`,
+        : `“${titleFor(conversation)}” will be removed from your list.`,
       confirmLabel: 'Delete chat',
       destructive: true,
     });
@@ -137,6 +138,20 @@ export function ChatListScreen() {
     await runAction('delete chat', async () => {
       await deleteChat(conversation.id);
       toast.success(isGroup ? 'Left group' : 'Chat deleted');
+    });
+  };
+
+  const confirmBlock = async (conversation: ChatConversation) => {
+    const ok = await confirm({
+      title: `Block ${titleFor(conversation)}?`,
+      message: 'They won’t be able to message or call you. This chat will be removed from your list.',
+      confirmLabel: 'Block',
+      destructive: true,
+    });
+    if (!ok) return;
+    await runAction('block', async () => {
+      await blockChat(conversation.id);
+      toast.success('User blocked');
     });
   };
 
@@ -338,7 +353,7 @@ export function ChatListScreen() {
             }}
           />
           <ActionRow
-            icon={menuTarget?.muted ? 'notifications-outline' : 'notifications-off-outline'}
+            icon="notifications-off-outline"
             label={
               menuTarget?.type === 'group'
                 ? menuTarget?.muted
@@ -376,6 +391,20 @@ export function ChatListScreen() {
               });
             }}
           />
+          {menuTarget?.type === 'dm' ? (
+            <ActionRow
+              icon="ban-outline"
+              label="Block"
+              subtitle="Stop messages and calls from this person"
+              destructive
+              onPress={() => {
+                const target = menuTarget;
+                afterMenuClose(() => {
+                  if (target) void confirmBlock(target);
+                });
+              }}
+            />
+          ) : null}
           <ActionRow
             icon="chatbubble-ellipses-outline"
             label="Delete chat"
